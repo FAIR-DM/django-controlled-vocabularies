@@ -51,7 +51,7 @@ django-tomselect = "^2026.6.2"
 # it the shipped search and sort controls render associated with a form only
 # the filter action defines (django-mvp#282), so both are inert on a page that
 # shows neither a filter nor a create button — which is every page here.
-django-mvp = { version = "^0.19.2", optional = true, python = ">=3.12" }
+django-mvp = { version = ">=0.19.2,<0.21.0", optional = true, python = ">=3.12" }
 
 [tool.poetry.extras]
 ui = ["django-mvp"]
@@ -61,7 +61,7 @@ ui = ["django-mvp"]
 # ruff, mypy, deptry, pre-commit, pytest, pytest-django, coverage, django-stubs.
 # python marker: the bundle needs >=3.12; the package floor stays 3.11 for
 # consumers — dev tooling never ships to them.
-mvp-shared = { git = "https://github.com/django-mvp/shared.git", tag = "v0.2.0", extras = ["dev", "test"], python = ">=3.12" }
+mvp-shared = { git = "https://github.com/django-mvp/shared.git", tag = "v0.4.1", extras = ["dev", "test"], python = ">=3.12" }
 
 [build-system]
 requires = ["poetry-core"]
