@@ -119,16 +119,36 @@ now real imported vocabularies to build and test the field against, rather than 
 
 Serves G2. Out of scope: import, export and serving, the editing interface.
 
+### R5 — Vocabulary management interface
+
+*Large, multi-feature · advances G1.*
+
+The graphical, code-free way for curators to create, edit, and delete vocabularies and concepts. It
+is the last Essential goal, so `0.1.0` cannot ship without it. It comes after the consume items
+because it needs the domain in place, and it comes before publishing: there is nothing to publish
+until a vocabulary can be authored here.
+
+**Deliverables:**
+
+- create and edit schemes, concepts, and collections through the UI;
+- edit labels and notes per language;
+- manage hierarchy and relationships between concepts.
+
+A fuller brief gets written when it reaches the front of the queue.
+
 ### R4 — RDF publishing and stable URIs
 
 *Full feature · advances G3, and G4.*
 
-This closes the consume loop and makes the stable-URI promise real: a published concept URI has to
-resolve to standards-compliant RDF. The details belong in this feature's own spec.
+This follows the management interface: publishing a vocabulary, and freezing its concept URIs,
+means something only once a vocabulary can be authored here rather than only imported. It closes
+the consume loop and makes the stable-URI promise real: a published concept URI has to resolve to
+standards-compliant RDF. The details belong in this feature's own spec.
 
 It also absorbs the concept lifecycle deferred out of R1. Publishing a vocabulary and freezing its
 concept URIs are the same moment, so the rules that protect a published concept belong here rather
-than in the foundation.
+than in the foundation. Until a vocabulary can be published, a curator simply deletes a concept
+instead.
 
 **Deliverables:**
 
@@ -140,22 +160,6 @@ than in the foundation.
 - a vocabulary exported this way that re-imports cleanly.
 
 Serves G3 and G4. Out of scope: the editing interface, browsing external sources.
-
-### R5 — Vocabulary management interface
-
-*Large, multi-feature · advances G1.*
-
-The graphical, code-free way for curators to create, edit, and deprecate vocabularies and concepts.
-It is the last Essential goal, so `0.1.0` cannot ship without it, but it comes after the consume
-items because it needs the domain and the publish path in place.
-
-**Deliverables:**
-
-- create, edit, and deprecate schemes, concepts, and collections through the UI;
-- edit labels and notes per language;
-- manage hierarchy and relationships between concepts.
-
-A fuller brief gets written when it reaches the front of the queue.
 
 ## Expected goals: v1.0.0
 
