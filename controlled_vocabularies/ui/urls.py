@@ -8,7 +8,12 @@ decisions #4). Views are imported relatively, staying inside this app's own pack
 
 from django.urls import path
 
-from .views import CollectionDetailView, ConceptDetailView, VocabularyDetailView, VocabularyListView
+from .views import (
+    CollectionDetailView,
+    ConceptDetailView,
+    VocabularyDetailView,
+    VocabularyListView,
+)
 
 app_name = "controlled_vocabularies_ui"
 
@@ -27,6 +32,10 @@ urlpatterns = [
         CollectionDetailView.as_view(),
         name="collection-detail",
     ),
-    path("<str:slug>/<str:concept_slug>/", ConceptDetailView.as_view(), name="concept-detail"),
+    path(
+        "<str:slug>/<str:concept_slug>/",
+        ConceptDetailView.as_view(),
+        name="concept-detail",
+    ),
     path("<str:slug>/", VocabularyDetailView.as_view(), name="vocabulary-detail"),
 ]

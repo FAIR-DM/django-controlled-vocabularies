@@ -29,7 +29,11 @@ if TYPE_CHECKING:
 #: (FR-004, plan.md A4). The default-language preferred label — every
 #: concept's own ``label`` column — is matched separately, unconditional on
 #: the active language.
-_SEARCHED_LABEL_KINDS = [ConceptLabel.Kind.PREFERRED, ConceptLabel.Kind.ALTERNATIVE, ConceptLabel.Kind.HIDDEN]
+_SEARCHED_LABEL_KINDS = [
+    ConceptLabel.Kind.PREFERRED,
+    ConceptLabel.Kind.ALTERNATIVE,
+    ConceptLabel.Kind.HIDDEN,
+]
 
 
 class ConceptAutocompleteView(AutocompleteModelView):
@@ -62,7 +66,11 @@ class ConceptAutocompleteView(AutocompleteModelView):
         active_language = get_language() or settings.LANGUAGE_CODE
         return queryset.filter(
             Q(label__icontains=query)
-            | Q(labels__language=active_language, labels__kind__in=_SEARCHED_LABEL_KINDS, labels__text__icontains=query)
+            | Q(
+                labels__language=active_language,
+                labels__kind__in=_SEARCHED_LABEL_KINDS,
+                labels__text__icontains=query,
+            )
         ).distinct()
 
     def hook_queryset(self, queryset):

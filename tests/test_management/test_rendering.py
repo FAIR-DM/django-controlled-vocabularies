@@ -49,7 +49,11 @@ class TestReportRendererBucketCounts:
                     params={"language": "en", "predicate": "skos:scopeNote"},
                 )
             ],
-            absent_from_source=["http://example.org/f", "http://example.org/g", "http://example.org/h"],
+            absent_from_source=[
+                "http://example.org/f",
+                "http://example.org/g",
+                "http://example.org/h",
+            ],
         )
         lines = [str(line) for line in ReportRenderer(report).render()]
         assert any("2" in line and "created" in line for line in lines)
@@ -70,7 +74,9 @@ class TestReportRendererDryRunLine:
     the two renderings differ in exactly one deliberate place (plan.md "Rendering")."""
 
     def test_a_dry_run_states_that_nothing_was_kept(self):
-        lines = [str(line) for line in ReportRenderer(ImportReport(), dry_run=True).render()]
+        lines = [
+            str(line) for line in ReportRenderer(ImportReport(), dry_run=True).render()
+        ]
         assert any("nothing was kept" in line for line in lines)
 
     def test_a_live_run_of_the_same_report_does_not_state_that_nothing_was_kept(self):
@@ -85,8 +91,12 @@ class TestReportRendererSetAsideByReason:
     def test_several_reasons_each_render_one_line_with_the_right_count(self):
         report = ImportReport(
             set_aside=[
-                SetAsideEntry(reason=SetAsideReason.NOTATION, subject="http://example.org/a"),
-                SetAsideEntry(reason=SetAsideReason.NOTATION, subject="http://example.org/b"),
+                SetAsideEntry(
+                    reason=SetAsideReason.NOTATION, subject="http://example.org/a"
+                ),
+                SetAsideEntry(
+                    reason=SetAsideReason.NOTATION, subject="http://example.org/b"
+                ),
                 SetAsideEntry(
                     reason=SetAsideReason.UNCONFIGURED_LANGUAGE,
                     subject="http://example.org/c",
@@ -95,11 +105,22 @@ class TestReportRendererSetAsideByReason:
             ]
         )
         lines = [str(line) for line in ReportRenderer(report).render()]
-        assert any("2" in line and str(SetAsideReason.NOTATION.label) in line for line in lines)
-        assert any("1" in line and str(SetAsideReason.UNCONFIGURED_LANGUAGE.label) in line for line in lines)
+        assert any(
+            "2" in line and str(SetAsideReason.NOTATION.label) in line for line in lines
+        )
+        assert any(
+            "1" in line and str(SetAsideReason.UNCONFIGURED_LANGUAGE.label) in line
+            for line in lines
+        )
 
     def test_a_reason_with_no_entries_renders_no_line_for_itself(self):
-        report = ImportReport(set_aside=[SetAsideEntry(reason=SetAsideReason.NOTATION, subject="http://example.org/a")])
+        report = ImportReport(
+            set_aside=[
+                SetAsideEntry(
+                    reason=SetAsideReason.NOTATION, subject="http://example.org/a"
+                )
+            ]
+        )
         lines = [str(line) for line in ReportRenderer(report).render()]
         assert not any(str(SetAsideReason.MAPPING.label) in line for line in lines)
 
@@ -146,7 +167,9 @@ class TestReportRendererAgainstARealRun:
     not only a hand-built one, so the accessors are exercised as the command will actually see
     them (tasks.md T016)."""
 
-    def test_a_real_run_setting_aside_several_reasons_and_languages_groups_them_correctly(self, db):
+    def test_a_real_run_setting_aside_several_reasons_and_languages_groups_them_correctly(
+        self, db
+    ):
         # Committed under tests/fixtures/skos/ (T025) rather than written to tmp_path: every
         # identifier here is absolute, so — unlike the relative-URI fixtures decisions.md D11
         # documents — nothing about this document requires it to stay out of the directory
@@ -158,9 +181,16 @@ class TestReportRendererAgainstARealRun:
         assert len(grouped[SetAsideReason.UNCONFIGURED_LANGUAGE]) == 3
 
         lines = [str(line) for line in ReportRenderer(report).render()]
-        assert any("1" in line and str(SetAsideReason.NOTATION.label) in line for line in lines)
-        assert any("1" in line and str(SetAsideReason.MAPPING.label) in line for line in lines)
-        assert any("3" in line and str(SetAsideReason.UNCONFIGURED_LANGUAGE.label) in line for line in lines)
+        assert any(
+            "1" in line and str(SetAsideReason.NOTATION.label) in line for line in lines
+        )
+        assert any(
+            "1" in line and str(SetAsideReason.MAPPING.label) in line for line in lines
+        )
+        assert any(
+            "3" in line and str(SetAsideReason.UNCONFIGURED_LANGUAGE.label) in line
+            for line in lines
+        )
         assert any("2" in line and "es" in line for line in lines)
         assert any("1" in line and "ja" in line for line in lines)
 
@@ -169,7 +199,9 @@ class TestReportRendererAbsentFromSource:
     """T017, FR-008, `decisions.md` D7 — records absent from the source render as their own
     section, visibly separate from set-asides and not counted among them."""
 
-    def test_a_reimport_names_the_dropped_concept_as_absent_and_leaves_set_aside_alone(self, db):
+    def test_a_reimport_names_the_dropped_concept_as_absent_and_leaves_set_aside_alone(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
         report = import_skos(FIXTURES / "rocks_updated.ttl")
 
@@ -202,7 +234,9 @@ class TestReportRendererVerbosity:
         lines = [str(line) for line in ReportRenderer(report).render()]
         assert not any("item-0" in line for line in lines)
 
-    def test_raised_verbosity_prints_one_line_per_value_matching_the_summary_count(self):
+    def test_raised_verbosity_prints_one_line_per_value_matching_the_summary_count(
+        self,
+    ):
         report = self._report_with_several_hundred_set_asides()
         lines = [str(line) for line in ReportRenderer(report, verbosity=2).render()]
         expected_details = {entry.render() for entry in report.set_aside}
@@ -230,7 +264,10 @@ class TestReportRendererVerbosity:
         # The dry run line is the one thing that could argue for an exception, since it
         # says nothing was kept. It does not get one: at 0 there is no output to qualify,
         # and a dry run at --verbosity 0 writes nothing anywhere either way.
-        assert list(ReportRenderer(ImportReport(), dry_run=True, verbosity=0).render()) == []
+        assert (
+            list(ReportRenderer(ImportReport(), dry_run=True, verbosity=0).render())
+            == []
+        )
 
     def test_the_default_verbosity_still_prints_the_counts(self):
         # The control: silencing 0 must not silence the default.

@@ -13,7 +13,12 @@ preferred labels and notes off a single concept in a couple of lines.
 
 import pytest
 
-from controlled_vocabularies.models import Concept, ConceptLabel, ConceptNote, ConceptScheme
+from controlled_vocabularies.models import (
+    Concept,
+    ConceptLabel,
+    ConceptNote,
+    ConceptScheme,
+)
 from tests.factories import (
     ConceptFactory,
     ConceptLabelFactory,
@@ -117,7 +122,9 @@ def test_multilingual_trait_yields_preferred_labels_in_more_than_one_language():
     assert default_pref
     assert german_pref
     assert default_pref != german_pref
-    languages_with_a_preferred_label = {language for language in ("en", "de") if concept.preferred_label(language)}
+    languages_with_a_preferred_label = {
+        language for language in ("en", "de") if concept.preferred_label(language)
+    }
     assert len(languages_with_a_preferred_label) > 1
 
 
@@ -126,7 +133,9 @@ def test_multilingual_trait_yields_notes_in_more_than_one_language():
     concept = ConceptFactory(multilingual=True)
     assert concept.notes("en")
     assert concept.notes("de")
-    languages_with_a_note = {language for language in ("en", "de") if concept.notes(language)}
+    languages_with_a_note = {
+        language for language in ("en", "de") if concept.notes(language)
+    }
     assert len(languages_with_a_note) > 1
 
 
@@ -135,7 +144,9 @@ def test_multilingual_trait_uses_the_concepts_own_scheme_default_language():
     # The German preferred label sits on a real ConceptLabel row (not the anchor),
     # and the anchor still resolves as the en preferred label.
     concept = ConceptFactory(multilingual=True)
-    assert concept.labels.filter(language="de", kind=ConceptLabel.Kind.PREFERRED).exists()
+    assert concept.labels.filter(
+        language="de", kind=ConceptLabel.Kind.PREFERRED
+    ).exists()
     assert concept.preferred_label("en") == concept.label
 
 
@@ -165,7 +176,9 @@ def test_relation_factory_builds_a_single_related_association():
     relation = ConceptRelationFactory(kind=ConceptRelation.Kind.RELATED)
     assert relation.source in relation.target.related()
     assert relation.target in relation.source.related()
-    assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count() == 1
+    assert (
+        ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count() == 1
+    )
 
 
 @pytest.mark.django_db
@@ -177,7 +190,10 @@ def test_relation_graph_helper_yields_a_navigable_graph():
     assert graph["child"] in graph["parent"].narrower()
     assert graph["right"] in graph["left"].related()
     # everything is in one vocabulary
-    schemes = {c.scheme_id for c in (graph["parent"], graph["child"], graph["left"], graph["right"])}
+    schemes = {
+        c.scheme_id
+        for c in (graph["parent"], graph["child"], graph["left"], graph["right"])
+    }
     assert len(schemes) == 1
 
 
@@ -257,7 +273,9 @@ class TestExternalTrait:
         assert concept.has_static_uri is False
 
     @pytest.mark.django_db
-    def test_concept_factory_external_trait_yields_a_fixed_externally_assigned_uri(self):
+    def test_concept_factory_external_trait_yields_a_fixed_externally_assigned_uri(
+        self,
+    ):
         concept = ConceptFactory(external=True)
         assert concept.has_static_uri is True
         assert concept.uri == concept.static_uri
@@ -273,7 +291,9 @@ class TestExternalTrait:
         assert collection.has_static_uri is False
 
     @pytest.mark.django_db
-    def test_collection_factory_external_trait_yields_a_fixed_externally_assigned_uri(self):
+    def test_collection_factory_external_trait_yields_a_fixed_externally_assigned_uri(
+        self,
+    ):
         from tests.factories import CollectionFactory
 
         collection = CollectionFactory(external=True)

@@ -106,7 +106,9 @@ class TestDemoBaseAddress:
     """The demonstration is configured so its identifiers resolve (T006, US-1 scenario 4 in
     the demonstration, SC-007)."""
 
-    def test_the_locally_authored_vocabularys_identifier_moves_and_the_imported_ones_does_not(self, tmp_path):
+    def test_the_locally_authored_vocabularys_identifier_moves_and_the_imported_ones_does_not(
+        self, tmp_path
+    ):
         env = dict(os.environ, DEMO_DB_PATH=str(tmp_path / "demo.sqlite3"))
         result = subprocess.run(  # noqa: S603 — fixed interpreter, literal script, no user input
             [sys.executable, "-c", BASE_ADDRESS_BOOT_SCRIPT],

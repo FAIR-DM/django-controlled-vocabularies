@@ -57,7 +57,9 @@ def check_vocabulary_detail_route(app_configs, **kwargs):
     """
     placeholder = "check-placeholder-slug"
     try:
-        detail_path = reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": placeholder})
+        detail_path = reverse(
+            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": placeholder}
+        )
     except NoReverseMatch:
         return []
 

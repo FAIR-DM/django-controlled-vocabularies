@@ -39,10 +39,16 @@ class TestSeedDemo:
 
     def test_a_second_run_returns_the_same_counts(self):
         run_seed_demo()
-        first = {scheme.name: scheme.concepts.count() for scheme in ConceptScheme.objects.all()}
+        first = {
+            scheme.name: scheme.concepts.count()
+            for scheme in ConceptScheme.objects.all()
+        }
 
         run_seed_demo()
-        second = {scheme.name: scheme.concepts.count() for scheme in ConceptScheme.objects.all()}
+        second = {
+            scheme.name: scheme.concepts.count()
+            for scheme in ConceptScheme.objects.all()
+        }
 
         assert first == second
 
@@ -63,7 +69,9 @@ class TestSeedDemo:
         assert imported.count() == 1
         assert authored.count() == 1
 
-    def test_seeded_concepts_carry_alternative_and_hidden_labels_through_the_real_importer(self):
+    def test_seeded_concepts_carry_alternative_and_hidden_labels_through_the_real_importer(
+        self,
+    ):
         # T016, US-3: a search can find something a reader is never shown, which needs a
         # hidden label content asserting on a search cannot exercise. Loaded through
         # import_skos() (seed_demo.py), never a fixture behind it — the same path a real
@@ -88,13 +96,17 @@ class TestSeedDemo:
         assert dataset.alt_labels("en") == ["Data set"]
         assert dataset.hidden_labels("en") == ["Datset"]
 
-    def test_seeded_collections_load_through_the_real_importer_with_one_of_each_kind(self):
+    def test_seeded_collections_load_through_the_real_importer_with_one_of_each_kind(
+        self,
+    ):
         # T020, FR-018: through the Turtle file (research_methods.ttl), never a fixture
         # behind it — the same import_skos() path the concepts and their labels use.
         run_seed_demo()
 
         authored = ConceptScheme.objects.get(static_uri__isnull=True)
-        collections = {collection.name: collection for collection in authored.collections.all()}
+        collections = {
+            collection.name: collection for collection in authored.collections.all()
+        }
 
         assert len(collections) == 2
         ordered = [c for c in collections.values() if c.ordered]
@@ -115,7 +127,12 @@ class TestSeedDemo:
         run_seed_demo()
 
         authored = ConceptScheme.objects.get(static_uri__isnull=True)
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": authored.slug}))
+        response = client.get(
+            reverse(
+                "controlled_vocabularies_ui:vocabulary-detail",
+                kwargs={"slug": authored.slug},
+            )
+        )
         content = response.content.decode()
 
         for collection in authored.collections.all():

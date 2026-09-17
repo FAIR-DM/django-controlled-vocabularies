@@ -61,7 +61,8 @@ def _render_params(subject: str, params: dict[str, str]) -> dict[str, str]:
     if merged.get("language") == "":
         merged["language"] = str(_NO_LANGUAGE_TAG)
     return {
-        key: _CONTROL_CHARACTERS.sub("", value) if isinstance(value, str) else value for key, value in merged.items()
+        key: _CONTROL_CHARACTERS.sub("", value) if isinstance(value, str) else value
+        for key, value in merged.items()
     }
 
 
@@ -154,19 +155,46 @@ class SetAsideReason(TextChoices):
     MAPPING = "mapping", _("mapping to another vocabulary")
     MISSING_RELATION_END = "missing_relation_end", _("relationship end not found")
     MISSING_MEMBER = "missing_member", _("collection member not found")
-    NO_PREFERRED_LABEL = "no_preferred_label", _("no preferred label in default language")
+    NO_PREFERRED_LABEL = (
+        "no_preferred_label",
+        _("no preferred label in default language"),
+    )
     VOCABULARY_MISMATCH = "vocabulary_mismatch", _("belongs to a different vocabulary")
-    DEFAULT_LANGUAGE_FROZEN = "default_language_frozen", _("default language already fixed")
-    RELATION_DISJOINTNESS = "relation_disjointness", _("broader/narrower and related both claimed for a pair")
-    SURPLUS_PREFERRED_LABEL = "surplus_preferred_label", _("surplus preferred label in a language")
+    DEFAULT_LANGUAGE_FROZEN = (
+        "default_language_frozen",
+        _("default language already fixed"),
+    )
+    RELATION_DISJOINTNESS = (
+        "relation_disjointness",
+        _("broader/narrower and related both claimed for a pair"),
+    )
+    SURPLUS_PREFERRED_LABEL = (
+        "surplus_preferred_label",
+        _("surplus preferred label in a language"),
+    )
     EMPTY_SLUG = "empty_slug", _("no usable URL slug could be derived")
-    ALREADY_IN_ANOTHER_VOCABULARY = "already_in_another_vocabulary", _("already belongs to another vocabulary")
-    URI_HELD_BY_DIFFERENT_KIND = "uri_held_by_different_kind", _("identifier held by a different kind of record")
+    ALREADY_IN_ANOTHER_VOCABULARY = (
+        "already_in_another_vocabulary",
+        _("already belongs to another vocabulary"),
+    )
+    URI_HELD_BY_DIFFERENT_KIND = (
+        "uri_held_by_different_kind",
+        _("identifier held by a different kind of record"),
+    )
     NO_LANGUAGE_TAG = "no_language_tag", _("no language tag")
     VARIANT_NOT_KEPT = "variant_not_kept", _("language variant not kept")
-    VALUE_TOO_LONG = "value_too_long", _("value exceeds the maximum length this application can store")
-    STORED_SLUG_INVALID = "stored_slug_invalid", _("stored slug no longer passes validation")
-    COLLECTION_NOT_CREATED = "collection_not_created", _("collection was not created for want of a usable name")
+    VALUE_TOO_LONG = (
+        "value_too_long",
+        _("value exceeds the maximum length this application can store"),
+    )
+    STORED_SLUG_INVALID = (
+        "stored_slug_invalid",
+        _("stored slug no longer passes validation"),
+    )
+    COLLECTION_NOT_CREATED = (
+        "collection_not_created",
+        _("collection was not created for want of a usable name"),
+    )
 
     @property
     def template(self) -> Promise:
@@ -221,7 +249,9 @@ _REASON_TEMPLATES: dict[SetAsideReason, Promise] = {
         "'%(subject)s' carries more than one preferred label in the language '%(language)s'; only one is "
         "kept and the surplus value was set aside."
     ),
-    SetAsideReason.EMPTY_SLUG: _("'%(subject)s' could not be given a usable URL slug, so it was set aside."),
+    SetAsideReason.EMPTY_SLUG: _(
+        "'%(subject)s' could not be given a usable URL slug, so it was set aside."
+    ),
     SetAsideReason.ALREADY_IN_ANOTHER_VOCABULARY: _(
         "'%(subject)s' already belongs to the vocabulary '%(current)s'; importing it into '%(target)s' "
         "would move it between vocabularies, so it was left where it is."
@@ -329,18 +359,35 @@ class FatalReason(TextChoices):
 
     MISSING_IDENTITY = "missing_identity", _("identifier missing or blank")
     REFUSED_IDENTITY = "refused_identity", _("identifier refused by the identity rules")
-    VOCABULARY_UNDETERMINED = "vocabulary_undetermined", _("vocabulary not declared and no target named")
-    VOCABULARY_TARGET_MISMATCH = "vocabulary_target_mismatch", _("declared vocabulary does not match the named target")
-    VOCABULARY_AMBIGUOUS = "vocabulary_ambiguous", _("the file declares more than one vocabulary and none was named")
-    DEFAULT_LANGUAGE_UNCONFIGURED = "default_language_unconfigured", _("default language not configured")
-    VOCABULARY_SLUG_UNUSABLE = "vocabulary_slug_unusable", _("vocabulary's identifier produces no usable slug")
+    VOCABULARY_UNDETERMINED = (
+        "vocabulary_undetermined",
+        _("vocabulary not declared and no target named"),
+    )
+    VOCABULARY_TARGET_MISMATCH = (
+        "vocabulary_target_mismatch",
+        _("declared vocabulary does not match the named target"),
+    )
+    VOCABULARY_AMBIGUOUS = (
+        "vocabulary_ambiguous",
+        _("the file declares more than one vocabulary and none was named"),
+    )
+    DEFAULT_LANGUAGE_UNCONFIGURED = (
+        "default_language_unconfigured",
+        _("default language not configured"),
+    )
+    VOCABULARY_SLUG_UNUSABLE = (
+        "vocabulary_slug_unusable",
+        _("vocabulary's identifier produces no usable slug"),
+    )
     VOCABULARY_NAME_UNUSABLE = (
         "vocabulary_name_unusable",
         _("vocabulary's name is longer than this application can store"),
     )
     VOCABULARY_RECORD_INVALID = (
         "vocabulary_record_invalid",
-        _("vocabulary's stored record fails its own validation and could not be written"),
+        _(
+            "vocabulary's stored record fails its own validation and could not be written"
+        ),
     )
     VOCABULARY_NAME_UNPUBLISHED = (
         "vocabulary_name_unpublished",
@@ -361,7 +408,9 @@ _FATAL_TEMPLATES: dict[FatalReason, Promise] = {
     FatalReason.MISSING_IDENTITY: _(
         "'%(subject)s' has no identifier that survives re-serialization (a blank node); the run was refused."
     ),
-    FatalReason.REFUSED_IDENTITY: _("'%(subject)s' is not an identifier the application accepts; the run was refused."),
+    FatalReason.REFUSED_IDENTITY: _(
+        "'%(subject)s' is not an identifier the application accepts; the run was refused."
+    ),
     FatalReason.VOCABULARY_UNDETERMINED: _(
         "'%(subject)s' declares no vocabulary of its own, and no target vocabulary was named; the run was refused."
     ),
@@ -435,8 +484,14 @@ class NormalizedReason(TextChoices):
     and ``%(kept_as)s`` the configured language it was stored under.
     """
 
-    FOREIGN_DEFINITION = "foreign_definition", _("definition read from a foreign predicate")
-    LANGUAGE_SUBSTITUTION = "language_substitution", _("value stored under a different language than published")
+    FOREIGN_DEFINITION = (
+        "foreign_definition",
+        _("definition read from a foreign predicate"),
+    )
+    LANGUAGE_SUBSTITUTION = (
+        "language_substitution",
+        _("value stored under a different language than published"),
+    )
 
     @property
     def template(self) -> Promise:
@@ -514,17 +569,25 @@ class ImportReport:
         """Record that ``subject`` exists here but is no longer in the source (FR-013)."""
         self.absent_from_source.append(subject)
 
-    def add_set_aside(self, reason: SetAsideReason, subject: str, **params: str) -> None:
+    def add_set_aside(
+        self, reason: SetAsideReason, subject: str, **params: str
+    ) -> None:
         """Record that ``subject`` was not stored, for ``reason``, with any extra ``params``
         its message template needs."""
-        self.set_aside.append(SetAsideEntry(reason=reason, subject=subject, params=params))
+        self.set_aside.append(
+            SetAsideEntry(reason=reason, subject=subject, params=params)
+        )
 
-    def add_normalized(self, reason: NormalizedReason, subject: str, **params: str) -> None:
+    def add_normalized(
+        self, reason: NormalizedReason, subject: str, **params: str
+    ) -> None:
         """Record that ``subject`` was stored under a predicate other than the one the
         file asserted, for ``reason``, with any extra ``params`` its message template
         needs (T021, FR-009). The value *is* stored — this is visibility, not a refusal,
         so it is tracked apart from :attr:`set_aside`."""
-        self.normalized.append(NormalizedEntry(reason=reason, subject=subject, params=params))
+        self.normalized.append(
+            NormalizedEntry(reason=reason, subject=subject, params=params)
+        )
 
     def add_fatal(self, reason: FatalReason, subject: str, **params: str) -> None:
         """Record that ``subject`` is why the whole run was refused, for ``reason``, with any
@@ -546,7 +609,9 @@ class ImportReport:
     #: param": :attr:`SetAsideReason.SURPLUS_PREFERRED_LABEL` carries one too,
     #: and its language is a configured code the site already holds, not a
     #: published tag configuring something would recover.
-    _LANGUAGE_ACCOUNT_REASONS = frozenset({SetAsideReason.UNCONFIGURED_LANGUAGE, SetAsideReason.VARIANT_NOT_KEPT})
+    _LANGUAGE_ACCOUNT_REASONS = frozenset(
+        {SetAsideReason.UNCONFIGURED_LANGUAGE, SetAsideReason.VARIANT_NOT_KEPT}
+    )
 
     def language_account(self) -> dict[str, int]:
         """How many values were not stored for a language reason, broken down by

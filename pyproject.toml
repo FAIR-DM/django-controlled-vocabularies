@@ -93,32 +93,15 @@ django_settings_module = "tests.settings_core"
 ignore_missing_model_attributes = "True"
 
 [tool.ruff]
-target-version = "py311"
-line-length = 120
-fix = true
-# migrations are generated code — never linted or reformatted
-exclude = ['docs/', '**/migrations/**']
-
-[tool.ruff.lint]
-select = [
-    "YTT", "S", "B", "A", "C4", "T10", "SIM", "I", "C90",
-    "E", "W", "F", "PGH", "UP", "RUF", "TRY",
-]
-ignore = [
-    "E501",
-    "E731",
-    "RUF012",
-    "TRY003",
-    "S308",
-    "S311",
-    "A003",
-    "F403",
-    "F405",
-    "C901",
-]
+extend = "ruff-base.toml"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "S105", "B017", "A001", "RUF059"]
+# S101: asserts are the point of a test. S105: settings_core.py carries a
+# placeholder test SECRET_KEY. RUF059: collection_with_members() returns a
+# tuple a handful of tests unpack for only one member.
+"tests/*" = ["S101", "S105", "RUF059"]
+# Inherits tests/settings_core.py wholesale via `import *` to add the ui front end.
+"tests/settings.py" = ["F403", "F405"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"

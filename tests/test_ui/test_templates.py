@@ -30,16 +30,30 @@ def visible_text(element) -> str:
     )
 
 
-TEMPLATES_ROOT = Path(__file__).resolve().parents[2] / "controlled_vocabularies" / "ui" / "templates"
-ROW_TEMPLATE_PATH = TEMPLATES_ROOT / "controlled_vocabularies" / "ui" / "conceptscheme_list_item.html"
-CONCEPT_ROW_TEMPLATE_PATH = TEMPLATES_ROOT / "controlled_vocabularies" / "ui" / "concept_list_item.html"
-CONCEPTSCHEME_DETAIL_TEMPLATE_PATH = TEMPLATES_ROOT / "controlled_vocabularies" / "ui" / "conceptscheme_detail.html"
+TEMPLATES_ROOT = (
+    Path(__file__).resolve().parents[2] / "controlled_vocabularies" / "ui" / "templates"
+)
+ROW_TEMPLATE_PATH = (
+    TEMPLATES_ROOT / "controlled_vocabularies" / "ui" / "conceptscheme_list_item.html"
+)
+CONCEPT_ROW_TEMPLATE_PATH = (
+    TEMPLATES_ROOT / "controlled_vocabularies" / "ui" / "concept_list_item.html"
+)
+CONCEPTSCHEME_DETAIL_TEMPLATE_PATH = (
+    TEMPLATES_ROOT / "controlled_vocabularies" / "ui" / "conceptscheme_detail.html"
+)
 PROPERTY_ROW_TEMPLATE = "cotton/controlled_vocabularies/property_row.html"
-PROPERTY_ROW_TEMPLATE_PATH = TEMPLATES_ROOT / "cotton" / "controlled_vocabularies" / "property_row.html"
+PROPERTY_ROW_TEMPLATE_PATH = (
+    TEMPLATES_ROOT / "cotton" / "controlled_vocabularies" / "property_row.html"
+)
 # 015-read-single-record T023, FR-006: every template that carries an in-site link, widened
 # from the one file ROW_TEMPLATE_PATH named on its own — the two row partials plus
 # property_row.html, which composes the in-site link T003's record-valued rows carry.
-IN_SITE_LINK_TEMPLATE_PATHS = [ROW_TEMPLATE_PATH, CONCEPT_ROW_TEMPLATE_PATH, PROPERTY_ROW_TEMPLATE_PATH]
+IN_SITE_LINK_TEMPLATE_PATHS = [
+    ROW_TEMPLATE_PATH,
+    CONCEPT_ROW_TEMPLATE_PATH,
+    PROPERTY_ROW_TEMPLATE_PATH,
+]
 # mvp is a namespace package (no __init__.py), so it carries no __file__ — its own
 # __path__ is the only way to locate the package directory.
 MVP_CSS_PATH = Path(mvp.__path__[0]) / "static" / "css" / "django-mvp.css"
@@ -106,7 +120,13 @@ class TestRenderedPageLinksToEachVocabulary:
 
         hrefs = re.findall(r'href="([^"]*)"', content)
         for scheme in schemes:
-            assert reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}) in hrefs
+            assert (
+                reverse(
+                    "controlled_vocabularies_ui:vocabulary-detail",
+                    kwargs={"slug": scheme.slug},
+                )
+                in hrefs
+            )
 
 
 class TestConceptRowPartialLinksToItsOwnPage:
@@ -312,7 +332,11 @@ class TestPropertyRowTermDisclosesItsOwnURI:
     def test_the_dt_carries_neither_text_xs_nor_uppercase(self):
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
-            {"term": "skos:broader", "term_uri": "http://publisher.example.org/broader", "value": "x"},
+            {
+                "term": "skos:broader",
+                "term_uri": "http://publisher.example.org/broader",
+                "value": "x",
+            },
         )
         soup = BeautifulSoup(html, "html.parser")
         dt = soup.find("dt")
@@ -324,7 +348,11 @@ class TestPropertyRowTermDisclosesItsOwnURI:
     def test_the_terms_uri_is_reachable_as_text_and_carries_no_title(self):
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
-            {"term": "skos:broader", "term_uri": "http://publisher.example.org/broader", "value": "x"},
+            {
+                "term": "skos:broader",
+                "term_uri": "http://publisher.example.org/broader",
+                "value": "x",
+            },
         )
         soup = BeautifulSoup(html, "html.parser")
         dt = soup.find("dt")
@@ -369,11 +397,19 @@ class TestPropertyRowClasses:
         source = PROPERTY_ROW_TEMPLATE_PATH.read_text()
         css = MVP_CSS_PATH.read_text()
 
-        tokens = {token for group in re.findall(r'class="([^"]*)"', source) for token in group.split()}
+        tokens = {
+            token
+            for group in re.findall(r'class="([^"]*)"', source)
+            for token in group.split()
+        }
 
-        assert tokens, "the component names no class at all — nothing for this test to prove"
+        assert tokens, (
+            "the component names no class at all — nothing for this test to prove"
+        )
         for token in tokens:
-            assert _tailwind_selector_pattern(token).search(css), f"{token!r} is not in the shipped stylesheet"
+            assert _tailwind_selector_pattern(token).search(css), (
+                f"{token!r} is not in the shipped stylesheet"
+            )
 
     def test_a_class_shipped_only_inside_a_compound_selector_is_still_found(self):
         # tooltip-right (015-read-single-record second round) never appears as a standalone
@@ -390,9 +426,14 @@ class TestPropertyRowClasses:
         # real class from an absent one instead of matching anything handed to it — which
         # is exactly the failure mode an invented class would hit in silence otherwise.
         css = MVP_CSS_PATH.read_text()
-        assert _tailwind_selector_pattern("cv-property-row-invented-class").search(css) is None
+        assert (
+            _tailwind_selector_pattern("cv-property-row-invented-class").search(css)
+            is None
+        )
 
-    def test_the_boundary_does_not_let_a_shorter_class_match_inside_a_longer_ones_name(self):
+    def test_the_boundary_does_not_let_a_shorter_class_match_inside_a_longer_ones_name(
+        self,
+    ):
         # Widening the boundary to accept a compound selector must not widen it into a prefix
         # match: a stylesheet naming only ".tooltip-rightmost" never ships "tooltip-right" at
         # all, so the check for the shorter name must still report it absent.
@@ -422,5 +463,11 @@ class TestNoTemplateNamesACottonComponentWithAnUnderscore:
         ids=lambda p: str(p.relative_to(TEMPLATES_ROOT)),
     )
     def test_no_cotton_tag_name_contains_an_underscore(self, path):
-        offenders = [name for name in _COTTON_TAG_NAME_RE.findall(path.read_text()) if "_" in name]
-        assert offenders == [], f"{path.relative_to(TEMPLATES_ROOT)} names a cotton tag with an underscore: {offenders}"
+        offenders = [
+            name
+            for name in _COTTON_TAG_NAME_RE.findall(path.read_text())
+            if "_" in name
+        ]
+        assert offenders == [], (
+            f"{path.relative_to(TEMPLATES_ROOT)} names a cotton tag with an underscore: {offenders}"
+        )

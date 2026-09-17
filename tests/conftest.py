@@ -57,7 +57,13 @@ def single_language_scheme(db):
 class StubResponse:
     """One configured answer for a path on :class:`HTTPStub` (T006, research.md R8)."""
 
-    def __init__(self, status: int, body: bytes, content_type: str | None, headers: dict[str, str]) -> None:
+    def __init__(
+        self,
+        status: int,
+        body: bytes,
+        content_type: str | None,
+        headers: dict[str, str],
+    ) -> None:
         self.status = status
         self.body = body
         self.content_type = content_type
@@ -107,7 +113,9 @@ class HTTPStub:
         content_type: str | None = None,
         headers: dict[str, str] | None = None,
     ) -> None:
-        self._server.responses[path] = StubResponse(status, body, content_type, headers or {})  # type: ignore[attr-defined]
+        self._server.responses[path] = StubResponse(
+            status, body, content_type, headers or {}
+        )  # type: ignore[attr-defined]
 
 
 @pytest.fixture

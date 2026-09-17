@@ -41,7 +41,9 @@ from controlled_vocabularies.exchange.report import (
 )
 from controlled_vocabularies.management import rendering as rendering_module
 from controlled_vocabularies.management import sources as sources_module
-from controlled_vocabularies.management.commands import import_skos as import_skos_command_module
+from controlled_vocabularies.management.commands import (
+    import_skos as import_skos_command_module,
+)
 from controlled_vocabularies.models import (
     Collection,
     CollectionMember,
@@ -53,7 +55,15 @@ from controlled_vocabularies.models import (
     validate_static_uri,
 )
 
-ALL_MODELS = [ConceptScheme, Concept, ConceptLabel, ConceptNote, ConceptRelation, Collection, CollectionMember]
+ALL_MODELS = [
+    ConceptScheme,
+    Concept,
+    ConceptLabel,
+    ConceptNote,
+    ConceptRelation,
+    Collection,
+    CollectionMember,
+]
 
 
 def _editable_fields(model: type[Model]):
@@ -62,7 +72,9 @@ def _editable_fields(model: type[Model]):
     return [
         field
         for field in model._meta.get_fields()
-        if getattr(field, "concrete", False) and getattr(field, "editable", False) and not field.auto_created
+        if getattr(field, "concrete", False)
+        and getattr(field, "editable", False)
+        and not field.auto_created
     ]
 
 
@@ -100,7 +112,9 @@ def test_app_config_verbose_name_is_lazy():
     from django.apps import apps
 
     verbose_name = apps.get_app_config("controlled_vocabularies").verbose_name
-    assert isinstance(verbose_name, Promise), "AppConfig.verbose_name is not lazily translatable"
+    assert isinstance(verbose_name, Promise), (
+        "AppConfig.verbose_name is not lazily translatable"
+    )
 
 
 # --- Article XII: the new FS-002 validation messages are translatable, with named placeholders ---
@@ -119,8 +133,12 @@ def test_missing_default_language_label_message_uses_named_placeholder(scheme):
     with pytest.raises(ValidationError) as excinfo:
         Concept.objects.create(scheme=scheme, label="")
     err = _inner_error(excinfo.value, "label")
-    assert isinstance(err.message, Promise), "missing-default-language-label message is not lazily translatable"
-    assert "%(language)s" in str(err.message), "message lacks a named %(language)s placeholder"
+    assert isinstance(err.message, Promise), (
+        "missing-default-language-label message is not lazily translatable"
+    )
+    assert "%(language)s" in str(err.message), (
+        "message lacks a named %(language)s placeholder"
+    )
     assert err.params == {"language": scheme.effective_default_language}
     # ...and it still renders with the real language substituted in.
     assert scheme.effective_default_language in excinfo.value.messages[0]
@@ -131,12 +149,22 @@ def test_duplicate_preferred_label_message_uses_named_placeholder(scheme):
     # FR-001: at most one preferred label per language. The second is refused with a
     # translatable, curator-facing message that names the language via a placeholder.
     concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-    concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss")
+    concept.add_label(
+        language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss"
+    )
     with pytest.raises(ValidationError) as excinfo:
-        concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Terrestrischer Wärmefluss")
+        concept.add_label(
+            language="de",
+            kind=ConceptLabel.Kind.PREFERRED,
+            text="Terrestrischer Wärmefluss",
+        )
     err = _inner_error(excinfo.value, "language")
-    assert isinstance(err.message, Promise), "duplicate-preferred-label message is not lazily translatable"
-    assert "%(language)s" in str(err.message), "message lacks a named %(language)s placeholder"
+    assert isinstance(err.message, Promise), (
+        "duplicate-preferred-label message is not lazily translatable"
+    )
+    assert "%(language)s" in str(err.message), (
+        "message lacks a named %(language)s placeholder"
+    )
     assert err.params == {"language": "de"}
     assert "de" in excinfo.value.messages[0]
 
@@ -158,8 +186,12 @@ class TestStaticUriValidationMessages:
         with pytest.raises(ValidationError) as excinfo:
             validate_static_uri("not-absolute")
         err = excinfo.value
-        assert isinstance(err.message, Promise), "not-absolute message is not lazily translatable"
-        assert "%(uri)s" in str(err.message), "message lacks a named %(uri)s placeholder"
+        assert isinstance(err.message, Promise), (
+            "not-absolute message is not lazily translatable"
+        )
+        assert "%(uri)s" in str(err.message), (
+            "message lacks a named %(uri)s placeholder"
+        )
         assert err.params == {"uri": "not-absolute"}
         assert "not-absolute" in excinfo.value.messages[0]
 
@@ -168,11 +200,17 @@ class TestStaticUriValidationMessages:
         # both the value and the offending scheme. "javascript" is outside the default
         # allowlist (T035) so it would already be refused there; the allowlist is
         # overridden to include it so this exercises the denylist's own message.
-        settings.CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES = ["http", "https", "javascript"]
+        settings.CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES = [
+            "http",
+            "https",
+            "javascript",
+        ]
         with pytest.raises(ValidationError) as excinfo:
             validate_static_uri("javascript:alert(1)")
         err = excinfo.value
-        assert isinstance(err.message, Promise), "unsafe-scheme message is not lazily translatable"
+        assert isinstance(err.message, Promise), (
+            "unsafe-scheme message is not lazily translatable"
+        )
         assert "%(uri)s" in str(err.message) and "%(scheme)s" in str(err.message)
         assert err.params == {"uri": "javascript:alert(1)", "scheme": "javascript"}
         assert "javascript" in excinfo.value.messages[0]
@@ -184,7 +222,9 @@ class TestStaticUriValidationMessages:
         with pytest.raises(ValidationError) as excinfo:
             validate_static_uri("file:///etc/passwd")
         err = excinfo.value
-        assert isinstance(err.message, Promise), "scheme-not-allowed message is not lazily translatable"
+        assert isinstance(err.message, Promise), (
+            "scheme-not-allowed message is not lazily translatable"
+        )
         assert "%(uri)s" in str(err.message) and "%(scheme)s" in str(err.message)
         assert err.params == {"uri": "file:///etc/passwd", "scheme": "file"}
         assert err.code == "static_uri_scheme_not_allowed"
@@ -198,9 +238,18 @@ class TestStaticUriValidationMessages:
         with pytest.raises(ValidationError) as excinfo:
             validate_static_uri(overlong)
         err = excinfo.value
-        assert isinstance(err.message, Promise), "too-long message is not lazily translatable"
-        assert all(placeholder in str(err.message) for placeholder in ("%(max_length)s", "%(uri)s", "%(length)s"))
-        assert err.params == {"max_length": 500, "uri": str(Truncator(overlong).chars(80)), "length": len(overlong)}
+        assert isinstance(err.message, Promise), (
+            "too-long message is not lazily translatable"
+        )
+        assert all(
+            placeholder in str(err.message)
+            for placeholder in ("%(max_length)s", "%(uri)s", "%(length)s")
+        )
+        assert err.params == {
+            "max_length": 500,
+            "uri": str(Truncator(overlong).chars(80)),
+            "length": len(overlong),
+        }
 
     def test_static_uri_unparseable_message_uses_named_placeholder(self):
         # T031: urllib.parse.urlsplit raises a bare ValueError for some malformed input
@@ -209,8 +258,12 @@ class TestStaticUriValidationMessages:
         with pytest.raises(ValidationError) as excinfo:
             validate_static_uri("http://exa℀mple.com/x")
         err = excinfo.value
-        assert isinstance(err.message, Promise), "unparseable message is not lazily translatable"
-        assert "%(uri)s" in str(err.message), "message lacks a named %(uri)s placeholder"
+        assert isinstance(err.message, Promise), (
+            "unparseable message is not lazily translatable"
+        )
+        assert "%(uri)s" in str(err.message), (
+            "message lacks a named %(uri)s placeholder"
+        )
         assert err.params == {"uri": "http://exa℀mple.com/x"}
         assert err.code == "static_uri_unparseable"
 
@@ -299,21 +352,30 @@ def test_concept_label_has_one_preferred_per_language_constraint():
         (
             c
             for c in ConceptLabel._meta.constraints
-            if isinstance(c, UniqueConstraint) and c.name == "one_preferred_label_per_language"
+            if isinstance(c, UniqueConstraint)
+            and c.name == "one_preferred_label_per_language"
         ),
         None,
     )
-    assert constraint is not None, "missing one_preferred_label_per_language partial unique constraint"
+    assert constraint is not None, (
+        "missing one_preferred_label_per_language partial unique constraint"
+    )
     assert tuple(constraint.fields) == ("concept", "language")
-    assert constraint.condition is not None, "the preferred-label uniqueness must be a *partial* constraint"
+    assert constraint.condition is not None, (
+        "the preferred-label uniqueness must be a *partial* constraint"
+    )
 
 
 def test_concept_note_value_is_unindexed():
     # decisions.md §20: value is free documentary prose with no lookup path this
     # slice, so it carries no db_index and appears in no explicit index.
-    assert ConceptNote._meta.get_field("value").db_index is False, "ConceptNote.value must stay unindexed"
+    assert ConceptNote._meta.get_field("value").db_index is False, (
+        "ConceptNote.value must stay unindexed"
+    )
     for index in ConceptNote._meta.indexes:
-        assert "value" not in index.fields, "ConceptNote.value must not be part of any index"
+        assert "value" not in index.fields, (
+            "ConceptNote.value must not be part of any index"
+        )
 
 
 def test_concept_note_and_label_fks_are_indexed():
@@ -344,7 +406,9 @@ def test_self_relation_message_is_translatable():
     with pytest.raises(ValidationError) as excinfo:
         granite.add_broader(granite)
     err = _authored_nonfield_error(excinfo.value)
-    assert isinstance(err.message, Promise), "self-relation message is not lazily translatable"
+    assert isinstance(err.message, Promise), (
+        "self-relation message is not lazily translatable"
+    )
 
 
 @pytest.mark.django_db
@@ -357,7 +421,9 @@ def test_cross_vocabulary_relation_message_uses_named_placeholders():
     with pytest.raises(ValidationError) as excinfo:
         granite.add_related(quartz)
     err = _authored_nonfield_error(excinfo.value)
-    assert isinstance(err.message, Promise), "cross-vocabulary message is not lazily translatable"
+    assert isinstance(err.message, Promise), (
+        "cross-vocabulary message is not lazily translatable"
+    )
     assert "%(source)s" in str(err.message) and "%(target)s" in str(err.message)
     assert set(err.params) == {"source", "target"}
 
@@ -372,7 +438,9 @@ def test_disjointness_message_uses_named_placeholder():
     with pytest.raises(ValidationError) as excinfo:
         granite.add_related(igneous)
     err = _authored_nonfield_error(excinfo.value)
-    assert isinstance(err.message, Promise), "disjointness message is not lazily translatable"
+    assert isinstance(err.message, Promise), (
+        "disjointness message is not lazily translatable"
+    )
     assert "%(kind)s" in str(err.message)
     assert set(err.params) == {"kind"}
 
@@ -380,14 +448,24 @@ def test_disjointness_message_uses_named_placeholder():
 def test_concept_relation_reverse_read_path_is_indexed():
     # FR-012 / research R6: the (target, kind) reverse-read path is indexed deliberately.
     indexed = [tuple(index.fields) for index in ConceptRelation._meta.indexes]
-    assert ("target", "kind") in indexed, f"ConceptRelation missing a (target, kind) index; has {indexed}"
+    assert ("target", "kind") in indexed, (
+        f"ConceptRelation missing a (target, kind) index; has {indexed}"
+    )
 
 
 def test_concept_relation_has_unique_and_self_constraints():
     names = {c.name for c in ConceptRelation._meta.constraints}
-    assert "unique_concept_relation" in names, "missing the (source, target, kind) unique constraint (FR-007)"
-    assert "concept_relation_not_self" in names, "missing the not-self check constraint (FR-006)"
-    unique = next(c for c in ConceptRelation._meta.constraints if c.name == "unique_concept_relation")
+    assert "unique_concept_relation" in names, (
+        "missing the (source, target, kind) unique constraint (FR-007)"
+    )
+    assert "concept_relation_not_self" in names, (
+        "missing the not-self check constraint (FR-006)"
+    )
+    unique = next(
+        c
+        for c in ConceptRelation._meta.constraints
+        if c.name == "unique_concept_relation"
+    )
     assert tuple(unique.fields) == ("source", "target", "kind")
 
 
@@ -415,8 +493,12 @@ def test_cross_vocabulary_membership_message_uses_named_placeholders():
     with pytest.raises(ValidationError) as excinfo:
         igneous.add(mica)
     err = _authored_nonfield_error(excinfo.value)
-    assert isinstance(err.message, Promise), "cross-vocabulary membership message is not lazily translatable"
-    assert "%(concept_scheme)s" in str(err.message) and "%(collection_scheme)s" in str(err.message)
+    assert isinstance(err.message, Promise), (
+        "cross-vocabulary membership message is not lazily translatable"
+    )
+    assert "%(concept_scheme)s" in str(err.message) and "%(collection_scheme)s" in str(
+        err.message
+    )
     assert set(err.params) == {"concept_scheme", "collection_scheme"}
 
 
@@ -433,7 +515,9 @@ def test_not_ordered_guard_message_uses_named_placeholder():
     # a non-field ValidationError raised directly (no error_dict); read messages/params off it
     assert isinstance(excinfo.value.messages[0], str)
     err = excinfo.value.error_list[0]
-    assert isinstance(err.message, Promise), "not-ordered guard message is not lazily translatable"
+    assert isinstance(err.message, Promise), (
+        "not-ordered guard message is not lazily translatable"
+    )
     assert "%(name)s" in str(err.message)
     assert set(err.params) == {"name"}
 
@@ -441,8 +525,14 @@ def test_not_ordered_guard_message_uses_named_placeholder():
 def test_collection_member_has_held_once_constraint_and_order_index():
     # FR-004 / Article XIII: held-once is a DB unique constraint; the ordered read is index-backed.
     names = {c.name for c in CollectionMember._meta.constraints}
-    assert "unique_collection_member" in names, "missing the (collection, concept) held-once constraint (FR-004)"
-    unique = next(c for c in CollectionMember._meta.constraints if c.name == "unique_collection_member")
+    assert "unique_collection_member" in names, (
+        "missing the (collection, concept) held-once constraint (FR-004)"
+    )
+    unique = next(
+        c
+        for c in CollectionMember._meta.constraints
+        if c.name == "unique_collection_member"
+    )
     assert tuple(unique.fields) == ("collection", "concept")
     indexed = [tuple(index.fields) for index in CollectionMember._meta.indexes]
     assert ("collection", "position") in indexed, (
@@ -456,11 +546,14 @@ def test_collection_has_per_scheme_unique_slug_constraint():
         (
             c
             for c in Collection._meta.constraints
-            if isinstance(c, UniqueConstraint) and c.name == "unique_collection_slug_per_scheme"
+            if isinstance(c, UniqueConstraint)
+            and c.name == "unique_collection_slug_per_scheme"
         ),
         None,
     )
-    assert constraint is not None, "missing unique_collection_slug_per_scheme constraint"
+    assert constraint is not None, (
+        "missing unique_collection_slug_per_scheme constraint"
+    )
     assert tuple(constraint.fields) == ("scheme", "slug")
 
 
@@ -482,27 +575,41 @@ class TestStaticUriIndexing:
     @pytest.mark.parametrize("model", [ConceptScheme, Concept, Collection])
     def test_static_uri_is_covered_only_by_its_partial_unique_constraint(self, model):
         field = model._meta.get_field("static_uri")
-        assert field.db_index is False, f"{model.__name__}.static_uri must not carry a plain db_index"
+        assert field.db_index is False, (
+            f"{model.__name__}.static_uri must not carry a plain db_index"
+        )
         for index in model._meta.indexes:
             assert "static_uri" not in index.fields, (
                 f"{model.__name__}.static_uri must not appear in any explicit Meta.indexes entry"
             )
         constraint_name = f"{model.__name__.lower()}_static_uri_unique"
         constraint = next(
-            (c for c in model._meta.constraints if isinstance(c, UniqueConstraint) and c.name == constraint_name),
+            (
+                c
+                for c in model._meta.constraints
+                if isinstance(c, UniqueConstraint) and c.name == constraint_name
+            ),
             None,
         )
-        assert constraint is not None, f"missing {constraint_name} partial unique constraint"
+        assert constraint is not None, (
+            f"missing {constraint_name} partial unique constraint"
+        )
         assert tuple(constraint.fields) == ("static_uri",)
-        assert constraint.condition is not None, "static_uri's uniqueness must be a *partial* constraint"
+        assert constraint.condition is not None, (
+            "static_uri's uniqueness must be a *partial* constraint"
+        )
 
     def test_local_url_and_has_static_uri_are_properties_not_indexable_columns(self):
         # Neither local_url nor has_static_uri is a model field, so neither can carry an
         # index; they compose from slug fields already indexed/constrained by R1.
         for model in (ConceptScheme, Concept, Collection):
             field_names = {field.name for field in model._meta.get_fields()}
-            assert "local_url" not in field_names, f"{model.__name__}.local_url must not be a model field"
-            assert "has_static_uri" not in field_names, f"{model.__name__}.has_static_uri must not be a model field"
+            assert "local_url" not in field_names, (
+                f"{model.__name__}.local_url must not be a model field"
+            )
+            assert "has_static_uri" not in field_names, (
+                f"{model.__name__}.has_static_uri must not be a model field"
+            )
             assert isinstance(model.local_url, property)
             assert isinstance(model.has_static_uri, property)
 
@@ -518,26 +625,46 @@ class TestStaticUriFieldAttributesAgree:
     attributes stops matching the others.
     """
 
-    def test_the_three_concrete_models_static_uri_fields_agree_on_every_shared_attribute(self):
-        fields = {model: model._meta.get_field("static_uri") for model in (ConceptScheme, Concept, Collection)}
-        max_lengths = {model.__name__: field.max_length for model, field in fields.items()}
+    def test_the_three_concrete_models_static_uri_fields_agree_on_every_shared_attribute(
+        self,
+    ):
+        fields = {
+            model: model._meta.get_field("static_uri")
+            for model in (ConceptScheme, Concept, Collection)
+        }
+        max_lengths = {
+            model.__name__: field.max_length for model, field in fields.items()
+        }
         nulls = {model.__name__: field.null for model, field in fields.items()}
         blanks = {model.__name__: field.blank for model, field in fields.items()}
-        verbose_names = {model.__name__: str(field.verbose_name) for model, field in fields.items()}
+        verbose_names = {
+            model.__name__: str(field.verbose_name) for model, field in fields.items()
+        }
 
         # Validators are compared by (type, limit_value) rather than identity or raw repr:
         # Django gives every field its own MaxLengthValidator *instance* (derived from
         # max_length), so instances that are equivalent are still distinct objects with
         # distinct default reprs — comparing raw repr would report a false disagreement.
         def _validator_signature(v):
-            return (type(v).__name__, getattr(v, "limit_value", None), getattr(v, "__qualname__", None))
+            return (
+                type(v).__name__,
+                getattr(v, "limit_value", None),
+                getattr(v, "__qualname__", None),
+            )
 
         validator_reprs = {
-            model.__name__: [_validator_signature(v) for v in field.validators] for model, field in fields.items()
+            model.__name__: [_validator_signature(v) for v in field.validators]
+            for model, field in fields.items()
         }
-        assert len(set(max_lengths.values())) == 1, f"static_uri.max_length disagrees across models: {max_lengths}"
-        assert len(set(nulls.values())) == 1, f"static_uri.null disagrees across models: {nulls}"
-        assert len(set(blanks.values())) == 1, f"static_uri.blank disagrees across models: {blanks}"
+        assert len(set(max_lengths.values())) == 1, (
+            f"static_uri.max_length disagrees across models: {max_lengths}"
+        )
+        assert len(set(nulls.values())) == 1, (
+            f"static_uri.null disagrees across models: {nulls}"
+        )
+        assert len(set(blanks.values())) == 1, (
+            f"static_uri.blank disagrees across models: {blanks}"
+        )
         assert len(set(verbose_names.values())) == 1, (
             f"static_uri.verbose_name disagrees across models: {verbose_names}"
         )
@@ -556,7 +683,11 @@ class TestStaticUriFieldAttributesAgree:
 # passed to a translation call (`_`/`gettext_lazy`/`ngettext_lazy`) carries a positional `%`
 # placeholder rather than a named one.
 
-_MANAGEMENT_I18N_MODULES = [import_skos_command_module, rendering_module, sources_module]
+_MANAGEMENT_I18N_MODULES = [
+    import_skos_command_module,
+    rendering_module,
+    sources_module,
+]
 _TRANSLATION_CALL_NAMES = {"_", "gettext_lazy", "ngettext_lazy"}
 # A `%` not immediately followed by `(` (a named placeholder's opening paren) or another `%`
 # (an escaped literal percent) is positional: %s, %d, %-10.2f, and so on.
@@ -582,7 +713,11 @@ class ManagementI18nVisitor(ast.NodeVisitor):
 
     @staticmethod
     def _str_constant(node: ast.expr) -> str | None:
-        return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
+        return (
+            node.value
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            else None
+        )
 
     def visit_Call(self, node: ast.Call) -> None:
         name = self._call_name(node)
@@ -614,7 +749,10 @@ class ManagementI18nVisitor(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign) -> None:
         # A command's own `help = "..."` class attribute (Django reads it as the command's
         # top-level help text, alongside every argument's own `help=`).
-        if any(isinstance(target, ast.Name) and target.id == "help" for target in node.targets):
+        if any(
+            isinstance(target, ast.Name) and target.id == "help"
+            for target in node.targets
+        ):
             literal = self._str_constant(node.value)
             if literal is not None:
                 self.bare_literals.append(literal)
@@ -639,11 +777,15 @@ class TestManagementI18nSweepVisitorCatchesAViolation:
     management package."""
 
     def test_catches_a_positional_placeholder_in_a_translation_call(self):
-        visitor = _visit_source('from django.utils.translation import gettext_lazy as _\n_("%s changed")\n')
+        visitor = _visit_source(
+            'from django.utils.translation import gettext_lazy as _\n_("%s changed")\n'
+        )
         assert visitor.positional_placeholders == ["%s changed"]
 
     def test_catches_a_bare_literal_raised_as_a_command_error(self):
-        visitor = _visit_source("from django.core.management.base import CommandError\nraise CommandError('boom')\n")
+        visitor = _visit_source(
+            "from django.core.management.base import CommandError\nraise CommandError('boom')\n"
+        )
         assert visitor.bare_literals == ["boom"]
 
     def test_catches_a_bare_literal_written_to_stdout(self):
@@ -678,7 +820,9 @@ class TestManagementPackageI18nSweep:
     with only named placeholders. Earlier tasks wrapped as they wrote; this asserts the whole
     package holds, so a later addition that misses one is caught here rather than by review."""
 
-    @pytest.mark.parametrize("module", _MANAGEMENT_I18N_MODULES, ids=lambda m: m.__name__)
+    @pytest.mark.parametrize(
+        "module", _MANAGEMENT_I18N_MODULES, ids=lambda m: m.__name__
+    )
     def test_every_output_string_is_translatable_with_named_placeholders(self, module):
         source = Path(inspect.getfile(module)).read_text()
         visitor = _visit_source(source)
@@ -722,7 +866,13 @@ class TestManagementPackageI18nSweep:
 # cover, and it carries the same kind of sinks this visitor already recognises — none of them
 # populated, since the module is one lazy lookup function that returns a class or `None`.
 
-_FIELDS_CHECKS_MODULES = [fields_module, checks_module, forms_module, views_module, admin_module]
+_FIELDS_CHECKS_MODULES = [
+    fields_module,
+    checks_module,
+    forms_module,
+    views_module,
+    admin_module,
+]
 _FIELD_METADATA_KEYWORDS = {"help_text", "verbose_name", "verbose_name_plural"}
 _DIAGNOSTIC_MESSAGE_KEYWORDS = {"msg", "message", "hint"}
 
@@ -748,7 +898,11 @@ class FieldsChecksI18nVisitor(ast.NodeVisitor):
         # literal. ast.JoinedStr carries no .value, so report its source text.
         if isinstance(node, ast.JoinedStr):
             return ast.unparse(node)
-        return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
+        return (
+            node.value
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            else None
+        )
 
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
@@ -762,7 +916,9 @@ class FieldsChecksI18nVisitor(ast.NodeVisitor):
             and func.value.id == "checks"
             and func.attr in {"Warning", "Error"}
         )
-        is_translation_call = isinstance(func, ast.Name) and func.id in _TRANSLATION_CALL_NAMES
+        is_translation_call = (
+            isinstance(func, ast.Name) and func.id in _TRANSLATION_CALL_NAMES
+        )
         if is_translation_call:
             for arg in node.args:
                 literal = self._str_constant(arg)
@@ -782,7 +938,10 @@ class FieldsChecksI18nVisitor(ast.NodeVisitor):
         elif isinstance(func, ast.Attribute) and func.attr == "setdefault":
             # kwargs.setdefault("help_text", <value>) — how ConceptField ships a default
             # while still letting a consumer override it.
-            if len(node.args) == 2 and self._str_constant(node.args[0]) in _FIELD_METADATA_KEYWORDS:
+            if (
+                len(node.args) == 2
+                and self._str_constant(node.args[0]) in _FIELD_METADATA_KEYWORDS
+            ):
                 literal = self._str_constant(node.args[1])
                 if literal is not None:
                     self.bare_literals.append(literal)
@@ -799,7 +958,9 @@ class FieldsChecksI18nVisitor(ast.NodeVisitor):
         # error_messages = {...} / default_error_messages = {...} — every dict value is a
         # message a consumer eventually reads off a raised ValidationError.
         names = {target.id for target in node.targets if isinstance(target, ast.Name)}
-        if names & {"error_messages", "default_error_messages"} and isinstance(node.value, ast.Dict):
+        if names & {"error_messages", "default_error_messages"} and isinstance(
+            node.value, ast.Dict
+        ):
             for value in node.value.values:
                 literal = self._str_constant(value)
                 if literal is not None:
@@ -841,7 +1002,9 @@ class TestFieldsChecksI18nVisitorCatchesAViolation:
         assert visitor.bare_literals == ["boom"]
 
     def test_catches_a_bare_help_text_default_via_kwargs_setdefault(self):
-        visitor = _visit_fields_checks_source("kwargs.setdefault('help_text', 'boom')\n")
+        visitor = _visit_fields_checks_source(
+            "kwargs.setdefault('help_text', 'boom')\n"
+        )
         assert visitor.bare_literals == ["boom"]
 
     def test_catches_a_bare_error_messages_dict_value(self):
@@ -880,7 +1043,9 @@ class TestFieldsChecksI18nVisitorCatchesAViolation:
     def test_catches_a_bare_interpolated_message(self):
         # checks.py's own message shape: the literal sits under a `%` BinOp, not directly
         # under the call.
-        visitor = _visit_fields_checks_source("checks.Warning('boom %(model)s' % {'model': m})\n")
+        visitor = _visit_fields_checks_source(
+            "checks.Warning('boom %(model)s' % {'model': m})\n"
+        )
         assert visitor.bare_literals == ["boom %(model)s"]
 
     def test_catches_a_bare_f_string_message(self):
@@ -888,7 +1053,9 @@ class TestFieldsChecksI18nVisitorCatchesAViolation:
         assert visitor.bare_literals == ["f'boom {model}'"]
 
     def test_catches_a_bare_hint_keyword_literal(self):
-        visitor = _visit_fields_checks_source("checks.Warning(_('fine'), hint='boom')\n")
+        visitor = _visit_fields_checks_source(
+            "checks.Warning(_('fine'), hint='boom')\n"
+        )
         assert visitor.bare_literals == ["boom"]
 
     def test_catches_a_bare_verbose_name_dict_literal_value(self):
@@ -957,7 +1124,9 @@ class TestFormsMissingRouteMessageIsTranslatable:
 # the shipped page documents all three, by name and in the order a developer does them, rather
 # than trusting a docs-writing pass to remember an amendment made after the plan was written.
 
-_SEARCH_DOC_TEXT = (Path(__file__).resolve().parents[1] / "docs" / "search.md").read_text()
+_SEARCH_DOC_TEXT = (
+    Path(__file__).resolve().parents[1] / "docs" / "search.md"
+).read_text()
 
 
 class TestDocumentationCoversTheConceptSearchControlsWiring:
@@ -969,10 +1138,16 @@ class TestDocumentationCoversTheConceptSearchControlsWiring:
         assert 'include("controlled_vocabularies.urls")' in _SEARCH_DOC_TEXT
 
     def test_documents_the_installed_apps_step(self):
-        assert '"django_tomselect"' in _SEARCH_DOC_TEXT and "INSTALLED_APPS" in _SEARCH_DOC_TEXT
+        assert (
+            '"django_tomselect"' in _SEARCH_DOC_TEXT
+            and "INSTALLED_APPS" in _SEARCH_DOC_TEXT
+        )
 
     def test_documents_the_middleware_step(self):
-        assert "django_tomselect.middleware.TomSelectMiddleware" in _SEARCH_DOC_TEXT and "MIDDLEWARE" in _SEARCH_DOC_TEXT
+        assert (
+            "django_tomselect.middleware.TomSelectMiddleware" in _SEARCH_DOC_TEXT
+            and "MIDDLEWARE" in _SEARCH_DOC_TEXT
+        )
 
     def test_documents_the_three_steps_in_wiring_order(self):
         # A project does these in the order the render-time failure modes surface them: no route
@@ -981,13 +1156,21 @@ class TestDocumentationCoversTheConceptSearchControlsWiring:
         # one a developer notices last, so it is documented last (decisions.md D15).
         route_at = _SEARCH_DOC_TEXT.index('include("controlled_vocabularies.urls")')
         installed_apps_at = _SEARCH_DOC_TEXT.index('"django_tomselect"')
-        middleware_at = _SEARCH_DOC_TEXT.index("django_tomselect.middleware.TomSelectMiddleware")
+        middleware_at = _SEARCH_DOC_TEXT.index(
+            "django_tomselect.middleware.TomSelectMiddleware"
+        )
         assert route_at < installed_apps_at < middleware_at
 
     def test_documents_what_the_endpoint_exposes(self):
-        assert "preferred label" in _SEARCH_DOC_TEXT and "identifier" in _SEARCH_DOC_TEXT and "vocabulary" in _SEARCH_DOC_TEXT
+        assert (
+            "preferred label" in _SEARCH_DOC_TEXT
+            and "identifier" in _SEARCH_DOC_TEXT
+            and "vocabulary" in _SEARCH_DOC_TEXT
+        )
 
-    def test_documents_no_default_permission_rule_and_the_include_as_the_restriction_lever(self):
+    def test_documents_no_default_permission_rule_and_the_include_as_the_restriction_lever(
+        self,
+    ):
         assert "no permission rule" in _SEARCH_DOC_TEXT
         assert "restrict" in _SEARCH_DOC_TEXT
 
@@ -1020,5 +1203,12 @@ class TestDocumentationCoversTheAdminSection:
         assert "read-only" in _SEARCH_DOC_TEXT and "preferred label" in _SEARCH_DOC_TEXT
 
     def test_documents_the_override_mechanisms(self):
-        for override in ("autocomplete_fields", "raw_id_fields", "readonly_fields", "Meta.widgets"):
-            assert override in _SEARCH_DOC_TEXT, f"docs/search.md does not document {override}"
+        for override in (
+            "autocomplete_fields",
+            "raw_id_fields",
+            "readonly_fields",
+            "Meta.widgets",
+        ):
+            assert override in _SEARCH_DOC_TEXT, (
+                f"docs/search.md does not document {override}"
+            )

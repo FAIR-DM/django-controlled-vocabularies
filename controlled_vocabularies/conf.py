@@ -18,7 +18,17 @@ DEFAULT_BASE_URI = "http://localhost:8000/vocabularies"
 #: ``urn``, ``doi``, ``info``, ``ark``, ``tag``, ``hdl``, and ``oai`` are the
 #: non-http identifier schemes real SKOS vocabularies actually use (``tag``,
 #: ``hdl``, and ``oai`` added in review round 4, decisions.md D15).
-DEFAULT_ALLOWED_URI_SCHEMES = ("http", "https", "urn", "doi", "info", "ark", "tag", "hdl", "oai")
+DEFAULT_ALLOWED_URI_SCHEMES = (
+    "http",
+    "https",
+    "urn",
+    "doi",
+    "info",
+    "ark",
+    "tag",
+    "hdl",
+    "oai",
+)
 
 
 def get_base_uri() -> str:
@@ -39,5 +49,9 @@ def get_allowed_uri_schemes() -> frozenset[str]:
     back to :data:`DEFAULT_ALLOWED_URI_SCHEMES`, so a downstream project with
     an unusual scheme is not stuck with the defaults (T035).
     """
-    schemes = getattr(settings, "CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES", DEFAULT_ALLOWED_URI_SCHEMES)
+    schemes = getattr(
+        settings,
+        "CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES",
+        DEFAULT_ALLOWED_URI_SCHEMES,
+    )
     return frozenset(scheme.lower() for scheme in schemes)

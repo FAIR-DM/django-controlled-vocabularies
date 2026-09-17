@@ -25,7 +25,11 @@ FORBIDDEN_ROOTS = (
 
 
 def core_modules():
-    return [path for path in sorted(PACKAGE_ROOT.rglob("*.py")) if UI_ROOT not in path.parents]
+    return [
+        path
+        for path in sorted(PACKAGE_ROOT.rglob("*.py"))
+        if UI_ROOT not in path.parents
+    ]
 
 
 def imported_names(path):
@@ -59,6 +63,9 @@ class TestCoreImportsNothingFromTheUIStack:
         offending = {
             name
             for name in imported
-            if any(name == forbidden or name.startswith(f"{forbidden}.") for forbidden in FORBIDDEN_ROOTS)
+            if any(
+                name == forbidden or name.startswith(f"{forbidden}.")
+                for forbidden in FORBIDDEN_ROOTS
+            )
         }
         assert not offending, f"{path} imports forbidden module(s): {offending}"

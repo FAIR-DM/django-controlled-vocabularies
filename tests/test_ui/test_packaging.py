@@ -5,8 +5,9 @@ There is no ``controlled_vocabularies/ui/packaging.py`` to mirror against — th
 (``[tool.forge.conformance] non-mirror-paths``, T001).
 """
 
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 PYPROJECT_PATH = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
@@ -41,7 +42,9 @@ class TestDjangoMVPIsOptOnly:
         groups = pyproject["tool"]["poetry"].get("group", {})
         for group_name, group in groups.items():
             dependencies = group.get("dependencies", {})
-            assert "django-mvp" not in dependencies, f"django-mvp found in poetry group '{group_name}'"
+            assert "django-mvp" not in dependencies, (
+                f"django-mvp found in poetry group '{group_name}'"
+            )
 
 
 class TestToolingReadsCoreOnlySettings:
@@ -54,10 +57,23 @@ class TestToolingReadsCoreOnlySettings:
         # which installs django-mvp's stack, the plugin cannot be constructed in a job installed
         # without the `ui` extra — and it fails as an internal error naming the plugin, not the
         # import, on a machine where mypy passes locally because the extra happens to be there.
-        settings_module = load_pyproject()["tool"]["django-stubs"]["django_settings_module"]
+        settings_module = load_pyproject()["tool"]["django-stubs"][
+            "django_settings_module"
+        ]
 
         assert settings_module == "tests.settings_core"
 
-        source = (PYPROJECT_PATH.parent / settings_module.replace(".", "/")).with_suffix(".py").read_text()
-        for ui_app in ("mvp", "django_cotton", "crispy_forms", "crispy_tailwind", "easy_icons", "flex_menu"):
+        source = (
+            (PYPROJECT_PATH.parent / settings_module.replace(".", "/"))
+            .with_suffix(".py")
+            .read_text()
+        )
+        for ui_app in (
+            "mvp",
+            "django_cotton",
+            "crispy_forms",
+            "crispy_tailwind",
+            "easy_icons",
+            "flex_menu",
+        ):
             assert f'"{ui_app}"' not in source, f"{settings_module} installs {ui_app}"

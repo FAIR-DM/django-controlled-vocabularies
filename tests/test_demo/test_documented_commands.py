@@ -26,7 +26,9 @@ DEMO_SECTION_HEADING = "## Try it: the demo project"
 #: A ``manage.py`` invocation, captured one line at a time — what runs before the interpreter,
 #: and the subcommand after it. Line-scoped deliberately: a pattern free to cross newlines
 #: swallows the surrounding prose into the prefix and reports the failure against that.
-MANAGE_COMMAND = re.compile(r"^(.*?)\bpython\s+manage\.py\s+([a-z_]+)", flags=re.MULTILINE)
+MANAGE_COMMAND = re.compile(
+    r"^(.*?)\bpython\s+manage\.py\s+([a-z_]+)", flags=re.MULTILINE
+)
 
 
 def demo_section():
@@ -55,7 +57,9 @@ class TestDocumentedCommands:
         assert "runserver" in subcommands, subcommands
 
     @pytest.mark.parametrize(("prefix", "subcommand"), documented_commands())
-    def test_every_documented_command_runs_in_the_installed_environment(self, prefix, subcommand):
+    def test_every_documented_command_runs_in_the_installed_environment(
+        self, prefix, subcommand
+    ):
         """Every invocation the section carries, not only the three that start it: the same
         drift that shipped a bare ``python manage.py migrate`` can ship a bare
         ``createsuperuser`` beside it."""

@@ -13,7 +13,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-INIT_PATH = Path(__file__).resolve().parents[2] / "controlled_vocabularies" / "ui" / "__init__.py"
+INIT_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "controlled_vocabularies"
+    / "ui"
+    / "__init__.py"
+)
 
 BOOT_SCRIPT = """
 import django

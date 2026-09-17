@@ -37,10 +37,18 @@ from django.utils.translation import gettext_lazy as _
 #: holds. Each is one static msgid with the restriction carried through a single
 #: named placeholder (Article XII), so the identifier stays the same whatever
 #: the declaration names.
-RESTRICTED_TO_COLLECTION_MESSAGE = _("%(value)s is not a valid concept in the '%(restriction)s' collection.")
-RESTRICTED_TO_CONCEPTS_MESSAGE = _("%(value)s is not one of the permitted concepts: '%(restriction)s'.")
-RESTRICTED_TO_BRANCH_MESSAGE = _("%(value)s is not a valid concept in the '%(restriction)s' branch.")
-UNRESTRICTED_VOCABULARY_MESSAGE = _("%(value)s is not a valid concept in the '%(vocabulary)s' vocabulary.")
+RESTRICTED_TO_COLLECTION_MESSAGE = _(
+    "%(value)s is not a valid concept in the '%(restriction)s' collection."
+)
+RESTRICTED_TO_CONCEPTS_MESSAGE = _(
+    "%(value)s is not one of the permitted concepts: '%(restriction)s'."
+)
+RESTRICTED_TO_BRANCH_MESSAGE = _(
+    "%(value)s is not a valid concept in the '%(restriction)s' branch."
+)
+UNRESTRICTED_VOCABULARY_MESSAGE = _(
+    "%(value)s is not a valid concept in the '%(vocabulary)s' vocabulary."
+)
 
 
 def _branch_closure(vocabulary, branch):
@@ -72,7 +80,11 @@ def _branch_closure(vocabulary, branch):
     """
     from .models import Concept, ConceptRelation
 
-    seen = set(Concept.objects.filter(scheme__slug=vocabulary, slug=branch).values_list("pk", flat=True))
+    seen = set(
+        Concept.objects.filter(scheme__slug=vocabulary, slug=branch).values_list(
+            "pk", flat=True
+        )
+    )
     frontier = set(seen)
     while frontier:
         frontier = (
@@ -138,7 +150,11 @@ class ConceptFieldMixin:
         read, never which value it holds — the value itself never reaches
         either default.
         """
-        if self.collection is not None or self.concepts is not None or self.branch is not None:
+        if (
+            self.collection is not None
+            or self.concepts is not None
+            or self.branch is not None
+        ):
             return self.default_restricted_help_text
         return self.default_help_text
 
@@ -167,7 +183,9 @@ class ConceptFieldMixin:
             slugs = tuple(vocabulary)
         for slug in slugs:
             if not isinstance(slug, str) or not slug:
-                raise TypeError(f"{type(self).__name__}() vocabulary elements must be non-empty strings; got {slug!r}.")
+                raise TypeError(
+                    f"{type(self).__name__}() vocabulary elements must be non-empty strings; got {slug!r}."
+                )
         return tuple(dict.fromkeys(slugs))
 
     def _normalise_restriction_slug(self, value, argument_name):
@@ -176,7 +194,9 @@ class ConceptFieldMixin:
         slug: a non-empty string, or a ``TypeError`` naming the class.
         """
         if not isinstance(value, str) or not value:
-            raise TypeError(f"{type(self).__name__}() {argument_name} must be a non-empty string; got {value!r}.")
+            raise TypeError(
+                f"{type(self).__name__}() {argument_name} must be a non-empty string; got {value!r}."
+            )
         return value
 
     def _normalise_concepts(self, concepts):
@@ -197,7 +217,9 @@ class ConceptFieldMixin:
         slugs = (concepts,) if isinstance(concepts, str) else tuple(concepts)
         for slug in slugs:
             if not isinstance(slug, str) or not slug:
-                raise TypeError(f"{type(self).__name__}() concepts elements must be non-empty strings; got {slug!r}.")
+                raise TypeError(
+                    f"{type(self).__name__}() concepts elements must be non-empty strings; got {slug!r}."
+                )
         normalised = tuple(dict.fromkeys(slugs))
         if not normalised:
             raise TypeError(
@@ -216,9 +238,17 @@ class ConceptFieldMixin:
         work; this only decides whether the declaration is one this package
         accepts.
         """
-        self.collection = None if collection is None else self._normalise_restriction_slug(collection, "collection")
+        self.collection = (
+            None
+            if collection is None
+            else self._normalise_restriction_slug(collection, "collection")
+        )
         self.concepts = None if concepts is None else self._normalise_concepts(concepts)
-        self.branch = None if branch is None else self._normalise_restriction_slug(branch, "branch")
+        self.branch = (
+            None
+            if branch is None
+            else self._normalise_restriction_slug(branch, "branch")
+        )
 
         restriction_names = [
             name
@@ -347,7 +377,10 @@ class ConceptFieldMixin:
 
         kwargs["model_field"] = self
         kwargs.setdefault(
-            "form_class", ConceptsChoiceField if isinstance(self, ManyToManyField) else ConceptChoiceField
+            "form_class",
+            ConceptsChoiceField
+            if isinstance(self, ManyToManyField)
+            else ConceptChoiceField,
         )
         return super().formfield(**kwargs)
 
@@ -448,14 +481,24 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
         "invalid_restricted_branch": RESTRICTED_TO_BRANCH_MESSAGE,
     }
 
-    default_help_text = _("A concept from this field's configured vocabulary or vocabularies.")
-    default_restricted_help_text = _("A concept from a restricted part of this field's configured vocabulary.")
+    default_help_text = _(
+        "A concept from this field's configured vocabulary or vocabularies."
+    )
+    default_restricted_help_text = _(
+        "A concept from a restricted part of this field's configured vocabulary."
+    )
 
-    def __init__(self, vocabulary=None, collection=None, concepts=None, branch=None, **kwargs):
+    def __init__(
+        self, vocabulary=None, collection=None, concepts=None, branch=None, **kwargs
+    ):
         if "on_delete" in kwargs:
-            raise TypeError("ConceptField() sets on_delete=PROTECT itself; a consumer may not override it.")
+            raise TypeError(
+                "ConceptField() sets on_delete=PROTECT itself; a consumer may not override it."
+            )
         kwargs["on_delete"] = PROTECT
-        super().__init__(**self._apply_vocabulary(vocabulary, collection, concepts, branch, kwargs))
+        super().__init__(
+            **self._apply_vocabulary(vocabulary, collection, concepts, branch, kwargs)
+        )
 
     def validate(self, value, model_instance):
         """Refuse a concept outside the named vocabulary, with a message that
@@ -593,8 +636,10 @@ def _create_membership_model(field, cls):
             "app_label": cls._meta.app_label,
             "db_tablespace": cls._meta.db_tablespace,
             "unique_together": (from_, to),
-            "verbose_name": _("%(from)s-%(to)s relationship") % {"from": from_, "to": to},
-            "verbose_name_plural": _("%(from)s-%(to)s relationships") % {"from": from_, "to": to},
+            "verbose_name": _("%(from)s-%(to)s relationship")
+            % {"from": from_, "to": to},
+            "verbose_name_plural": _("%(from)s-%(to)s relationships")
+            % {"from": from_, "to": to},
             "apps": field.model._meta.apps,
         },
     )
@@ -622,7 +667,9 @@ def _create_membership_model(field, cls):
     )
 
 
-def _refuse_concepts_the_restriction_does_not_admit(*, field, instance, action, reverse, model, pk_set, **kwargs):
+def _refuse_concepts_the_restriction_does_not_admit(
+    *, field, instance, action, reverse, model, pk_set, **kwargs
+):
     """``m2m_changed`` receiver for a :class:`ConceptsField`'s generated
     through model (FR-005, D2, R1, R3, R6, T012): refuse the whole write when
     any incoming concept falls outside ``field``'s resolved restriction — of
@@ -664,7 +711,14 @@ def _refuse_concepts_the_restriction_does_not_admit(*, field, instance, action, 
         return
     restriction = field.get_limit_choices_to()
     if reverse:
-        invalid = [] if type(instance).objects.filter(pk=instance.pk).filter(restriction).exists() else [instance]
+        invalid = (
+            []
+            if type(instance)
+            .objects.filter(pk=instance.pk)
+            .filter(restriction)
+            .exists()
+            else [instance]
+        )
     else:
         invalid = list(model.objects.filter(pk__in=pk_set).exclude(restriction))
     if not invalid:
@@ -770,7 +824,11 @@ def _install_required_set_check(cls):
 
         if self.pk is not None and validate_unique:
             for field in type(self)._meta.get_fields():
-                if isinstance(field, ConceptsField) and not field.blank and not getattr(self, field.name).exists():
+                if (
+                    isinstance(field, ConceptsField)
+                    and not field.blank
+                    and not getattr(self, field.name).exists()
+                ):
                     errors.setdefault(field.name, []).append(
                         ValidationError(
                             _("%(field)s requires at least one concept."),
@@ -810,16 +868,24 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
     imported class — see :class:`ConceptField`'s docstring for why.
     """
 
-    default_help_text = _("Concepts from this field's configured vocabulary or vocabularies.")
-    default_restricted_help_text = _("Concepts from a restricted part of this field's configured vocabulary.")
+    default_help_text = _(
+        "Concepts from this field's configured vocabulary or vocabularies."
+    )
+    default_restricted_help_text = _(
+        "Concepts from a restricted part of this field's configured vocabulary."
+    )
 
-    def __init__(self, vocabulary=None, collection=None, concepts=None, branch=None, **kwargs):
+    def __init__(
+        self, vocabulary=None, collection=None, concepts=None, branch=None, **kwargs
+    ):
         if "through" in kwargs:
             raise TypeError(
                 "ConceptsField() generates its own through model with PROTECT on the "
                 "foreign key to Concept; a consumer may not override it."
             )
-        super().__init__(**self._apply_vocabulary(vocabulary, collection, concepts, branch, kwargs))
+        super().__init__(
+            **self._apply_vocabulary(vocabulary, collection, concepts, branch, kwargs)
+        )
 
     def contribute_to_class(self, cls, name, **kwargs):
         """Attach the field, then generate the ``PROTECT`` membership model in
@@ -877,7 +943,9 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
         its own definition.
         """
         if self.remote_field.hidden:
-            self.remote_field.related_name = f"_{cls._meta.app_label}_{cls.__name__.lower()}_{name}_+"
+            self.remote_field.related_name = (
+                f"_{cls._meta.app_label}_{cls.__name__.lower()}_{name}_+"
+            )
         super(ManyToManyField, self).contribute_to_class(cls, name, **kwargs)
 
         if not cls._meta.abstract and not cls._meta.swapped:
@@ -885,7 +953,9 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
             _install_required_set_check(cls)
             if self.vocabulary:
                 m2m_changed.connect(
-                    partial(_refuse_concepts_the_restriction_does_not_admit, field=self),
+                    partial(
+                        _refuse_concepts_the_restriction_does_not_admit, field=self
+                    ),
                     sender=self.remote_field.through,
                     weak=False,
                 )
@@ -893,7 +963,9 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
             def get_labels(instance):
                 if instance.pk is None:
                     return []
-                return [concept.display_label() for concept in getattr(instance, name).all()]
+                return [
+                    concept.display_label() for concept in getattr(instance, name).all()
+                ]
 
             def get_uris(instance):
                 if instance.pk is None:
