@@ -34,7 +34,9 @@ from tests.testapp.models import Specimen
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _run_django_admin(*args: str, settings: str = "tests.settings") -> subprocess.CompletedProcess:
+def _run_django_admin(
+    *args: str, settings: str = "tests.settings"
+) -> subprocess.CompletedProcess:
     """Run ``django-admin`` in a fresh subprocess against a brand-new, never-migrated
     ``:memory:`` sqlite database (``tests/settings.py``'s ``DATABASES``) — the state
     the very first ``migrate`` on a real install runs the checks against (T009).
@@ -86,7 +88,9 @@ class TestCheckConceptFieldVocabularies:
             assert isinstance(warning, django_checks.Warning)
             assert warning.id == CHECK_ID
 
-    def test_reports_only_the_absent_vocabulary_when_a_concept_field_names_several(self):
+    def test_reports_only_the_absent_vocabulary_when_a_concept_field_names_several(
+        self,
+    ):
         """#111 — the single-value field reaches the check the same way the
         many-valued one does, one warning per absent slug it names."""
         ConceptSchemeFactory(name="Rock Type")
@@ -94,7 +98,10 @@ class TestCheckConceptFieldVocabularies:
         warnings = check_concept_field_vocabularies(None)
 
         matches = [
-            w for w in warnings if w.obj.model._meta.label == "testapp.Borehole" and w.obj.name == "dominant_material"
+            w
+            for w in warnings
+            if w.obj.model._meta.label == "testapp.Borehole"
+            and w.obj.name == "dominant_material"
         ]
         assert len(matches) == 1
         message = str(matches[0].msg)
@@ -105,12 +112,20 @@ class TestCheckConceptFieldVocabularies:
         """#111 — a single-value field naming none names nothing that could be
         missing, so the check has nothing to say about it, before or after any
         vocabulary is imported."""
-        assert [w for w in check_concept_field_vocabularies(None) if w.obj.model._meta.label == "testapp.Sketch"] == []
+        assert [
+            w
+            for w in check_concept_field_vocabularies(None)
+            if w.obj.model._meta.label == "testapp.Sketch"
+        ] == []
 
         ConceptSchemeFactory(name="Rock Type")
         ConceptSchemeFactory(name="Mineral")
 
-        assert [w for w in check_concept_field_vocabularies(None) if w.obj.model._meta.label == "testapp.Sketch"] == []
+        assert [
+            w
+            for w in check_concept_field_vocabularies(None)
+            if w.obj.model._meta.label == "testapp.Sketch"
+        ] == []
 
     def test_costs_one_query_however_many_fields_are_declared(self):
         # The test app declares several ConceptField and ConceptsField
@@ -133,7 +148,12 @@ class TestCheckConceptsFieldVocabularies:
     def test_warns_about_a_concepts_field_whose_vocabulary_is_absent(self):
         warnings = check_concept_field_vocabularies(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.Deposit" and w.obj.name == "rock_types"]
+        matches = [
+            w
+            for w in warnings
+            if w.obj.model._meta.label == "testapp.Deposit"
+            and w.obj.name == "rock_types"
+        ]
         assert len(matches) == 1
         message = str(matches[0].msg)
         assert "testapp.Deposit" in message
@@ -145,13 +165,24 @@ class TestCheckConceptsFieldVocabularies:
 
         warnings = check_concept_field_vocabularies(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.Deposit" and w.obj.name == "rock_types"]
+        matches = [
+            w
+            for w in warnings
+            if w.obj.model._meta.label == "testapp.Deposit"
+            and w.obj.name == "rock_types"
+        ]
         assert matches == []
 
-    def test_reports_both_field_types_when_one_model_declares_both_against_one_absent_vocabulary(self):
+    def test_reports_both_field_types_when_one_model_declares_both_against_one_absent_vocabulary(
+        self,
+    ):
         warnings = check_concept_field_vocabularies(None)
 
-        matches = {w.obj.name for w in warnings if w.obj.model._meta.label == "testapp.RockSample"}
+        matches = {
+            w.obj.name
+            for w in warnings
+            if w.obj.model._meta.label == "testapp.RockSample"
+        }
         assert matches == {"primary_mineral", "associated_minerals"}
 
     def test_reports_only_the_absent_vocabulary_when_a_field_names_several(self):
@@ -159,7 +190,12 @@ class TestCheckConceptsFieldVocabularies:
 
         warnings = check_concept_field_vocabularies(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.FieldNote" and w.obj.name == "keywords"]
+        matches = [
+            w
+            for w in warnings
+            if w.obj.model._meta.label == "testapp.FieldNote"
+            and w.obj.name == "keywords"
+        ]
         assert len(matches) == 1
         message = str(matches[0].msg)
         assert "mineral" in message
@@ -168,7 +204,9 @@ class TestCheckConceptsFieldVocabularies:
     def test_never_reports_a_field_naming_no_vocabulary(self):
         warnings = check_concept_field_vocabularies(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.Photograph"]
+        matches = [
+            w for w in warnings if w.obj.model._meta.label == "testapp.Photograph"
+        ]
         assert matches == []
 
     def test_never_reports_a_field_naming_no_vocabulary_even_once_others_exist(self):
@@ -177,7 +215,9 @@ class TestCheckConceptsFieldVocabularies:
 
         warnings = check_concept_field_vocabularies(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.Photograph"]
+        matches = [
+            w for w in warnings if w.obj.model._meta.label == "testapp.Photograph"
+        ]
         assert matches == []
 
     def test_costs_one_query_when_a_field_names_several_vocabularies(self):
@@ -214,7 +254,12 @@ class TestCheckConceptFieldRestrictionTargets:
 
         warnings = check_concept_field_restriction_targets(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.ChipSample" and w.obj.name == "rock_type"]
+        matches = [
+            w
+            for w in warnings
+            if w.obj.model._meta.label == "testapp.ChipSample"
+            and w.obj.name == "rock_type"
+        ]
         assert len(matches) == 1
         message = str(matches[0].msg)
         assert "basalt" in message
@@ -223,7 +268,9 @@ class TestCheckConceptFieldRestrictionTargets:
     def test_warns_about_an_absent_branch_target(self):
         warnings = check_concept_field_restriction_targets(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.BranchSample"]
+        matches = [
+            w for w in warnings if w.obj.model._meta.label == "testapp.BranchSample"
+        ]
         assert len(matches) == 1
         message = str(matches[0].msg)
         assert "igneous" in message
@@ -245,7 +292,9 @@ class TestCheckConceptFieldRestrictionTargets:
             "testapp.BranchSample",
             "testapp.BranchTray",
         }
-        assert [w for w in warnings if w.obj.model._meta.label in restricted_labels] == []
+        assert [
+            w for w in warnings if w.obj.model._meta.label in restricted_labels
+        ] == []
 
     def test_resolves_on_the_vocabulary_and_target_pair_not_a_flat_set_of_slugs(self):
         """The one thing most likely to be got wrong (plan.md A6, decisions.md
@@ -260,7 +309,12 @@ class TestCheckConceptFieldRestrictionTargets:
 
         warnings = check_concept_field_restriction_targets(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.CoreSample" and w.obj.name == "rock_type"]
+        matches = [
+            w
+            for w in warnings
+            if w.obj.model._meta.label == "testapp.CoreSample"
+            and w.obj.name == "rock_type"
+        ]
         assert len(matches) == 1
 
     def test_reported_objects_are_warnings_not_errors(self):
@@ -294,7 +348,12 @@ class TestCheckConceptFieldRestrictionTargetsStaysQuietWhenItShould:
 
         warnings = check_concept_field_restriction_targets(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.CoreSample" and w.obj.name == "rock_type"]
+        matches = [
+            w
+            for w in warnings
+            if w.obj.model._meta.label == "testapp.CoreSample"
+            and w.obj.name == "rock_type"
+        ]
         assert matches == []
 
     def test_silencing_the_check_id_suppresses_it(self):
@@ -303,7 +362,9 @@ class TestCheckConceptFieldRestrictionTargetsStaysQuietWhenItShould:
         assert CHECK_ID_MISSING_RESTRICTION_TARGET in stderr.getvalue()
 
         stderr = io.StringIO()
-        with override_settings(SILENCED_SYSTEM_CHECKS=[CHECK_ID_MISSING_RESTRICTION_TARGET]):
+        with override_settings(
+            SILENCED_SYSTEM_CHECKS=[CHECK_ID_MISSING_RESTRICTION_TARGET]
+        ):
             call_command("check", stderr=stderr)
         assert CHECK_ID_MISSING_RESTRICTION_TARGET not in stderr.getvalue()
 
@@ -320,7 +381,12 @@ class TestCheckConceptFieldRestrictionTargetsStaysQuietWhenItShould:
 
         warnings = check_concept_field_restriction_targets(None)
 
-        matches = [w for w in warnings if w.obj.model._meta.label == "testapp.ChipSample" and w.obj.name == "rock_type"]
+        matches = [
+            w
+            for w in warnings
+            if w.obj.model._meta.label == "testapp.ChipSample"
+            and w.obj.name == "rock_type"
+        ]
         assert len(matches) == 1
         message = str(matches[0].msg)
         assert "granite" in message
@@ -369,7 +435,9 @@ class TestNothingAboutAnAbsentRestrictionTargetStopsTheProject:
     someone "helpfully" turning W005 into an ``Error`` or resolving a
     restriction target at declaration time."""
 
-    def test_check_makemigrations_and_migrate_all_succeed_with_every_target_absent(self):
+    def test_check_makemigrations_and_migrate_all_succeed_with_every_target_absent(
+        self,
+    ):
         result = _run_django_admin(
             "shell",
             "--no-startup",
@@ -469,7 +537,9 @@ class TestCheckDjangoTomselectInstalled:
     database."""
 
     def test_warns_when_django_tomselect_is_not_installed(self):
-        installed = [app for app in settings.INSTALLED_APPS if app != "django_tomselect"]
+        installed = [
+            app for app in settings.INSTALLED_APPS if app != "django_tomselect"
+        ]
         with override_settings(INSTALLED_APPS=installed):
             warnings = check_django_tomselect_installed(None)
 
@@ -485,7 +555,9 @@ class TestCheckDjangoTomselectInstalled:
         assert warnings == []
 
     def test_reported_objects_are_warnings_not_errors(self):
-        installed = [app for app in settings.INSTALLED_APPS if app != "django_tomselect"]
+        installed = [
+            app for app in settings.INSTALLED_APPS if app != "django_tomselect"
+        ]
         with override_settings(INSTALLED_APPS=installed):
             warnings = check_django_tomselect_installed(None)
 
@@ -520,7 +592,9 @@ class TestBothWiringChecksReachManageCheck:
         assert CHECK_ID_MISSING_ROUTE not in stderr.getvalue()
 
     def test_the_missing_installed_app_is_reported_by_manage_check(self):
-        installed = [app for app in settings.INSTALLED_APPS if app != "django_tomselect"]
+        installed = [
+            app for app in settings.INSTALLED_APPS if app != "django_tomselect"
+        ]
         stderr = io.StringIO()
         with override_settings(INSTALLED_APPS=installed):
             call_command("check", stderr=stderr)
@@ -665,7 +739,9 @@ class TestProjectWithoutTheAdminIsUnaffected:
         assert result.returncode == 0, result.stderr
         assert "ADMIN_NOT_IMPORTED" in result.stdout
 
-    def test_controlled_vocabularies_admin_registers_nothing_with_the_default_site(self, settings):
+    def test_controlled_vocabularies_admin_registers_nothing_with_the_default_site(
+        self, settings
+    ):
         """With the admin installed (``tests.settings``, this suite's default),
         ``controlled_vocabularies.admin`` still registers nothing — the module
         exists only to hold the lazy lookup (``decisions.md`` D10), never a
@@ -673,5 +749,7 @@ class TestProjectWithoutTheAdminIsUnaffected:
         from django.contrib import admin as django_admin
 
         assert "django.contrib.admin" in settings.INSTALLED_APPS
-        registered_app_labels = {model._meta.app_label for model in django_admin.site._registry}
+        registered_app_labels = {
+            model._meta.app_label for model in django_admin.site._registry
+        }
         assert "controlled_vocabularies" not in registered_app_labels

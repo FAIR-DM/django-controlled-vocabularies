@@ -25,7 +25,10 @@ class TestHTTPStubFixture:
 
     def test_the_stub_serves_a_configured_status_body_and_content_type(self, http_stub):
         http_stub.set_response(
-            "/vocab.ttl", status=200, body=b"@prefix skos: <http://example.org/> .", content_type="text/turtle"
+            "/vocab.ttl",
+            status=200,
+            body=b"@prefix skos: <http://example.org/> .",
+            content_type="text/turtle",
         )
         with urllib.request.urlopen(http_stub.url + "/vocab.ttl") as response:  # noqa: S310 -- stub is localhost-only
             assert response.status == 200
@@ -83,8 +86,12 @@ class TestSourceResolverFetch:
     a byte ceiling, a temporary file, and cleanup on both the success and the failure path.
     No real network call: every case is served by ``http_stub``."""
 
-    def test_a_served_document_is_fetched_to_a_temporary_file_with_the_url_as_base_uri(self, http_stub):
-        http_stub.set_response("/vocab.ttl", status=200, body=b"stub body", content_type="text/turtle")
+    def test_a_served_document_is_fetched_to_a_temporary_file_with_the_url_as_base_uri(
+        self, http_stub
+    ):
+        http_stub.set_response(
+            "/vocab.ttl", status=200, body=b"stub body", content_type="text/turtle"
+        )
         url = http_stub.url + "/vocab.ttl"
         resolver = SourceResolver(url, serialization="turtle")
         resolved = resolver.resolve()
@@ -111,9 +118,20 @@ class TestSourceResolverFetch:
         assert not Path(resolved.path).exists()
 
     def test_a_redirect_to_another_http_url_is_followed(self, http_stub):
-        http_stub.set_response("/redirect.ttl", status=302, headers={"Location": http_stub.url + "/target.ttl"})
-        http_stub.set_response("/target.ttl", status=200, body=b"redirected body", content_type="text/turtle")
-        resolver = SourceResolver(http_stub.url + "/redirect.ttl", serialization="turtle")
+        http_stub.set_response(
+            "/redirect.ttl",
+            status=302,
+            headers={"Location": http_stub.url + "/target.ttl"},
+        )
+        http_stub.set_response(
+            "/target.ttl",
+            status=200,
+            body=b"redirected body",
+            content_type="text/turtle",
+        )
+        resolver = SourceResolver(
+            http_stub.url + "/redirect.ttl", serialization="turtle"
+        )
         resolved = resolver.resolve()
         try:
             assert Path(resolved.path).read_bytes() == b"redirected body"
@@ -127,7 +145,9 @@ class TestSourceResolverFetch:
     def test_a_fetch_with_no_redirect_reports_the_address_it_was_given(self, http_stub):
         # The control for the line above: taking the base URI off the response must not
         # change what an ordinary, unredirected fetch reports.
-        http_stub.set_response("/vocab.ttl", status=200, body=b"body", content_type="text/turtle")
+        http_stub.set_response(
+            "/vocab.ttl", status=200, body=b"body", content_type="text/turtle"
+        )
         resolver = SourceResolver(http_stub.url + "/vocab.ttl", serialization="turtle")
         resolved = resolver.resolve()
         try:
@@ -135,13 +155,17 @@ class TestSourceResolverFetch:
         finally:
             resolver.cleanup()
 
-    def test_a_redirect_target_names_the_serialization_the_typed_address_does_not(self, http_stub):
+    def test_a_redirect_target_names_the_serialization_the_typed_address_does_not(
+        self, http_stub
+    ):
         # The second half of CORR-001: an extensionless redirecting address (a PURL, a
         # w3id) landing on a ".ttl" is the ordinary publishing shape. Guessing from the
         # typed address finds no extension and falls through; guessing from the served
         # address reads it straight off. No --format and no Content-Type here, so the
         # extension is the only thing that can answer.
-        http_stub.set_response("/latest", status=302, headers={"Location": http_stub.url + "/v2/rocks.ttl"})
+        http_stub.set_response(
+            "/latest", status=302, headers={"Location": http_stub.url + "/v2/rocks.ttl"}
+        )
         http_stub.set_response("/v2/rocks.ttl", status=200, body=b"body")
         resolver = SourceResolver(http_stub.url + "/latest")
         resolved = resolver.resolve()
@@ -150,8 +174,14 @@ class TestSourceResolverFetch:
         finally:
             resolver.cleanup()
 
-    def test_a_redirect_to_a_non_http_scheme_is_refused_without_opening_a_connection(self, http_stub):
-        http_stub.set_response("/redirect.ttl", status=302, headers={"Location": "ftp://10.255.255.1/vocab.ttl"})
+    def test_a_redirect_to_a_non_http_scheme_is_refused_without_opening_a_connection(
+        self, http_stub
+    ):
+        http_stub.set_response(
+            "/redirect.ttl",
+            status=302,
+            headers={"Location": "ftp://10.255.255.1/vocab.ttl"},
+        )
         url = http_stub.url + "/redirect.ttl"
         resolver = SourceResolver(url, serialization="turtle")
         started = time.monotonic()
@@ -163,10 +193,14 @@ class TestSourceResolverFetch:
         assert elapsed < 1.0
         assert url in str(exc_info.value)
 
-    def test_a_response_exceeding_the_byte_ceiling_is_abandoned_and_writes_nothing(self, http_stub, monkeypatch):
+    def test_a_response_exceeding_the_byte_ceiling_is_abandoned_and_writes_nothing(
+        self, http_stub, monkeypatch
+    ):
         monkeypatch.setattr(sources, "_MAX_RESPONSE_BYTES", 16)
         url = http_stub.url + "/big.ttl"
-        http_stub.set_response("/big.ttl", status=200, body=b"x" * 1000, content_type="text/turtle")
+        http_stub.set_response(
+            "/big.ttl", status=200, body=b"x" * 1000, content_type="text/turtle"
+        )
         resolver = SourceResolver(url, serialization="turtle")
         with pytest.raises(CommandError) as exc_info:
             resolver.resolve()
@@ -176,7 +210,9 @@ class TestSourceResolverFetch:
         resolver.cleanup()
         assert not temp_path.exists()
 
-    def test_a_transfer_exceeding_the_total_deadline_is_abandoned(self, http_stub, monkeypatch):
+    def test_a_transfer_exceeding_the_total_deadline_is_abandoned(
+        self, http_stub, monkeypatch
+    ):
         # SEC-703 (review, security): neither of the other two bounds catches a server
         # that answers continuously but slowly. The read timeout is per read, so a
         # trickle resets it forever, and the byte ceiling counts bytes a trickle never
@@ -185,7 +221,9 @@ class TestSourceResolverFetch:
         # trickle slowed, so the test costs a fraction of a second.
         monkeypatch.setattr(sources, "_MAX_TOTAL_SECONDS", 0)
         url = http_stub.url + "/slow.ttl"
-        http_stub.set_response("/slow.ttl", status=200, body=b"x" * 1000, content_type="text/turtle")
+        http_stub.set_response(
+            "/slow.ttl", status=200, body=b"x" * 1000, content_type="text/turtle"
+        )
         resolver = SourceResolver(url, serialization="turtle")
         with pytest.raises(CommandError) as exc_info:
             resolver.resolve()
@@ -199,7 +237,9 @@ class TestSourceResolverFetch:
     def test_an_ordinary_fetch_is_well_inside_the_total_deadline(self, http_stub):
         # The control: the deadline must be a stop for a pathological server, not a
         # bound an ordinary local fetch can approach.
-        http_stub.set_response("/vocab.ttl", status=200, body=b"x" * 1000, content_type="text/turtle")
+        http_stub.set_response(
+            "/vocab.ttl", status=200, body=b"x" * 1000, content_type="text/turtle"
+        )
         resolver = SourceResolver(http_stub.url + "/vocab.ttl", serialization="turtle")
         started = time.monotonic()
         resolver.resolve()
@@ -214,7 +254,12 @@ class TestSourceResolverSerializationLadder:
 
     def test_explicit_format_wins_over_the_url_extension(self, http_stub):
         # ".rdf" would guess "xml" (rdflib.util.guess_format) — the explicit value must win.
-        http_stub.set_response("/vocab.rdf", status=200, body=b"stub body", content_type="application/rdf+xml")
+        http_stub.set_response(
+            "/vocab.rdf",
+            status=200,
+            body=b"stub body",
+            content_type="application/rdf+xml",
+        )
         resolver = SourceResolver(http_stub.url + "/vocab.rdf", serialization="turtle")
         resolved = resolver.resolve()
         try:
@@ -232,8 +277,15 @@ class TestSourceResolverSerializationLadder:
         finally:
             resolver.cleanup()
 
-    def test_the_content_type_is_used_when_the_url_has_no_recognisable_extension(self, http_stub):
-        http_stub.set_response("/download", status=200, body=b"stub body", content_type="application/rdf+xml")
+    def test_the_content_type_is_used_when_the_url_has_no_recognisable_extension(
+        self, http_stub
+    ):
+        http_stub.set_response(
+            "/download",
+            status=200,
+            body=b"stub body",
+            content_type="application/rdf+xml",
+        )
         resolver = SourceResolver(http_stub.url + "/download")
         resolved = resolver.resolve()
         try:
@@ -242,7 +294,9 @@ class TestSourceResolverSerializationLadder:
             resolver.cleanup()
 
     def test_json_ld_content_type_is_recognised(self, http_stub):
-        http_stub.set_response("/download", status=200, body=b"{}", content_type="application/ld+json")
+        http_stub.set_response(
+            "/download", status=200, body=b"{}", content_type="application/ld+json"
+        )
         resolver = SourceResolver(http_stub.url + "/download")
         resolved = resolver.resolve()
         try:
@@ -250,8 +304,15 @@ class TestSourceResolverSerializationLadder:
         finally:
             resolver.cleanup()
 
-    def test_neither_extension_nor_content_type_is_refused_naming_format(self, http_stub):
-        http_stub.set_response("/download", status=200, body=b"stub body", content_type="application/octet-stream")
+    def test_neither_extension_nor_content_type_is_refused_naming_format(
+        self, http_stub
+    ):
+        http_stub.set_response(
+            "/download",
+            status=200,
+            body=b"stub body",
+            content_type="application/octet-stream",
+        )
         resolver = SourceResolver(http_stub.url + "/download")
         with pytest.raises(CommandError) as exc_info:
             resolver.resolve()

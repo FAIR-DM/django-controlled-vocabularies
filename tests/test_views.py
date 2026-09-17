@@ -44,7 +44,12 @@ from django.utils import translation
 from django_tomselect.middleware import TomSelectMiddleware
 
 from controlled_vocabularies.views import ConceptAutocompleteView
-from tests.factories import CollectionFactory, ConceptFactory, ConceptSchemeFactory, collection_with_members
+from tests.factories import (
+    CollectionFactory,
+    ConceptFactory,
+    ConceptSchemeFactory,
+    collection_with_members,
+)
 from tests.testapp.models import Borehole, CoreSample, Sketch, Specimen
 
 
@@ -124,7 +129,9 @@ class TestConceptAutocompleteSearch:
     all, which is a test that asserts nothing about its own scenario."""
 
     @pytest.mark.django_db
-    def test_a_fragment_of_an_alternative_label_finds_the_concept_by_its_preferred_label(self):
+    def test_a_fragment_of_an_alternative_label_finds_the_concept_by_its_preferred_label(
+        self,
+    ):
         concept = ConceptFactory(label="Granite")
         concept.add_label(language="en", kind="alternative", text="granitic rock")
         ConceptFactory(label="Basalt")
@@ -136,7 +143,9 @@ class TestConceptAutocompleteSearch:
         assert body["results"][0]["display_label"] == "Granite"
 
     @pytest.mark.django_db
-    def test_a_fragment_of_a_hidden_label_finds_the_concept_by_its_preferred_label(self):
+    def test_a_fragment_of_a_hidden_label_finds_the_concept_by_its_preferred_label(
+        self,
+    ):
         concept = ConceptFactory(label="Granite")
         concept.add_label(language="en", kind="hidden", text="granyte")
         ConceptFactory(label="Basalt")
@@ -151,7 +160,9 @@ class TestConceptAutocompleteSearch:
     def test_a_fragment_of_either_the_active_or_default_language_preferred_label_finds_the_concept_by_the_active_one(
         self,
     ):
-        concept = ConceptFactory(label="Granite", multilingual=True, german_label__text="Granitgestein")
+        concept = ConceptFactory(
+            label="Granite", multilingual=True, german_label__text="Granitgestein"
+        )
         ConceptFactory(label="Basalt", multilingual=True, german_label__text="Basalt")
 
         with translation.override("de"):
@@ -164,7 +175,9 @@ class TestConceptAutocompleteSearch:
             assert body["results"][0]["display_label"] == "Granitgestein"
 
     @pytest.mark.django_db
-    def test_a_concept_with_no_active_language_labels_is_found_and_shown_by_its_default_label(self):
+    def test_a_concept_with_no_active_language_labels_is_found_and_shown_by_its_default_label(
+        self,
+    ):
         concept = ConceptFactory(label="Granite")
         ConceptFactory(label="Basalt")
 
@@ -226,7 +239,9 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
     reference names, resolved through Django's app registry — never from
     anything else the request carries (T006)."""
 
-    def test_a_field_declared_against_one_vocabulary_returns_only_that_vocabularys_concepts(self):
+    def test_a_field_declared_against_one_vocabulary_returns_only_that_vocabularys_concepts(
+        self,
+    ):
         rock_scheme = ConceptSchemeFactory(name="Rock type")
         mineral_scheme = ConceptSchemeFactory(name="Mineral")
         fossil_scheme = ConceptSchemeFactory(name="Fossil")
@@ -278,7 +293,10 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
         )
 
         body = json.loads(response.content)
-        assert {result["id"] for result in body["results"]} == {rock_concept.pk, mineral_concept.pk}
+        assert {result["id"] for result in body["results"]} == {
+            rock_concept.pk,
+            mineral_concept.pk,
+        }
 
     def test_a_field_declared_against_no_vocabulary_makes_every_concept_eligible(self):
         rock_scheme = ConceptSchemeFactory(name="Rock type")
@@ -322,7 +340,10 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
         # backslash-u-0-0-3-D — verified against the actual rendered output,
         # not assumed from the raw parameter string.
         escaped_equals = "\\u003D"
-        assert f"autocompleteParams: 'field{escaped_equals}testapp.specimen.rock_type'" in rendered["html"]
+        assert (
+            f"autocompleteParams: 'field{escaped_equals}testapp.specimen.rock_type'"
+            in rendered["html"]
+        )
 
 
 @pytest.mark.django_db
@@ -332,15 +353,25 @@ class TestConceptAutocompleteRefusalDisclosesNothing:
     identical to a search that simply matched nothing (T007)."""
 
     def _get(self, **params):
-        return Client().get(reverse("controlled_vocabularies:concept-autocomplete"), params)
+        return Client().get(
+            reverse("controlled_vocabularies:concept-autocomplete"), params
+        )
 
-    def test_four_unresolvable_references_and_a_true_empty_search_are_byte_identical(self):
+    def test_four_unresolvable_references_and_a_true_empty_search_are_byte_identical(
+        self,
+    ):
         baseline = self._get(field=_field_reference(Specimen, "rock_type"))
         assert baseline.status_code == 200
 
-        naming_a_model_that_does_not_exist = self._get(field="testapp.nosuchmodel.rock_type")
-        naming_a_field_that_is_not_one_of_this_packages = self._get(field="testapp.specimen.name")
-        naming_a_field_that_does_not_exist = self._get(field="testapp.specimen.no_such_field")
+        naming_a_model_that_does_not_exist = self._get(
+            field="testapp.nosuchmodel.rock_type"
+        )
+        naming_a_field_that_is_not_one_of_this_packages = self._get(
+            field="testapp.specimen.name"
+        )
+        naming_a_field_that_does_not_exist = self._get(
+            field="testapp.specimen.no_such_field"
+        )
         with_no_reference_at_all = self._get()
 
         for response in (
@@ -364,7 +395,9 @@ class TestConceptAutocompletePagination:
     full ordered match set, never page lengths, so a repeat or a skip fails
     rather than cancelling out (prohibitions)."""
 
-    def test_a_search_matching_more_than_one_page_returns_one_page_and_says_more_exist(self):
+    def test_a_search_matching_more_than_one_page_returns_one_page_and_says_more_exist(
+        self,
+    ):
         for i in range(25):
             ConceptFactory(label=f"Quartz {i:02d}")
 
@@ -374,15 +407,21 @@ class TestConceptAutocompletePagination:
         assert len(body["results"]) == 20
         assert body["has_more"] is True
 
-    def test_the_following_page_returns_the_rest_with_none_repeated_and_none_skipped(self):
+    def test_the_following_page_returns_the_rest_with_none_repeated_and_none_skipped(
+        self,
+    ):
         concepts = [ConceptFactory(label=f"Quartz {i:02d}") for i in range(25)]
         full_match_set = {concept.pk for concept in concepts}
 
         first_page = _unrestricted_get(q="Quartz")
         second_page = _unrestricted_get(q="Quartz", p=2)
 
-        first_ids = [result["id"] for result in json.loads(first_page.content)["results"]]
-        second_ids = [result["id"] for result in json.loads(second_page.content)["results"]]
+        first_ids = [
+            result["id"] for result in json.loads(first_page.content)["results"]
+        ]
+        second_ids = [
+            result["id"] for result in json.loads(second_page.content)["results"]
+        ]
 
         # Collected from both pages and compared against the full ordered
         # match set, not page lengths: a repeat shrinks the union below the
@@ -392,13 +431,19 @@ class TestConceptAutocompletePagination:
         assert json.loads(second_page.content)["has_more"] is False
 
     def test_opening_with_nothing_typed_offers_a_first_page_in_a_stable_order(self):
-        concepts = [ConceptFactory(label=label) for label in ["Charlie", "Alpha", "Bravo"]]
-        expected_order = sorted(concepts, key=lambda concept: (concept.label, concept.pk))
+        concepts = [
+            ConceptFactory(label=label) for label in ["Charlie", "Alpha", "Bravo"]
+        ]
+        expected_order = sorted(
+            concepts, key=lambda concept: (concept.label, concept.pk)
+        )
 
         response = _unrestricted_get()
 
         body = json.loads(response.content)
-        assert [result["id"] for result in body["results"]] == [concept.pk for concept in expected_order]
+        assert [result["id"] for result in body["results"]] == [
+            concept.pk for concept in expected_order
+        ]
 
     def test_a_page_past_the_last_returns_nothing_and_says_no_more_exist(self):
         # This fails against the inherited behaviour, which re-serves page 1
@@ -420,7 +465,9 @@ class TestConceptAutocompletePagination:
         body = json.loads(response.content)
         assert len(body["results"]) == 200
 
-    def test_a_field_naming_no_vocabulary_is_bounded_the_same_way_across_several_vocabularies(self):
+    def test_a_field_naming_no_vocabulary_is_bounded_the_same_way_across_several_vocabularies(
+        self,
+    ):
         for scheme_index in range(3):
             scheme = ConceptSchemeFactory()
             for i in range(10):
@@ -434,7 +481,9 @@ class TestConceptAutocompletePagination:
         assert len(body["results"]) == 20
         assert body["has_more"] is True
 
-    def test_the_ordering_breaks_ties_with_pk_so_identically_labelled_concepts_stay_stable(self):
+    def test_the_ordering_breaks_ties_with_pk_so_identically_labelled_concepts_stay_stable(
+        self,
+    ):
         # decisions.md D13: Concept.label is unique only within its own
         # scheme, so two concepts in different vocabularies can share the
         # same label, and a field naming several (or none) can serve such a
@@ -474,7 +523,9 @@ class TestConceptAutocompleteRequestControlledSurfacesAreClosed:
 
     def test_a_blocked_filter_field_empties_the_page(self):
         ConceptFactory(label="Granite")
-        reference = _field_reference(Sketch, "subject")  # unrestricted: nothing to hide the guard behind
+        reference = _field_reference(
+            Sketch, "subject"
+        )  # unrestricted: nothing to hide the guard behind
 
         response = Client().get(
             reverse("controlled_vocabularies:concept-autocomplete"),
@@ -487,16 +538,25 @@ class TestConceptAutocompleteRequestControlledSurfacesAreClosed:
     def test_a_blocked_ordering_parameter_leaves_the_views_own_order_in_place(self):
         ConceptFactory(label="Basalt")
         ConceptFactory(label="Granite")
-        reference = _field_reference(Sketch, "subject")  # unrestricted: nothing to hide the guard behind
+        reference = _field_reference(
+            Sketch, "subject"
+        )  # unrestricted: nothing to hide the guard behind
 
-        default = Client().get(reverse("controlled_vocabularies:concept-autocomplete"), {"field": reference})
+        default = Client().get(
+            reverse("controlled_vocabularies:concept-autocomplete"),
+            {"field": reference},
+        )
         with_ordering = Client().get(
             reverse("controlled_vocabularies:concept-autocomplete"),
             {"field": reference, "ordering": "-label"},
         )
 
-        default_ids = [result["id"] for result in json.loads(default.content)["results"]]
-        ordered_ids = [result["id"] for result in json.loads(with_ordering.content)["results"]]
+        default_ids = [
+            result["id"] for result in json.loads(default.content)["results"]
+        ]
+        ordered_ids = [
+            result["id"] for result in json.loads(with_ordering.content)["results"]
+        ]
         assert default_ids  # the guard is being tested against real, non-empty results
         assert ordered_ids == default_ids
 
@@ -523,7 +583,9 @@ class TestConceptAutocompleteOrderedCollectionSequence:
             {"field": _field_reference(CoreSample, "rock_type"), **params},
         )
 
-    def test_an_ordered_collections_sequence_differs_from_both_alphabetical_and_creation_order(self):
+    def test_an_ordered_collections_sequence_differs_from_both_alphabetical_and_creation_order(
+        self,
+    ):
         # Created Bravo, Alpha, Charlie in that order (creation/pk order).
         # Alphabetical would read Alpha, Bravo, Charlie. The curator's chosen
         # sequence below is neither, so a missing override (falls to
@@ -531,29 +593,47 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         # both fail this.
         scheme = ConceptSchemeFactory(name="Rock type")
         collection, members = collection_with_members(
-            scheme=scheme, name="core-samples", ordered=True, labels=("Bravo", "Alpha", "Charlie")
+            scheme=scheme,
+            name="core-samples",
+            ordered=True,
+            labels=("Bravo", "Alpha", "Charlie"),
         )
         bravo, alpha, charlie = members
         collection.set_member_order([charlie, bravo, alpha])
 
         body = json.loads(self._get().content)
 
-        assert [result["id"] for result in body["results"]] == [charlie.pk, bravo.pk, alpha.pk]
+        assert [result["id"] for result in body["results"]] == [
+            charlie.pk,
+            bravo.pk,
+            alpha.pk,
+        ]
 
     def test_a_position_change_is_reflected_on_the_next_read(self):
         scheme = ConceptSchemeFactory(name="Rock type")
         collection, members = collection_with_members(
-            scheme=scheme, name="core-samples", ordered=True, labels=("Bravo", "Alpha", "Charlie")
+            scheme=scheme,
+            name="core-samples",
+            ordered=True,
+            labels=("Bravo", "Alpha", "Charlie"),
         )
         bravo, alpha, charlie = members
         collection.set_member_order([charlie, bravo, alpha])
         first_read = json.loads(self._get().content)
-        assert [result["id"] for result in first_read["results"]] == [charlie.pk, bravo.pk, alpha.pk]
+        assert [result["id"] for result in first_read["results"]] == [
+            charlie.pk,
+            bravo.pk,
+            alpha.pk,
+        ]
 
         collection.set_member_order([alpha, charlie, bravo])
 
         second_read = json.loads(self._get().content)
-        assert [result["id"] for result in second_read["results"]] == [alpha.pk, charlie.pk, bravo.pk]
+        assert [result["id"] for result in second_read["results"]] == [
+            alpha.pk,
+            charlie.pk,
+            bravo.pk,
+        ]
 
     def test_a_typed_search_term_returns_to_relevance_order(self):
         scheme = ConceptSchemeFactory(name="Rock type")
@@ -571,12 +651,19 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         # Falls through to the inherited ("label", "pk") ordering once a
         # search term is present (plan.md A5) — alphabetical by label, not
         # the curator's sequence asserted above for the same collection.
-        assert [result["id"] for result in body["results"]] == [alpha.pk, bravo.pk, charlie.pk]
+        assert [result["id"] for result in body["results"]] == [
+            alpha.pk,
+            bravo.pk,
+            charlie.pk,
+        ]
 
     def test_an_unordered_collection_stays_restricted_with_no_sequence_promised(self):
         scheme = ConceptSchemeFactory(name="Rock type")
         collection, members = collection_with_members(
-            scheme=scheme, name="core-samples", ordered=False, labels=("Charlie", "Bravo", "Alpha")
+            scheme=scheme,
+            name="core-samples",
+            ordered=False,
+            labels=("Charlie", "Bravo", "Alpha"),
         )
         charlie, bravo, alpha = members
         outsider = ConceptFactory(scheme=scheme, label="Marble")
@@ -594,7 +681,10 @@ class TestConceptAutocompleteOrderedCollectionSequence:
     def test_a_removed_member_leaves_the_survivors_in_relative_order(self):
         scheme = ConceptSchemeFactory(name="Rock type")
         collection, members = collection_with_members(
-            scheme=scheme, name="core-samples", ordered=True, labels=("Bravo", "Alpha", "Charlie", "Delta")
+            scheme=scheme,
+            name="core-samples",
+            ordered=True,
+            labels=("Bravo", "Alpha", "Charlie", "Delta"),
         )
         bravo, alpha, charlie, delta = members
         collection.set_member_order([delta, bravo, charlie, alpha])
@@ -602,7 +692,11 @@ class TestConceptAutocompleteOrderedCollectionSequence:
 
         body = json.loads(self._get().content)
 
-        assert [result["id"] for result in body["results"]] == [delta.pk, charlie.pk, alpha.pk]
+        assert [result["id"] for result in body["results"]] == [
+            delta.pk,
+            charlie.pk,
+            alpha.pk,
+        ]
 
     def test_a_concept_in_a_second_collection_too_is_not_duplicated(self):
         # research.md R3/R6: a concept belonging to a second collection must

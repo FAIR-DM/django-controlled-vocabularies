@@ -232,7 +232,9 @@ class RockSample(models.Model):
         null=True,
         blank=True,
         verbose_name=_("primary mineral"),
-        help_text=_("The single mineral this sample is primarily classified as, if known."),
+        help_text=_(
+            "The single mineral this sample is primarily classified as, if known."
+        ),
     )
     associated_minerals = ConceptsField(
         vocabulary="mineral",
@@ -261,7 +263,9 @@ class FieldNote(models.Model):
         blank=True,
         related_name="+",
         verbose_name=_("keywords"),
-        help_text=_("Keywords drawn from either the rock-type or the mineral vocabulary."),
+        help_text=_(
+            "Keywords drawn from either the rock-type or the mineral vocabulary."
+        ),
     )
 
     def __str__(self) -> str:
@@ -284,7 +288,9 @@ class Borehole(models.Model):
         blank=True,
         related_name="+",
         verbose_name=_("dominant material"),
-        help_text=_("The material logged as dominant, from either the rock-type or the mineral vocabulary."),
+        help_text=_(
+            "The material logged as dominant, from either the rock-type or the mineral vocabulary."
+        ),
     )
 
     def __str__(self) -> str:
@@ -306,7 +312,9 @@ class Sketch(models.Model):
         blank=True,
         related_name="+",
         verbose_name=_("subject"),
-        help_text=_("The sketch's subject, drawn from any vocabulary; this field names none in particular."),
+        help_text=_(
+            "The sketch's subject, drawn from any vocabulary; this field names none in particular."
+        ),
     )
 
     def __str__(self) -> str:
@@ -327,7 +335,9 @@ class Photograph(models.Model):
         blank=True,
         related_name="+",
         verbose_name=_("keywords"),
-        help_text=_("Keywords drawn from any vocabulary; this field names none in particular."),
+        help_text=_(
+            "Keywords drawn from any vocabulary; this field names none in particular."
+        ),
     )
 
     def __str__(self) -> str:
@@ -351,7 +361,9 @@ class CoreSample(models.Model):
         blank=True,
         related_name="+",
         verbose_name=_("rock type"),
-        help_text=_("The rock type this core sample is classified as, drawn from the core-samples collection."),
+        help_text=_(
+            "The rock type this core sample is classified as, drawn from the core-samples collection."
+        ),
     )
 
     def __str__(self) -> str:
@@ -378,7 +390,9 @@ class DrillCore(models.Model):
         blank=True,
         related_name="drill_cores",
         verbose_name=_("rock types"),
-        help_text=_("The rock types logged for this drill core, drawn from the core-samples collection."),
+        help_text=_(
+            "The rock types logged for this drill core, drawn from the core-samples collection."
+        ),
     )
 
     def __str__(self) -> str:
@@ -401,7 +415,9 @@ class ChipSample(models.Model):
         blank=True,
         related_name="+",
         verbose_name=_("rock type"),
-        help_text=_("The rock type this chip sample is classified as, restricted to granite and basalt."),
+        help_text=_(
+            "The rock type this chip sample is classified as, restricted to granite and basalt."
+        ),
     )
 
     def __str__(self) -> str:
@@ -425,7 +441,9 @@ class ChipTray(models.Model):
         blank=True,
         related_name="chip_trays",
         verbose_name=_("rock types"),
-        help_text=_("The rock types logged for this chip tray, restricted to granite and basalt."),
+        help_text=_(
+            "The rock types logged for this chip tray, restricted to granite and basalt."
+        ),
     )
 
     def __str__(self) -> str:
@@ -452,7 +470,9 @@ class BranchSample(models.Model):
         blank=True,
         related_name="+",
         verbose_name=_("rock type"),
-        help_text=_("The rock type this sample is classified as, drawn from the igneous branch."),
+        help_text=_(
+            "The rock type this sample is classified as, drawn from the igneous branch."
+        ),
     )
 
     def __str__(self) -> str:
@@ -476,7 +496,9 @@ class BranchTray(models.Model):
         blank=True,
         related_name="branch_trays",
         verbose_name=_("rock types"),
-        help_text=_("The rock types logged for this tray, drawn from the igneous branch."),
+        help_text=_(
+            "The rock types logged for this tray, drawn from the igneous branch."
+        ),
     )
 
     def __str__(self) -> str:
@@ -502,7 +524,9 @@ class Locality(models.Model):
         blank=True,
         related_name="+",
         verbose_name=_("primary mineral"),
-        help_text=_("The mineral this locality is primarily characterised by, if known."),
+        help_text=_(
+            "The mineral this locality is primarily characterised by, if known."
+        ),
     )
 
     def __str__(self) -> str:

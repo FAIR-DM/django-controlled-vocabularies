@@ -17,7 +17,10 @@ class TestConceptAutocompleteUrl:
     """The endpoint reverses under its project-chosen prefix and answers anonymously."""
 
     def test_reverses_under_the_project_chosen_prefix(self):
-        assert reverse("controlled_vocabularies:concept-autocomplete") == "/widget/concepts/"
+        assert (
+            reverse("controlled_vocabularies:concept-autocomplete")
+            == "/widget/concepts/"
+        )
 
     @pytest.mark.django_db
     def test_anonymous_get_returns_200_with_the_expected_json_shape(self):

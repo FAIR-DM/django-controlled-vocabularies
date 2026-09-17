@@ -21,7 +21,9 @@ class TestCheckMVPInstalled:
     def test_reports_nothing_when_mvp_is_importable(self):
         assert check_mvp_installed(None) == []
 
-    def test_reports_one_error_naming_the_extra_and_the_app_when_mvp_is_absent(self, monkeypatch):
+    def test_reports_one_error_naming_the_extra_and_the_app_when_mvp_is_absent(
+        self, monkeypatch
+    ):
         # ``mvp`` is genuinely installed in this environment (the ``ui`` extra is a dev
         # dependency of this repo's own test run) — sys.modules["mvp"] = None is the standard
         # way to make a real ``import mvp`` statement raise ImportError regardless, without

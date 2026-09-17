@@ -17,7 +17,10 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
-from controlled_vocabularies.exchange.exceptions import SkosImportError, SkosImportFailed
+from controlled_vocabularies.exchange.exceptions import (
+    SkosImportError,
+    SkosImportFailed,
+)
 from controlled_vocabularies.exchange.report import ImportReport
 from controlled_vocabularies.exchange.skos import import_skos
 from controlled_vocabularies.management.rendering import ReportRenderer
@@ -36,7 +39,10 @@ class DryRun(Exception):
 class Command(BaseCommand):
     # django-stubs types BaseCommand.help as `str`; gettext_lazy's proxy satisfies the attribute
     # itself but not the stub, hence the cast (Article XII).
-    help = cast(str, _("Import a published SKOS vocabulary from a local file or an http(s) URL."))
+    help = cast(
+        str,
+        _("Import a published SKOS vocabulary from a local file or an http(s) URL."),
+    )
 
     def create_parser(self, prog_name: str, subcommand: str, **kwargs: Any) -> Any:
         """Build the parser, then force :attr:`help` to a real string (Article XII).
@@ -58,7 +64,10 @@ class Command(BaseCommand):
         # Each help is forced for the same reason as the description above: argparse runs every
         # help string through re.sub as it lays the text out. `add_arguments` is called from
         # `create_parser`, so this carries the same per-invocation translation timing.
-        parser.add_argument("source", help=str(_("A local filesystem path or an http(s) URL to a SKOS file.")))
+        parser.add_argument(
+            "source",
+            help=str(_("A local filesystem path or an http(s) URL to a SKOS file.")),
+        )
         parser.add_argument(
             "--format",
             dest="format",
@@ -74,7 +83,11 @@ class Command(BaseCommand):
             "--dry-run",
             action="store_true",
             default=False,
-            help=str(_("Perform the whole import and report the outcome, then leave the database exactly as it was.")),
+            help=str(
+                _(
+                    "Perform the whole import and report the outcome, then leave the database exactly as it was."
+                )
+            ),
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
@@ -88,7 +101,9 @@ class Command(BaseCommand):
         # does not arise: a fetched document's temporary file never reaches this branch).
         path = Path(source)
         if path.is_file() and not os.access(path, os.R_OK):
-            raise CommandError(str(_("'%(file)s' exists but is not readable.")) % {"file": source})
+            raise CommandError(
+                str(_("'%(file)s' exists but is not readable.")) % {"file": source}
+            )
         resolver = SourceResolver(source, serialization=options["format"])
         try:
             resolved = resolver.resolve()
@@ -103,7 +118,9 @@ class Command(BaseCommand):
                 try:
                     with transaction.atomic():
                         report = import_skos(
-                            resolved.path, serialization=resolved.serialization, base_uri=resolved.base_uri
+                            resolved.path,
+                            serialization=resolved.serialization,
+                            base_uri=resolved.base_uri,
                         )
                         # This *is* the sentinel-unwind pattern (plan.md "Dry run"): the raise
                         # has to sit here, inside the block it unwinds, not in a helper function.
@@ -111,16 +128,24 @@ class Command(BaseCommand):
                 except DryRun as done:
                     report = done.report
             else:
-                report = import_skos(resolved.path, serialization=resolved.serialization, base_uri=resolved.base_uri)
+                report = import_skos(
+                    resolved.path,
+                    serialization=resolved.serialization,
+                    base_uri=resolved.base_uri,
+                )
         except SkosImportFailed as exc:
             # SkosImportFailed's own str() is one generic "N problem(s) were found" line
             # (exchange/exceptions.py) — every collected finding is only reachable through
             # exc.report.fatal, so this is where FR-011's "all of them, not just the first"
             # actually happens (T020).
-            raise CommandError("\n".join(finding.render() for finding in exc.report.fatal)) from exc
+            raise CommandError(
+                "\n".join(finding.render() for finding in exc.report.fatal)
+            ) from exc
         except SkosImportError as exc:
             raise CommandError(str(exc)) from exc
         finally:
             resolver.cleanup()
-        for line in ReportRenderer(report, dry_run=dry_run, verbosity=options["verbosity"]).render():
+        for line in ReportRenderer(
+            report, dry_run=dry_run, verbosity=options["verbosity"]
+        ).render():
             self.stdout.write(line)

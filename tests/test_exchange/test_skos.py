@@ -24,7 +24,11 @@ from django.utils.functional import Promise
 import controlled_vocabularies.exchange as exchange
 from controlled_vocabularies import conf
 from controlled_vocabularies.exchange.languages import LanguageMatcher
-from controlled_vocabularies.exchange.report import FatalReason, NormalizedReason, SetAsideReason
+from controlled_vocabularies.exchange.report import (
+    FatalReason,
+    NormalizedReason,
+    SetAsideReason,
+)
 from controlled_vocabularies.exchange.safety import UnsafeJsonLdError, UnsafeRdfXmlError
 from controlled_vocabularies.exchange.skos import (
     ConceptImporter,
@@ -67,7 +71,11 @@ BASE_SERIALIZATIONS = [
 # walking the directory rather than listed by hand, so a fixture added by a
 # later story is covered without anyone remembering to register it.
 SUFFIX_FORMATS = {".ttl": "turtle", ".rdf": "xml", ".jsonld": "json-ld"}
-ALL_FIXTURES = sorted((path.name, SUFFIX_FORMATS[path.suffix]) for path in FIXTURES.iterdir() if path.is_file())
+ALL_FIXTURES = sorted(
+    (path.name, SUFFIX_FORMATS[path.suffix])
+    for path in FIXTURES.iterdir()
+    if path.is_file()
+)
 
 
 class TestReadGraph:
@@ -78,11 +86,19 @@ class TestReadGraph:
     def test_each_supported_serialization_parses_by_extension(self, filename, fmt):
         graph = SkosGraph.from_file(FIXTURES / filename, serialization=fmt).graph
         assert len(graph) > 0
-        assert (rdflib.URIRef("http://example.org/rocks/"), rdflib.RDF.type, SKOS.ConceptScheme) in graph
+        assert (
+            rdflib.URIRef("http://example.org/rocks/"),
+            rdflib.RDF.type,
+            SKOS.ConceptScheme,
+        ) in graph
 
     @pytest.mark.parametrize("fmt", ["turtle", "xml", "json-ld"])
     def test_each_supported_serialization_parses_with_stated_format(self, fmt):
-        filename = {"turtle": "rocks.ttl", "xml": "rocks.rdf", "json-ld": "rocks.jsonld"}[fmt]
+        filename = {
+            "turtle": "rocks.ttl",
+            "xml": "rocks.rdf",
+            "json-ld": "rocks.jsonld",
+        }[fmt]
         graph = SkosGraph.from_file(FIXTURES / filename, serialization=fmt).graph
         assert len(graph) > 0
 
@@ -107,7 +123,9 @@ class TestReadGraph:
         with pytest.raises(SkosImportError):
             SkosGraph.from_file(mystery)
 
-    def test_serialization_not_among_the_three_supported_fails_even_if_named_explicitly(self):
+    def test_serialization_not_among_the_three_supported_fails_even_if_named_explicitly(
+        self,
+    ):
         # "n3" is a real rdflib format, but not one of FR-002's three — stating
         # it explicitly must not smuggle it past the supported-formats gate.
         with pytest.raises(SkosImportError):
@@ -121,10 +139,14 @@ class TestReadGraph:
         # SkosImportError are ValidationError subclasses; wrapping one inside
         # the other would only blur which stage actually refused the file).
         with pytest.raises(UnsafeRdfXmlError):
-            SkosGraph.from_file(SECURITY_FIXTURES / "entity_bomb.rdf", serialization="xml")
+            SkosGraph.from_file(
+                SECURITY_FIXTURES / "entity_bomb.rdf", serialization="xml"
+            )
 
     def test_ordinary_rdf_xml_is_unaffected_by_the_safety_scan(self):
-        graph = SkosGraph.from_file(SECURITY_FIXTURES / "ordinary.rdf", serialization="xml").graph
+        graph = SkosGraph.from_file(
+            SECURITY_FIXTURES / "ordinary.rdf", serialization="xml"
+        ).graph
         assert len(graph) > 0
 
     def test_json_ld_is_routed_through_the_safety_scan_before_rdflib_sees_it(self):
@@ -135,10 +157,15 @@ class TestReadGraph:
         # RDF/XML: if this were not actually wired in, the failure would be
         # a connection error from the real fetch attempt, not this refusal.
         with pytest.raises(UnsafeJsonLdError):
-            SkosGraph.from_file(SECURITY_FIXTURES / "remote_context_string.jsonld", serialization="json-ld")
+            SkosGraph.from_file(
+                SECURITY_FIXTURES / "remote_context_string.jsonld",
+                serialization="json-ld",
+            )
 
     def test_json_ld_with_an_inline_context_is_unaffected_by_the_safety_scan(self):
-        graph = SkosGraph.from_file(SECURITY_FIXTURES / "inline_context.jsonld", serialization="json-ld").graph
+        graph = SkosGraph.from_file(
+            SECURITY_FIXTURES / "inline_context.jsonld", serialization="json-ld"
+        ).graph
         assert len(graph) > 0
 
     def test_json_ld_context_import_cannot_exfiltrate_a_local_file(self, db):
@@ -272,10 +299,14 @@ class TestBaseUriThread:
     ]
 
     @pytest.mark.parametrize("filename,fmt,content", RELATIVE_SERIALIZATIONS)
-    def test_a_given_base_uri_resolves_relative_identifiers_against_it(self, tmp_path, filename, fmt, content):
+    def test_a_given_base_uri_resolves_relative_identifiers_against_it(
+        self, tmp_path, filename, fmt, content
+    ):
         path = tmp_path / filename
         path.write_text(content)
-        graph = SkosGraph.from_file(path, serialization=fmt, base_uri="https://example.org/vocab.ttl").graph
+        graph = SkosGraph.from_file(
+            path, serialization=fmt, base_uri="https://example.org/vocab.ttl"
+        ).graph
         assert (
             rdflib.URIRef("https://example.org/vocab.ttl"),
             rdflib.RDF.type,
@@ -293,11 +324,17 @@ class TestBaseUriThread:
         ) in graph
 
     @pytest.mark.parametrize("filename,fmt,content", RELATIVE_SERIALIZATIONS)
-    def test_no_base_uri_resolves_relative_identifiers_against_the_file(self, tmp_path, filename, fmt, content):
+    def test_no_base_uri_resolves_relative_identifiers_against_the_file(
+        self, tmp_path, filename, fmt, content
+    ):
         path = tmp_path / filename
         path.write_text(content)
         graph = SkosGraph.from_file(path, serialization=fmt).graph
-        assert (rdflib.URIRef(path.as_uri()), rdflib.RDF.type, SKOS.ConceptScheme) in graph
+        assert (
+            rdflib.URIRef(path.as_uri()),
+            rdflib.RDF.type,
+            SKOS.ConceptScheme,
+        ) in graph
         assert (
             rdflib.URIRef(path.parent.as_uri() + "/concept-a"),
             rdflib.RDF.type,
@@ -305,7 +342,9 @@ class TestBaseUriThread:
         ) in graph
 
     def test_absolute_identifiers_are_unaffected_by_a_given_base_uri(self):
-        with_base = SkosGraph.from_file(FIXTURES / "rocks.ttl", base_uri="https://example.org/vocab.ttl").graph
+        with_base = SkosGraph.from_file(
+            FIXTURES / "rocks.ttl", base_uri="https://example.org/vocab.ttl"
+        ).graph
         without_base = SkosGraph.from_file(FIXTURES / "rocks.ttl").graph
         assert (ROCKS_SCHEME_URI, rdflib.RDF.type, SKOS.ConceptScheme) in with_base
         assert (ROCKS_SCHEME_URI, rdflib.RDF.type, SKOS.ConceptScheme) in without_base
@@ -317,7 +356,9 @@ class TestBaseUriThread:
         assert "https://example.org/vocab.ttl" in str(exc_info.value)
         assert str(missing) not in str(exc_info.value)
 
-    def test_unsupported_serialization_refusal_names_the_base_uri_when_given(self, tmp_path):
+    def test_unsupported_serialization_refusal_names_the_base_uri_when_given(
+        self, tmp_path
+    ):
         mystery = tmp_path / "vocab.mysteryext"
         mystery.write_bytes((FIXTURES / "rocks.ttl").read_bytes())
         with pytest.raises(SkosImportError) as exc_info:
@@ -360,7 +401,9 @@ class TestPreferredLabelTagCounts:
             """
         )
         skos_graph = SkosGraph.from_file(path)
-        concept_nodes = sorted(skos_graph.graph.subjects(rdflib.RDF.type, SKOS.Concept), key=str)
+        concept_nodes = sorted(
+            skos_graph.graph.subjects(rdflib.RDF.type, SKOS.Concept), key=str
+        )
         counts = skos_graph.preferred_label_tag_counts(concept_nodes)
         assert counts == {"en-gb": 2, "en-us": 1}
 
@@ -388,7 +431,9 @@ class TestPreferredLabelTagCounts:
             """
         )
         skos_graph = SkosGraph.from_file(path)
-        concept_nodes = sorted(skos_graph.graph.subjects(rdflib.RDF.type, SKOS.Concept), key=str)
+        concept_nodes = sorted(
+            skos_graph.graph.subjects(rdflib.RDF.type, SKOS.Concept), key=str
+        )
         counts = skos_graph.preferred_label_tag_counts(concept_nodes)
         assert counts == {"en-gb": 2}
 
@@ -415,7 +460,9 @@ class TestPreferredLabelTagCounts:
             """
         )
         skos_graph = SkosGraph.from_file(path)
-        concept_nodes = sorted(skos_graph.graph.subjects(rdflib.RDF.type, SKOS.Concept), key=str)
+        concept_nodes = sorted(
+            skos_graph.graph.subjects(rdflib.RDF.type, SKOS.Concept), key=str
+        )
         counts = skos_graph.preferred_label_tag_counts(concept_nodes)
         assert counts == {"en-gb": 1}
 
@@ -426,7 +473,9 @@ class TestSkosImporterWiresOneMatcherToBothResolvers:
     and ``ConceptImporter`` as a constructor argument, rather than either
     building its own (research.md R2, plan.md "One winner, one computation")."""
 
-    def test_scheme_resolver_and_concept_importer_share_the_same_matcher_instance(self, db, monkeypatch):
+    def test_scheme_resolver_and_concept_importer_share_the_same_matcher_instance(
+        self, db, monkeypatch
+    ):
         captured = {}
         original_scheme_resolver_init = SchemeResolver.__init__
         original_concept_importer_init = ConceptImporter.__init__
@@ -480,11 +529,16 @@ class TestImportSkosVocabulary:
         assert target.name == "Rock types"
         assert report.fatal == []
 
-    def test_a_named_target_that_contradicts_the_file_fails_and_writes_nothing(self, db):
+    def test_a_named_target_that_contradicts_the_file_fails_and_writes_nothing(
+        self, db
+    ):
         target = ConceptSchemeFactory(name="Unrelated vocabulary", external=True)
         with pytest.raises(SkosImportFailed) as exc_info:
             import_skos(FIXTURES / "rocks.ttl", scheme=target)
-        assert exc_info.value.report.fatal[0].reason is FatalReason.VOCABULARY_TARGET_MISMATCH
+        assert (
+            exc_info.value.report.fatal[0].reason
+            is FatalReason.VOCABULARY_TARGET_MISMATCH
+        )
         target.refresh_from_db()
         assert target.name == "Unrelated vocabulary"
         assert not ConceptScheme.objects.filter(static_uri=ROCKS_URI).exists()
@@ -492,7 +546,9 @@ class TestImportSkosVocabulary:
     def test_a_file_declaring_no_vocabulary_fails_without_a_named_target(self, db):
         with pytest.raises(SkosImportFailed) as exc_info:
             import_skos(FIXTURES / "no_scheme_declared.ttl")
-        assert exc_info.value.report.fatal[0].reason is FatalReason.VOCABULARY_UNDETERMINED
+        assert (
+            exc_info.value.report.fatal[0].reason is FatalReason.VOCABULARY_UNDETERMINED
+        )
         assert ConceptScheme.objects.count() == 0
 
     def test_a_file_declaring_no_vocabulary_succeeds_with_a_named_target(self, db):
@@ -522,16 +578,22 @@ class TestChoosingBetweenDeclaredVocabularies:
     decide, and only a genuine tie with no named target is refused.
     """
 
-    def test_the_vocabulary_most_of_the_concepts_belong_to_is_the_one_imported(self, db):
+    def test_the_vocabulary_most_of_the_concepts_belong_to_is_the_one_imported(
+        self, db
+    ):
         report = import_skos(FIXTURES / "mixed_scheme_membership.ttl")
         assert ConceptScheme.objects.get().static_uri == "http://example.org/minerals/"
         assert report.fatal == []
 
-    def test_the_choice_does_not_depend_on_the_order_of_the_identifiers(self, db, tmp_path):
+    def test_the_choice_does_not_depend_on_the_order_of_the_identifiers(
+        self, db, tmp_path
+    ):
         # The same file with the two vocabularies' identifiers swapped so the
         # foreign one now sorts first. Sorted-first selection would import it.
         source = (FIXTURES / "mixed_scheme_membership.ttl").read_text()
-        swapped = source.replace("http://example.org/other/", "http://example.org/aaa-other/")
+        swapped = source.replace(
+            "http://example.org/other/", "http://example.org/aaa-other/"
+        )
         renamed = tmp_path / "swapped.ttl"
         renamed.write_text(swapped)
         import_skos(renamed)
@@ -548,11 +610,16 @@ class TestChoosingBetweenDeclaredVocabularies:
         assert Concept.objects.count() == 0
 
     def test_a_named_target_decides_between_them(self, db):
-        target = ConceptSchemeFactory(name="Beta vocabulary", static_uri="http://example.org/beta/")
+        target = ConceptSchemeFactory(
+            name="Beta vocabulary", static_uri="http://example.org/beta/"
+        )
         report = import_skos(FIXTURES / "two_vocabularies.ttl", scheme=target)
         assert report.fatal == []
         assert ConceptScheme.objects.count() == 1
-        assert Concept.objects.get(scheme=target).static_uri == "http://example.org/beta/two"
+        assert (
+            Concept.objects.get(scheme=target).static_uri
+            == "http://example.org/beta/two"
+        )
 
 
 class TestImportedVocabularyDefaultLanguage:
@@ -560,27 +627,37 @@ class TestImportedVocabularyDefaultLanguage:
     language comes from the file where the file says, and only ever a
     language the site is configured for."""
 
-    def test_a_vocabulary_declared_in_a_configured_non_default_language_uses_it(self, db):
+    def test_a_vocabulary_declared_in_a_configured_non_default_language_uses_it(
+        self, db
+    ):
         import_skos(FIXTURES / "french_vocabulary.ttl")
         scheme = ConceptScheme.objects.get(static_uri="http://example.org/geology/")
         assert scheme.default_language == "fr"
         assert scheme.effective_default_language == "fr"
         assert scheme.name == "Types de roches"
 
-    def test_a_vocabulary_declared_in_an_unconfigured_language_falls_back_to_the_site_default(self, db):
+    def test_a_vocabulary_declared_in_an_unconfigured_language_falls_back_to_the_site_default(
+        self, db
+    ):
         import_skos(FIXTURES / "unconfigured_language_vocabulary.ttl")
         scheme = ConceptScheme.objects.get(static_uri="http://example.org/geology2/")
         # Neither "es" (declared) nor "es" (commonest concept label language)
         # is configured, so nothing overrides the site default.
         assert scheme.effective_default_language == "en"
 
-    def test_default_language_is_not_recomputed_for_a_scheme_that_already_has_concepts(self, db):
+    def test_default_language_is_not_recomputed_for_a_scheme_that_already_has_concepts(
+        self, db
+    ):
         # ConceptScheme.save() itself refuses to change default_language once
         # concepts exist (R1's own guard — it anchors their identity). A
         # scheme matched by URI that already has concepts from an earlier
         # run must not trip that guard just because this run recomputed a
         # (possibly identical, possibly not) value from the file.
-        scheme = ConceptSchemeFactory(name="Geology", static_uri="http://example.org/geology/", default_language="")
+        scheme = ConceptSchemeFactory(
+            name="Geology",
+            static_uri="http://example.org/geology/",
+            default_language="",
+        )
         ConceptFactory(scheme=scheme, label="Existing concept")
         report = import_skos(FIXTURES / "french_vocabulary.ttl")
         assert report.fatal == []
@@ -595,13 +672,17 @@ class TestDefaultLanguageResolvesThroughTheMatcher:
     resolves to that configured language rather than falling back to the
     site's own default (the failure D9 describes)."""
 
-    def test_a_vocabulary_declaring_itself_in_a_variant_of_a_configured_language_resolves_to_it(self, db):
+    def test_a_vocabulary_declaring_itself_in_a_variant_of_a_configured_language_resolves_to_it(
+        self, db
+    ):
         import_skos(FIXTURES / "declares-de-at.ttl")
         scheme = ConceptScheme.objects.get(static_uri="http://example.org/farben/")
         assert scheme.default_language == "de"
         assert scheme.effective_default_language == "de"
 
-    def test_the_commonest_concept_language_fallback_also_resolves_through_the_matcher(self, db, tmp_path):
+    def test_the_commonest_concept_language_fallback_also_resolves_through_the_matcher(
+        self, db, tmp_path
+    ):
         # The scheme itself declares no single language (two tags on its own
         # prefLabel), so determine_default_language falls back to the
         # commonest language among the concepts' own preferred labels — that
@@ -679,7 +760,9 @@ class TestDefaultLanguageCommonestFallbackFoldsCaseLikeThePreferredLabelTally:
         path.write_text("\n".join(lines))
         return path
 
-    def test_a_published_tag_split_across_two_cases_is_counted_as_one_population(self, db, tmp_path):
+    def test_a_published_tag_split_across_two_cases_is_counted_as_one_population(
+        self, db, tmp_path
+    ):
         path = self._write(tmp_path)
         with override_settings(LANGUAGES=[("en", "English"), ("fr", "French")]):
             report = import_skos(path)
@@ -690,7 +773,9 @@ class TestDefaultLanguageCommonestFallbackFoldsCaseLikeThePreferredLabelTally:
         assert scheme.effective_default_language == "en"
         assert report.fatal == []
 
-    def test_the_predominant_en_gb_population_is_not_wrongly_set_aside(self, db, tmp_path):
+    def test_the_predominant_en_gb_population_is_not_wrongly_set_aside(
+        self, db, tmp_path
+    ):
         # The vocabulary's default language resolves to "en" (the fix): every en-gb-labelled
         # concept has a preferred label in it (via the matcher's base-language match) and
         # imports. Under the bug, default_language resolved to "fr" instead, and these six
@@ -703,11 +788,19 @@ class TestDefaultLanguageCommonestFallbackFoldsCaseLikeThePreferredLabelTally:
         en_gb_uris = {f"http://example.org/casetally/upper{i}" for i in range(3)} | {
             f"http://example.org/casetally/lower{i}" for i in range(3)
         }
-        assert set(Concept.objects.filter(static_uri__in=en_gb_uris).values_list("static_uri", flat=True)) == en_gb_uris
+        assert (
+            set(
+                Concept.objects.filter(static_uri__in=en_gb_uris).values_list(
+                    "static_uri", flat=True
+                )
+            )
+            == en_gb_uris
+        )
         wrongly_set_aside = {
             entry.subject
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.NO_PREFERRED_LABEL and entry.subject in en_gb_uris
+            if entry.reason is SetAsideReason.NO_PREFERRED_LABEL
+            and entry.subject in en_gb_uris
         }
         assert wrongly_set_aside == set()
 
@@ -718,7 +811,9 @@ class TestImportConcepts:
     label; scheme membership is read via any of the three SKOS predicates;
     a concept claiming a different vocabulary is set aside, not imported."""
 
-    def test_every_concept_in_the_base_vocabulary_is_created_with_its_identifier_and_label(self, db):
+    def test_every_concept_in_the_base_vocabulary_is_created_with_its_identifier_and_label(
+        self, db
+    ):
         report = import_skos(FIXTURES / "rocks.ttl")
         assert Concept.objects.count() == 5
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
@@ -733,39 +828,71 @@ class TestImportConcepts:
             "http://example.org/rocks/quartz",
         }
 
-    def test_scheme_membership_via_hasTopConcept_inScheme_and_topConceptOf_all_attach_correctly(self, db):
+    def test_scheme_membership_via_hasTopConcept_inScheme_and_topConceptOf_all_attach_correctly(
+        self, db
+    ):
         import_skos(FIXTURES / "mixed_scheme_membership.ttl")
         scheme = ConceptScheme.objects.get(static_uri="http://example.org/minerals/")
-        attached = set(Concept.objects.filter(scheme=scheme).values_list("static_uri", flat=True))
+        attached = set(
+            Concept.objects.filter(scheme=scheme).values_list("static_uri", flat=True)
+        )
         assert attached == {
             "http://example.org/minerals/quartz",
             "http://example.org/minerals/feldspar",
             "http://example.org/minerals/mica",
         }
 
-    def test_a_concept_claiming_a_different_vocabulary_is_set_aside_not_imported(self, db):
+    def test_a_concept_claiming_a_different_vocabulary_is_set_aside_not_imported(
+        self, db
+    ):
         report = import_skos(FIXTURES / "mixed_scheme_membership.ttl")
-        assert not Concept.objects.filter(static_uri="http://example.org/minerals/foreign").exists()
-        mismatches = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VOCABULARY_MISMATCH]
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/minerals/foreign"
+        ).exists()
+        mismatches = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VOCABULARY_MISMATCH
+        ]
         assert len(mismatches) == 1
         assert mismatches[0].subject == "http://example.org/minerals/foreign"
         assert mismatches[0].params["other"] == "http://example.org/other/"
 
-    def test_a_concept_with_no_preferred_label_in_the_default_language_is_set_aside_and_the_rest_imports(self, db):
+    def test_a_concept_with_no_preferred_label_in_the_default_language_is_set_aside_and_the_rest_imports(
+        self, db
+    ):
         report = import_skos(FIXTURES / "no_default_language_label.ttl")
-        assert Concept.objects.filter(scheme__static_uri="http://example.org/quarry/").count() == 2
-        assert not Concept.objects.filter(static_uri="http://example.org/quarry/c").exists()
-        set_aside = [entry for entry in report.set_aside if entry.reason is SetAsideReason.NO_PREFERRED_LABEL]
+        assert (
+            Concept.objects.filter(
+                scheme__static_uri="http://example.org/quarry/"
+            ).count()
+            == 2
+        )
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/quarry/c"
+        ).exists()
+        set_aside = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.NO_PREFERRED_LABEL
+        ]
         assert len(set_aside) == 1
         assert set_aside[0].subject == "http://example.org/quarry/c"
         assert set_aside[0].params["language"] == "en"
 
-    def test_reimporting_the_identical_file_updates_rather_than_duplicates_concepts(self, db):
+    def test_reimporting_the_identical_file_updates_rather_than_duplicates_concepts(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
-        granite_pk = Concept.objects.get(static_uri="http://example.org/rocks/granite").pk
+        granite_pk = Concept.objects.get(
+            static_uri="http://example.org/rocks/granite"
+        ).pk
         report = import_skos(FIXTURES / "rocks.ttl")
         assert Concept.objects.count() == 5
-        assert Concept.objects.get(static_uri="http://example.org/rocks/granite").pk == granite_pk
+        assert (
+            Concept.objects.get(static_uri="http://example.org/rocks/granite").pk
+            == granite_pk
+        )
         assert "http://example.org/rocks/granite" in report.updated
         assert "http://example.org/rocks/granite" not in report.created
 
@@ -776,13 +903,17 @@ class TestConceptLabelIsSelectedByTheWinnerRule:
     equality — so a concept whose only preferred label is a variant of the default language still
     names the concept, and an exact match is never displaced by a more predominant variant."""
 
-    def test_a_concept_whose_only_preferred_label_is_a_variant_of_the_default_language_still_names_it(self, db):
+    def test_a_concept_whose_only_preferred_label_is_a_variant_of_the_default_language_still_names_it(
+        self, db
+    ):
         import_skos(FIXTURES / "declares-de-at.ttl")
         rot = Concept.objects.get(static_uri="http://example.org/farben/rot")
         assert rot.label == "Rot"
         assert rot.slug == "rot"
 
-    def test_an_exact_match_is_not_displaced_by_a_more_predominant_variant(self, db, tmp_path):
+    def test_an_exact_match_is_not_displaced_by_a_more_predominant_variant(
+        self, db, tmp_path
+    ):
         # "en-gb" is the predominant tag across the file (three occurrences),
         # but the target concept also carries an exact "en" match, which
         # FR-002 says always wins regardless of predominance.
@@ -830,7 +961,10 @@ class TestLabelsNotesAndNamesResolveThroughTheMatcher:
             assert report.fatal == []
             igneous = Concept.objects.get(static_uri="http://example.org/rocks/igneous")
             assert igneous.label == "Igneous rock"
-            assert igneous.definition("en-gb") == "Rock formed by the cooling and solidification of magma or lava."
+            assert (
+                igneous.definition("en-gb")
+                == "Rock formed by the cooling and solidification of magma or lava."
+            )
             granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
             assert granite.alt_labels("en-gb") == ["Magma rock"]
             assert granite.hidden_labels("en-gb") == ["Granit rock"]
@@ -844,7 +978,9 @@ class TestLabelsNotesAndNamesResolveThroughTheMatcher:
         assert colour.alt_labels("en") == ["Hue"]
         assert colour.notes("en") == ["The visible spectral quality of light."]
 
-    def test_a_de_at_published_vocabulary_on_a_de_site_imports_its_preferred_labels_without_raising(self, db):
+    def test_a_de_at_published_vocabulary_on_a_de_site_imports_its_preferred_labels_without_raising(
+        self, db
+    ):
         # SC-010's write half: T006 and T007 alone still stop short of this — the concept's own
         # alt label and note are also tagged de-at and must resolve through the matcher too.
         report = import_skos(FIXTURES / "declares-de-at.ttl")
@@ -854,7 +990,9 @@ class TestLabelsNotesAndNamesResolveThroughTheMatcher:
         assert rot.alt_labels("de") == ["Karmesinrot"]
         assert rot.notes("de") == ["Eine der Grundfarben."]
 
-    def test_a_tag_differing_only_in_case_is_treated_as_an_exact_match(self, db, tmp_path):
+    def test_a_tag_differing_only_in_case_is_treated_as_an_exact_match(
+        self, db, tmp_path
+    ):
         # SC-004.
         path = tmp_path / "case.ttl"
         path.write_text(
@@ -875,7 +1013,9 @@ class TestLabelsNotesAndNamesResolveThroughTheMatcher:
         item = Concept.objects.get(static_uri="http://example.org/case/item")
         assert item.preferred_label("de") == "Artikel"
 
-    def test_a_tag_sharing_no_base_language_with_any_configured_language_is_still_set_aside(self, db, tmp_path):
+    def test_a_tag_sharing_no_base_language_with_any_configured_language_is_still_set_aside(
+        self, db, tmp_path
+    ):
         # SC-003.
         path = tmp_path / "nobase.ttl"
         path.write_text(
@@ -895,12 +1035,18 @@ class TestLabelsNotesAndNamesResolveThroughTheMatcher:
         report = import_skos(path)
         item = Concept.objects.get(static_uri="http://example.org/nobase/item")
         assert item.alt_labels("ja") == []
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE
+        ]
         assert len(entries) == 1
         assert entries[0].subject == item.static_uri
         assert entries[0].params["language"] == "ja"
 
-    def test_the_vocabularys_own_name_and_description_resolve_through_the_matcher_too(self, db, tmp_path):
+    def test_the_vocabularys_own_name_and_description_resolve_through_the_matcher_too(
+        self, db, tmp_path
+    ):
         # Call sites 6/7: without this, first_literal's exact filter finds no "de" literal and
         # falls back to sorted(...)[0] across every language in the file.
         path = tmp_path / "named.ttl"
@@ -925,7 +1071,9 @@ class TestLabelsNotesAndNamesResolveThroughTheMatcher:
         assert scheme.name == "Named scheme"
         assert scheme.description == "Named description"
 
-    def test_a_collections_own_name_resolves_through_the_matcher_too(self, db, tmp_path):
+    def test_a_collections_own_name_resolves_through_the_matcher_too(
+        self, db, tmp_path
+    ):
         # Call site 8.
         path = tmp_path / "named_collection.ttl"
         path.write_text(
@@ -946,7 +1094,9 @@ class TestLabelsNotesAndNamesResolveThroughTheMatcher:
             """
         )
         import_skos(path)
-        collection = Collection.objects.get(static_uri="http://example.org/namedcoll/coll")
+        collection = Collection.objects.get(
+            static_uri="http://example.org/namedcoll/coll"
+        )
         assert collection.name == "Named collection"
 
 
@@ -957,7 +1107,9 @@ class TestVocabularyAndCollectionNameSubstitutionIsReported:
     unlike ``Concept.label``, none of the three reported a ``LANGUAGE_SUBSTITUTION``.
     The same one-line guard ``Concept.label``'s own write already applies."""
 
-    def test_the_vocabularys_name_and_description_are_each_reported_as_a_substitution(self, db, tmp_path):
+    def test_the_vocabularys_name_and_description_are_each_reported_as_a_substitution(
+        self, db, tmp_path
+    ):
         path = tmp_path / "named.ttl"
         path.write_text(
             """
@@ -979,11 +1131,14 @@ class TestVocabularyAndCollectionNameSubstitutionIsReported:
         matching = [
             entry
             for entry in report.normalized
-            if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION and entry.subject == scheme_uri
+            if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION
+            and entry.subject == scheme_uri
         ]
         # One entry each for the name and the description, both de-at -> de.
         assert len(matching) == 2
-        assert all(entry.params == {"language": "de-at", "kept_as": "de"} for entry in matching)
+        assert all(
+            entry.params == {"language": "de-at", "kept_as": "de"} for entry in matching
+        )
 
     def test_a_collections_name_is_reported_as_a_substitution(self, db, tmp_path):
         path = tmp_path / "named_collection.ttl"
@@ -1005,11 +1160,14 @@ class TestVocabularyAndCollectionNameSubstitutionIsReported:
             """
         )
         report = import_skos(path)
-        collection = Collection.objects.get(static_uri="http://example.org/namedcoll/coll")
+        collection = Collection.objects.get(
+            static_uri="http://example.org/namedcoll/coll"
+        )
         matching = [
             entry
             for entry in report.normalized
-            if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION and entry.subject == collection.static_uri
+            if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION
+            and entry.subject == collection.static_uri
         ]
         assert len(matching) == 1
         assert matching[0].params == {"language": "de-at", "kept_as": "de"}
@@ -1021,7 +1179,8 @@ class TestVocabularyAndCollectionNameSubstitutionIsReported:
         report = import_skos(FIXTURES / "rocks.ttl")
         scheme_uri = "http://example.org/rocks/"
         assert not any(
-            entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION and entry.subject == scheme_uri
+            entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION
+            and entry.subject == scheme_uri
             for entry in report.normalized
         )
 
@@ -1032,13 +1191,16 @@ class TestLanguageSubstitutionIsReported:
     not stored at all, and never counted in ``language_account()`` — that account is for what a
     curator could recover by configuring something, and a substitution already made it in."""
 
-    def test_the_concepts_label_alt_label_and_note_are_each_reported_as_a_substitution(self, db):
+    def test_the_concepts_label_alt_label_and_note_are_each_reported_as_a_substitution(
+        self, db
+    ):
         report = import_skos(FIXTURES / "declares-de-at.ttl")
         rot_uri = "http://example.org/farben/rot"
         substitutions = {
             (entry.params["language"], entry.params["kept_as"])
             for entry in report.normalized
-            if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION and entry.subject == rot_uri
+            if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION
+            and entry.subject == rot_uri
         }
         assert substitutions == {("de-at", "de")}
         assert (
@@ -1046,13 +1208,16 @@ class TestLanguageSubstitutionIsReported:
                 [
                     entry
                     for entry in report.normalized
-                    if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION and entry.subject == rot_uri
+                    if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION
+                    and entry.subject == rot_uri
                 ]
             )
             == 3
         )  # the label, the alternative label, and the note
 
-    def test_a_substitution_is_distinguishable_from_a_value_that_was_not_stored(self, db, tmp_path):
+    def test_a_substitution_is_distinguishable_from_a_value_that_was_not_stored(
+        self, db, tmp_path
+    ):
         path = tmp_path / "mixed.ttl"
         path.write_text(
             """
@@ -1072,23 +1237,29 @@ class TestLanguageSubstitutionIsReported:
         item = Concept.objects.get(static_uri="http://example.org/mixed/item")
         assert item.alt_labels("en") == ["Article"]
         substitution_subjects = {
-            entry.subject for entry in report.normalized if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION
+            entry.subject
+            for entry in report.normalized
+            if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION
         }
         not_stored_subjects = {
-            entry.subject for entry in report.set_aside if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE
+            entry.subject
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE
         }
         assert item.static_uri in substitution_subjects
         assert item.static_uri in not_stored_subjects
         substitution_languages = {
             entry.params["language"]
             for entry in report.normalized
-            if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION and entry.subject == item.static_uri
+            if entry.reason is NormalizedReason.LANGUAGE_SUBSTITUTION
+            and entry.subject == item.static_uri
         }
         assert substitution_languages == {"en-gb"}
         not_stored_languages = {
             entry.params["language"]
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE and entry.subject == item.static_uri
+            if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE
+            and entry.subject == item.static_uri
         }
         assert not_stored_languages == {"ja"}
 
@@ -1096,7 +1267,9 @@ class TestLanguageSubstitutionIsReported:
         report = import_skos(FIXTURES / "declares-de-at.ttl")
         assert "de-at" not in report.language_account()
 
-    def test_an_exact_case_insensitive_match_is_not_reported_as_a_substitution(self, db, tmp_path):
+    def test_an_exact_case_insensitive_match_is_not_reported_as_a_substitution(
+        self, db, tmp_path
+    ):
         # SC-004: a case-only difference is an exact match, not a variant.
         path = tmp_path / "case_no_substitution.ttl"
         path.write_text(
@@ -1126,7 +1299,9 @@ class TestTheLanguageAccountReflectsARealImport:
     that left nothing behind, so #52 can render from it without asking which
     kind of run produced it."""
 
-    def test_the_account_covers_every_unconfigured_value_and_no_stored_value(self, db, tmp_path):
+    def test_the_account_covers_every_unconfigured_value_and_no_stored_value(
+        self, db, tmp_path
+    ):
         path = tmp_path / "multilingual.ttl"
         path.write_text(
             """
@@ -1157,12 +1332,19 @@ class TestTheLanguageAccountReflectsARealImport:
         assert report.language_account() == {"es": 2, "ja": 1, "it": 3}
 
         # Covers every value not stored for a language reason...
-        unconfigured = [entry for entry in report.set_aside if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE]
+        unconfigured = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE
+        ]
         assert sum(report.language_account().values()) == len(unconfigured)
 
         # ...and no value that was stored: the en preferred labels landed,
         # and the account carries nothing under a configured language.
-        assert Concept.objects.get(static_uri="http://example.org/multiling/a").label == "A"
+        assert (
+            Concept.objects.get(static_uri="http://example.org/multiling/a").label
+            == "A"
+        )
         assert "en" not in report.language_account()
 
     def test_present_and_empty_after_an_import_that_leaves_nothing_behind(self, db):
@@ -1185,25 +1367,33 @@ class TestConceptsImpliedByMembershipButNeverGivenAnRdfType:
     file got a green result reporting only the scheme, with no explanation
     for the missing concepts at all."""
 
-    def test_a_node_reachable_only_through_hastopconcept_is_imported_as_a_concept(self, db):
+    def test_a_node_reachable_only_through_hastopconcept_is_imported_as_a_concept(
+        self, db
+    ):
         import_skos(FIXTURES / "concept_implied_by_membership_no_rdf_type.ttl")
         alpha = Concept.objects.get(static_uri="http://example.org/implied/alpha")
         assert alpha.label == "Alpha"
         assert alpha.scheme.static_uri == "http://example.org/implied/"
 
-    def test_a_node_reachable_only_through_its_own_inscheme_is_imported_as_a_concept(self, db):
+    def test_a_node_reachable_only_through_its_own_inscheme_is_imported_as_a_concept(
+        self, db
+    ):
         import_skos(FIXTURES / "concept_implied_by_membership_no_rdf_type.ttl")
         beta = Concept.objects.get(static_uri="http://example.org/implied/beta")
         assert beta.label == "Beta"
         assert beta.scheme.static_uri == "http://example.org/implied/"
 
-    def test_a_node_reachable_only_through_its_own_topconceptof_is_imported_as_a_concept(self, db):
+    def test_a_node_reachable_only_through_its_own_topconceptof_is_imported_as_a_concept(
+        self, db
+    ):
         import_skos(FIXTURES / "concept_implied_by_membership_no_rdf_type.ttl")
         gamma = Concept.objects.get(static_uri="http://example.org/implied/gamma")
         assert gamma.label == "Gamma"
         assert gamma.scheme.static_uri == "http://example.org/implied/"
 
-    def test_all_three_are_named_created_and_the_run_reports_no_fatal_findings(self, db):
+    def test_all_three_are_named_created_and_the_run_reports_no_fatal_findings(
+        self, db
+    ):
         report = import_skos(FIXTURES / "concept_implied_by_membership_no_rdf_type.ttl")
         assert report.fatal == []
         assert set(report.created) == {
@@ -1221,8 +1411,12 @@ class TestConceptsImpliedByMembershipButNeverGivenAnRdfType:
         # object (they never do — inScheme's *subject* is the candidate, not
         # its object — but this asserts the outcome, not only the mechanism).
         import_skos(FIXTURES / "mixed_scheme_membership.ttl")
-        assert not Concept.objects.filter(static_uri="http://example.org/minerals/").exists()
-        assert ConceptScheme.objects.filter(static_uri="http://example.org/minerals/").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/minerals/"
+        ).exists()
+        assert ConceptScheme.objects.filter(
+            static_uri="http://example.org/minerals/"
+        ).exists()
 
 
 class TestConceptSlugs:
@@ -1264,14 +1458,18 @@ class TestConceptSlugs:
     def test_a_publisher_rename_leaves_the_slug_and_local_url_unchanged(self, db):
         # SC-027 — the case D6 deliberately let move, and D35 stops moving.
         import_skos(FIXTURES / "rocks.ttl")
-        granite_before = Concept.objects.get(static_uri="http://example.org/rocks/granite")
+        granite_before = Concept.objects.get(
+            static_uri="http://example.org/rocks/granite"
+        )
         slug_before = granite_before.slug
         local_url_before = granite_before.local_url
         assert granite_before.label == "Granite"
 
         report = import_skos(FIXTURES / "rocks_updated.ttl")
 
-        granite_after = Concept.objects.get(static_uri="http://example.org/rocks/granite")
+        granite_after = Concept.objects.get(
+            static_uri="http://example.org/rocks/granite"
+        )
         assert "http://example.org/rocks/granite" in report.updated
         assert granite_after.label == "Granite (revised)"
         assert granite_after.slug == slug_before
@@ -1291,14 +1489,29 @@ class TestConceptSlugs:
 
     def test_reimporting_the_identical_file_keeps_each_concept_s_slug(self, db):
         import_skos(FIXTURES / "duplicate_slug.ttl")
-        first_slug_before = Concept.objects.get(static_uri="http://example.org/quarry2/quartz-a").slug
-        second_slug_before = Concept.objects.get(static_uri="http://example.org/quarry2/quartz-b").slug
+        first_slug_before = Concept.objects.get(
+            static_uri="http://example.org/quarry2/quartz-a"
+        ).slug
+        second_slug_before = Concept.objects.get(
+            static_uri="http://example.org/quarry2/quartz-b"
+        ).slug
 
         import_skos(FIXTURES / "duplicate_slug.ttl")
 
-        assert Concept.objects.get(static_uri="http://example.org/quarry2/quartz-a").slug == first_slug_before
-        assert Concept.objects.get(static_uri="http://example.org/quarry2/quartz-b").slug == second_slug_before
-        assert Concept.objects.filter(scheme__static_uri="http://example.org/quarry2/").count() == 2
+        assert (
+            Concept.objects.get(static_uri="http://example.org/quarry2/quartz-a").slug
+            == first_slug_before
+        )
+        assert (
+            Concept.objects.get(static_uri="http://example.org/quarry2/quartz-b").slug
+            == second_slug_before
+        )
+        assert (
+            Concept.objects.filter(
+                scheme__static_uri="http://example.org/quarry2/"
+            ).count()
+            == 2
+        )
 
 
 class TestConceptSlugCollisionIsIdentifierDerived:
@@ -1326,7 +1539,9 @@ class TestConceptSlugCollisionIsIdentifierDerived:
         )
         return path
 
-    def test_two_identifiers_sharing_a_last_segment_get_distinct_slugs(self, db, tmp_path):
+    def test_two_identifiers_sharing_a_last_segment_get_distinct_slugs(
+        self, db, tmp_path
+    ):
         a_clay = (
             "<http://example.org/collision/a/clay> a skos:Concept ; "
             'skos:inScheme <http://example.org/collision/> ; skos:prefLabel "Clay A"@en .'
@@ -1356,14 +1571,24 @@ class TestConceptSlugCollisionIsIdentifierDerived:
         )
         first_path = self._write(tmp_path, "collision_first.ttl", a_clay, b_clay)
         import_skos(first_path)
-        a_slug_before = Concept.objects.get(static_uri="http://example.org/collision/a/clay").slug
-        b_slug_before = Concept.objects.get(static_uri="http://example.org/collision/b/clay").slug
+        a_slug_before = Concept.objects.get(
+            static_uri="http://example.org/collision/a/clay"
+        ).slug
+        b_slug_before = Concept.objects.get(
+            static_uri="http://example.org/collision/b/clay"
+        ).slug
 
         second_path = self._write(tmp_path, "collision_second.ttl", b_clay, a_clay)
         import_skos(second_path)
 
-        assert Concept.objects.get(static_uri="http://example.org/collision/a/clay").slug == a_slug_before
-        assert Concept.objects.get(static_uri="http://example.org/collision/b/clay").slug == b_slug_before
+        assert (
+            Concept.objects.get(static_uri="http://example.org/collision/a/clay").slug
+            == a_slug_before
+        )
+        assert (
+            Concept.objects.get(static_uri="http://example.org/collision/b/clay").slug
+            == b_slug_before
+        )
 
 
 class TestConceptSchemeSlugFollowsThePublishedIdentifier:
@@ -1405,21 +1630,31 @@ class TestConceptSchemeSlugFollowsThePublishedIdentifier:
         )
         with override_settings(LANGUAGES=[("en", "English")]):
             import_skos(first)
-        scheme_before = ConceptScheme.objects.get(static_uri="http://example.org/renamedscheme/")
+        scheme_before = ConceptScheme.objects.get(
+            static_uri="http://example.org/renamedscheme/"
+        )
         slug_before = scheme_before.slug
-        clay_before = Concept.objects.get(static_uri="http://example.org/renamedscheme/clay")
+        clay_before = Concept.objects.get(
+            static_uri="http://example.org/renamedscheme/clay"
+        )
         local_url_before = clay_before.local_url
 
         with override_settings(LANGUAGES=[("en", "English")]):
             import_skos(second)
 
-        scheme_after = ConceptScheme.objects.get(static_uri="http://example.org/renamedscheme/")
-        clay_after = Concept.objects.get(static_uri="http://example.org/renamedscheme/clay")
+        scheme_after = ConceptScheme.objects.get(
+            static_uri="http://example.org/renamedscheme/"
+        )
+        clay_after = Concept.objects.get(
+            static_uri="http://example.org/renamedscheme/clay"
+        )
         assert scheme_after.name == "Color"
         assert scheme_after.slug == slug_before
         assert clay_after.local_url == local_url_before
 
-    def test_a_scheme_s_slug_is_the_last_segment_of_its_identifier_not_its_name(self, db):
+    def test_a_scheme_s_slug_is_the_last_segment_of_its_identifier_not_its_name(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
         scheme = ConceptScheme.objects.get(static_uri="http://example.org/rocks/")
         # The URI's own last path segment is "rocks"; the name is "Rock types",
@@ -1452,9 +1687,15 @@ class TestConceptSchemeSlugCollisionIsIdentifierDerived:
         )
         return path
 
-    def test_two_vocabularies_sharing_a_last_segment_both_import_with_distinct_slugs(self, db, tmp_path):
-        first = self._write(tmp_path, "scheme_collision_a.ttl", "http://a.org/colours", "Colours A")
-        second = self._write(tmp_path, "scheme_collision_b.ttl", "http://b.org/colours", "Colours B")
+    def test_two_vocabularies_sharing_a_last_segment_both_import_with_distinct_slugs(
+        self, db, tmp_path
+    ):
+        first = self._write(
+            tmp_path, "scheme_collision_a.ttl", "http://a.org/colours", "Colours A"
+        )
+        second = self._write(
+            tmp_path, "scheme_collision_b.ttl", "http://b.org/colours", "Colours B"
+        )
 
         import_skos(first)
         import_skos(second)
@@ -1464,19 +1705,35 @@ class TestConceptSchemeSlugCollisionIsIdentifierDerived:
         assert {a.slug, b.slug} == {"colours", "colours-2"}
         assert a.slug != b.slug
 
-    def test_each_vocabulary_keeps_its_slug_when_its_own_file_is_reimported(self, db, tmp_path):
-        first = self._write(tmp_path, "scheme_collision_a.ttl", "http://a.org/colours", "Colours A")
-        second = self._write(tmp_path, "scheme_collision_b.ttl", "http://b.org/colours", "Colours B")
+    def test_each_vocabulary_keeps_its_slug_when_its_own_file_is_reimported(
+        self, db, tmp_path
+    ):
+        first = self._write(
+            tmp_path, "scheme_collision_a.ttl", "http://a.org/colours", "Colours A"
+        )
+        second = self._write(
+            tmp_path, "scheme_collision_b.ttl", "http://b.org/colours", "Colours B"
+        )
         import_skos(first)
         import_skos(second)
-        a_slug_before = ConceptScheme.objects.get(static_uri="http://a.org/colours").slug
-        b_slug_before = ConceptScheme.objects.get(static_uri="http://b.org/colours").slug
+        a_slug_before = ConceptScheme.objects.get(
+            static_uri="http://a.org/colours"
+        ).slug
+        b_slug_before = ConceptScheme.objects.get(
+            static_uri="http://b.org/colours"
+        ).slug
 
         import_skos(first)
         import_skos(second)
 
-        assert ConceptScheme.objects.get(static_uri="http://a.org/colours").slug == a_slug_before
-        assert ConceptScheme.objects.get(static_uri="http://b.org/colours").slug == b_slug_before
+        assert (
+            ConceptScheme.objects.get(static_uri="http://a.org/colours").slug
+            == a_slug_before
+        )
+        assert (
+            ConceptScheme.objects.get(static_uri="http://b.org/colours").slug
+            == b_slug_before
+        )
 
 
 class TestASlugAlreadyStoredIsReadBackNeverRecomputed:
@@ -1491,7 +1748,9 @@ class TestASlugAlreadyStoredIsReadBackNeverRecomputed:
     many times it is imported."
     """
 
-    def test_a_vocabulary_keeps_its_suffixed_slug_after_a_colliding_sibling_is_deleted(self, db, tmp_path):
+    def test_a_vocabulary_keeps_its_suffixed_slug_after_a_colliding_sibling_is_deleted(
+        self, db, tmp_path
+    ):
         # (a) — two vocabularies whose identifiers both end in "#terms" import as "terms" and
         # "terms-2"; deleting the first and re-importing the second's UNCHANGED file must not
         # move the second's address onto the now-vacant "terms".
@@ -1521,7 +1780,9 @@ class TestASlugAlreadyStoredIsReadBackNeverRecomputed:
         assert b.local_url == b_local_url_before
         assert "http://b.example/x#terms" in report.updated
 
-    def test_a_concept_keeps_its_suffixed_slug_after_a_colliding_local_record_is_deleted(self, db, tmp_path):
+    def test_a_concept_keeps_its_suffixed_slug_after_a_colliding_local_record_is_deleted(
+        self, db, tmp_path
+    ):
         # The same defect at concept granularity: an external concept collides on its base slug
         # with a *locally authored* concept already occupying it (static_uri=None), gets
         # suffixed on its first import, and must keep that suffix once the local record is
@@ -1556,7 +1817,9 @@ class TestASlugAlreadyStoredIsReadBackNeverRecomputed:
         remote_apple.refresh_from_db()
         assert remote_apple.slug == "apple-2"
 
-    def test_a_collection_keeps_its_suffixed_slug_after_a_colliding_sibling_is_deleted(self, db, tmp_path):
+    def test_a_collection_keeps_its_suffixed_slug_after_a_colliding_sibling_is_deleted(
+        self, db, tmp_path
+    ):
         # CORR-301 — the same (a) shape at collection granularity, the third record kind: two
         # collections in one vocabulary whose identifiers both end in "#colours" import as
         # "colours" and "colours-2"; deleting the first and re-importing a file describing only
@@ -1625,8 +1888,12 @@ class TestASlugAlreadyStoredIsReadBackNeverRecomputed:
 
         assert report.fatal == []
         assert ConceptScheme.objects.filter(name="Rocks").count() == 1
-        assert Concept.objects.filter(scheme__name="Rocks", label="Granite").count() == 1
-        assert Collection.objects.filter(scheme__name="Rocks", name="Igneous").count() == 1
+        assert (
+            Concept.objects.filter(scheme__name="Rocks", label="Granite").count() == 1
+        )
+        assert (
+            Collection.objects.filter(scheme__name="Rocks", name="Igneous").count() == 1
+        )
         scheme.refresh_from_db()
         concept.refresh_from_db()
         collection.refresh_from_db()
@@ -1670,18 +1937,24 @@ class TestUniqueSlugForIdentifierTruncationNeverSlicesNegative:
         base[:0] + '-2' == '-2' — the base is gone entirely, and the result is indistinguishable
         from another record's own base 'b-2'. Would fail (return '-2') without the fix.
         """
-        result = unique_slug_for_identifier("http://e.org/#ab", {"ab": "other", "b-2": "other2"}, 2)
+        result = unique_slug_for_identifier(
+            "http://e.org/#ab", {"ab": "other", "b-2": "other2"}, 2
+        )
         assert result != "-2"
         assert result.startswith("a")
 
-    def test_a_collision_suffix_longer_than_max_length_still_fits_within_max_length(self):
+    def test_a_collision_suffix_longer_than_max_length_still_fits_within_max_length(
+        self,
+    ):
         """SEC-405, decisions.md D63 (fix cycle 5): the docstring's own contract is "the returned
         candidate never exceeds max_length however many collisions it resolves" — true only once
         the fix below clamps the whole candidate, not only the base. Before it, ``max_length=2``
         with a two-character suffix returned ``'a-2'`` (length 3): ``base[: max(2 - 2, 1)]`` keeps
         one base character, but nothing then trims the assembled ``base + suffix`` back down.
         """
-        result = unique_slug_for_identifier("http://e.org/#ab", {"ab": "other", "b-2": "other2"}, 2)
+        result = unique_slug_for_identifier(
+            "http://e.org/#ab", {"ab": "other", "b-2": "other2"}, 2
+        )
         assert len(result) <= 2
 
     def test_a_normal_collision_is_unaffected_by_the_fix(self):
@@ -1706,7 +1979,9 @@ class TestUniqueSlugForIdentifierGivesUpRatherThanLoopingForever:
     ``SlugField(max_length=255)``.
     """
 
-    def test_a_collision_that_always_clamps_to_the_same_candidate_gives_up_rather_than_hanging(self):
+    def test_a_collision_that_always_clamps_to_the_same_candidate_gives_up_rather_than_hanging(
+        self,
+    ):
         """T061 — CORR-604 (round 6, low): asserting on the return value alone means a
         regression of the give-up itself hangs this call forever rather than failing — pytest
         never reaches the assertion below, and CI cannot tell the difference between that and a
@@ -1718,20 +1993,28 @@ class TestUniqueSlugForIdentifierGivesUpRatherThanLoopingForever:
         result_holder: list[str] = []
         worker = threading.Thread(
             target=lambda: result_holder.append(
-                unique_slug_for_identifier("http://e.org/#ab", {"ab": "other", "a-": "other2"}, 2)
+                unique_slug_for_identifier(
+                    "http://e.org/#ab", {"ab": "other", "a-": "other2"}, 2
+                )
             ),
             daemon=True,
         )
         worker.start()
         worker.join(timeout=5)
-        assert not worker.is_alive(), "unique_slug_for_identifier did not return within 5s (non-termination regression)"
+        assert not worker.is_alive(), (
+            "unique_slug_for_identifier did not return within 5s (non-termination regression)"
+        )
         assert result_holder == [""]
 
-    def test_giving_up_does_not_disturb_a_collision_that_would_have_resolved_anyway(self):
+    def test_giving_up_does_not_disturb_a_collision_that_would_have_resolved_anyway(
+        self,
+    ):
         """The existing SEC-303/SEC-405 fixtures resolve on their very first retry (``'a-'`` is
         not taken in either), so the give-up path must never fire for them.
         """
-        result = unique_slug_for_identifier("http://e.org/#ab", {"ab": "other", "b-2": "other2"}, 2)
+        result = unique_slug_for_identifier(
+            "http://e.org/#ab", {"ab": "other", "b-2": "other2"}, 2
+        )
         assert result == "a-"
 
     def test_a_normal_collision_chain_is_unaffected(self):
@@ -1754,11 +2037,15 @@ class TestUniqueSlugForIdentifierResolvesACollisionEvenWhenTheBaseIsAlreadyMaxLe
     def test_a_255_character_base_ending_in_dash_2_still_resolves_its_collision(self):
         base = "a" * 253 + "-2"
         assert len(base) == 255
-        result = unique_slug_for_identifier(f"http://e.org/#{base}", {base: "other"}, 255)
+        result = unique_slug_for_identifier(
+            f"http://e.org/#{base}", {base: "other"}, 255
+        )
         assert result != ""
         assert result != base
 
-    def test_two_concepts_sharing_a_255_character_slug_base_both_import(self, db, tmp_path):
+    def test_two_concepts_sharing_a_255_character_slug_base_both_import(
+        self, db, tmp_path
+    ):
         """The two fragments the round-6 review reproduced this with — both slugify (and
         truncate) to the identical 255-character base, so this exercises the give-up through the
         public ``import_skos``, not only the module-level helper directly.
@@ -1777,7 +2064,9 @@ class TestUniqueSlugForIdentifierResolvesACollisionEvenWhenTheBaseIsAlreadyMaxLe
         report = import_skos(path)
         assert report.fatal == []
         assert report.set_aside == []
-        concepts = Concept.objects.filter(scheme__static_uri="http://pub.example/t060scheme")
+        concepts = Concept.objects.filter(
+            scheme__static_uri="http://pub.example/t060scheme"
+        )
         assert concepts.count() == 2
         slugs = set(concepts.values_list("slug", flat=True))
         assert len(slugs) == 2
@@ -1795,7 +2084,9 @@ class TestAGiveUpSlugIsReportedNotWrittenOrMislabeled:
     produce, without needing to actually construct one.
     """
 
-    def test_a_concept_s_give_up_slug_is_empty_slug_not_stored_slug_invalid(self, db, tmp_path, monkeypatch):
+    def test_a_concept_s_give_up_slug_is_empty_slug_not_stored_slug_invalid(
+        self, db, tmp_path, monkeypatch
+    ):
         """The scheme itself is pre-created (matched, not created) so the patched give-up is
         exercised only through the concept's own call site — a *created* scheme would hit
         ``resolve_scheme``'s own already-guarded call first and refuse the whole run instead.
@@ -1808,21 +2099,35 @@ class TestAGiveUpSlugIsReportedNotWrittenOrMislabeled:
             "<http://pub.example/sec604scheme#c1> a skos:Concept ; "
             'skos:inScheme <http://pub.example/sec604scheme> ; skos:prefLabel "One"@en .\n'
         )
-        monkeypatch.setattr(exchange.skos, "unique_slug_for_identifier", lambda *args, **kwargs: "")
+        monkeypatch.setattr(
+            exchange.skos, "unique_slug_for_identifier", lambda *args, **kwargs: ""
+        )
         report = import_skos(path)
         assert report.fatal == []
-        assert not Concept.objects.filter(static_uri="http://pub.example/sec604scheme#c1").exists()
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.EMPTY_SLUG]
+        assert not Concept.objects.filter(
+            static_uri="http://pub.example/sec604scheme#c1"
+        ).exists()
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.EMPTY_SLUG
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://pub.example/sec604scheme#c1"
         stored_slug_entries = [
-            entry for entry in report.set_aside if entry.reason is SetAsideReason.STORED_SLUG_INVALID
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.STORED_SLUG_INVALID
         ]
         assert stored_slug_entries == []
 
-    def test_a_collection_s_give_up_slug_is_empty_slug_not_stored_slug_invalid(self, db, tmp_path, monkeypatch):
+    def test_a_collection_s_give_up_slug_is_empty_slug_not_stored_slug_invalid(
+        self, db, tmp_path, monkeypatch
+    ):
         """Same pre-creation reasoning as the concept test above."""
-        ConceptSchemeFactory(name="Vocab", static_uri="http://pub.example/sec604collscheme")
+        ConceptSchemeFactory(
+            name="Vocab", static_uri="http://pub.example/sec604collscheme"
+        )
         path = tmp_path / "sec604_collection.ttl"
         path.write_text(
             "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
@@ -1832,14 +2137,27 @@ class TestAGiveUpSlugIsReportedNotWrittenOrMislabeled:
             "<http://pub.example/sec604collscheme#grp> a skos:Collection ; "
             'skos:prefLabel "Group"@en .\n'
         )
-        monkeypatch.setattr(exchange.skos, "unique_slug_for_identifier", lambda *args, **kwargs: "")
+        monkeypatch.setattr(
+            exchange.skos, "unique_slug_for_identifier", lambda *args, **kwargs: ""
+        )
         report = import_skos(path)
         assert report.fatal == []
-        assert not Collection.objects.filter(static_uri="http://pub.example/sec604collscheme#grp").exists()
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.EMPTY_SLUG]
-        assert any(entry.subject == "http://pub.example/sec604collscheme#grp" for entry in entries)
+        assert not Collection.objects.filter(
+            static_uri="http://pub.example/sec604collscheme#grp"
+        ).exists()
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.EMPTY_SLUG
+        ]
+        assert any(
+            entry.subject == "http://pub.example/sec604collscheme#grp"
+            for entry in entries
+        )
         stored_slug_entries = [
-            entry for entry in report.set_aside if entry.reason is SetAsideReason.STORED_SLUG_INVALID
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.STORED_SLUG_INVALID
         ]
         assert stored_slug_entries == []
 
@@ -1855,7 +2173,9 @@ class TestSlugAndNameLengthAreBoundedToTheField:
     same pre-write ``VALUE_TOO_LONG`` set-aside guard ``Concept.label`` already has.
     """
 
-    def test_a_concept_s_slug_is_truncated_to_the_field_s_max_length(self, db, tmp_path):
+    def test_a_concept_s_slug_is_truncated_to_the_field_s_max_length(
+        self, db, tmp_path
+    ):
         long_fragment = "a" * 400
         path = tmp_path / "long_concept_identifier.ttl"
         path.write_text(
@@ -1867,7 +2187,9 @@ class TestSlugAndNameLengthAreBoundedToTheField:
         )
         report = import_skos(path)
         assert report.fatal == []
-        concept = Concept.objects.get(static_uri=f"http://pub.example/longconcept#{long_fragment}")
+        concept = Concept.objects.get(
+            static_uri=f"http://pub.example/longconcept#{long_fragment}"
+        )
         max_length = Concept._meta.get_field("slug").max_length
         assert len(concept.slug) <= max_length
         concept.full_clean()
@@ -1881,12 +2203,16 @@ class TestSlugAndNameLengthAreBoundedToTheField:
         )
         report = import_skos(path)
         assert report.fatal == []
-        scheme = ConceptScheme.objects.get(static_uri=f"http://pub.example/longscheme#{long_fragment}")
+        scheme = ConceptScheme.objects.get(
+            static_uri=f"http://pub.example/longscheme#{long_fragment}"
+        )
         max_length = ConceptScheme._meta.get_field("slug").max_length
         assert len(scheme.slug) <= max_length
         scheme.full_clean()
 
-    def test_a_collection_s_slug_is_truncated_to_the_field_s_max_length(self, db, tmp_path):
+    def test_a_collection_s_slug_is_truncated_to_the_field_s_max_length(
+        self, db, tmp_path
+    ):
         long_fragment = "c" * 400
         path = tmp_path / "long_collection_identifier.ttl"
         path.write_text(
@@ -1896,12 +2222,16 @@ class TestSlugAndNameLengthAreBoundedToTheField:
         )
         report = import_skos(path)
         assert report.fatal == []
-        collection = Collection.objects.get(static_uri=f"http://pub.example/longcollection#{long_fragment}")
+        collection = Collection.objects.get(
+            static_uri=f"http://pub.example/longcollection#{long_fragment}"
+        )
         max_length = Collection._meta.get_field("slug").max_length
         assert len(collection.slug) <= max_length
         collection.full_clean()
 
-    def test_a_scheme_name_longer_than_the_field_is_fatal_on_first_import(self, db, tmp_path):
+    def test_a_scheme_name_longer_than_the_field_is_fatal_on_first_import(
+        self, db, tmp_path
+    ):
         """T044, decisions.md D49 (fix cycle 4, ARCH-301/CORR-303/SEC-302): a *created* scheme
         has no earlier name to fall back to, so an unusable one is fatal rather than stored
         blank. Overturns the previous version of this test, which asserted
@@ -1921,14 +2251,20 @@ class TestSlugAndNameLengthAreBoundedToTheField:
         assert len(report.fatal) == 1
         assert report.fatal[0].reason is FatalReason.VOCABULARY_NAME_UNUSABLE
         assert report.fatal[0].subject == "http://pub.example/longschemename"
-        assert not ConceptScheme.objects.filter(static_uri="http://pub.example/longschemename").exists()
+        assert not ConceptScheme.objects.filter(
+            static_uri="http://pub.example/longschemename"
+        ).exists()
 
-    def test_a_matched_scheme_s_over_long_name_is_still_only_set_aside_keeping_the_old_name(self, db, tmp_path):
+    def test_a_matched_scheme_s_over_long_name_is_still_only_set_aside_keeping_the_old_name(
+        self, db, tmp_path
+    ):
         """The matched-row half of T044: a scheme that already has a name keeps it when a
         re-import's name is unusable, set aside rather than fatal. Would fail if the new
         created-only fatal branch fired for a matched row too.
         """
-        scheme = ConceptSchemeFactory(name="Kept Name", static_uri="http://pub.example/longschemename2")
+        scheme = ConceptSchemeFactory(
+            name="Kept Name", static_uri="http://pub.example/longschemename2"
+        )
         long_name = "N" * 300
         path = tmp_path / "long_scheme_name_reimport.ttl"
         path.write_text(
@@ -1939,7 +2275,11 @@ class TestSlugAndNameLengthAreBoundedToTheField:
         assert report.fatal == []
         scheme.refresh_from_db()
         assert scheme.name == "Kept Name"
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VALUE_TOO_LONG]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://pub.example/longschemename2"
 
@@ -1962,12 +2302,20 @@ class TestSlugAndNameLengthAreBoundedToTheField:
         )
         report = import_skos(path)
         assert report.fatal == []
-        assert not Collection.objects.filter(static_uri="http://pub.example/longcollectionname#grp").exists()
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VALUE_TOO_LONG]
+        assert not Collection.objects.filter(
+            static_uri="http://pub.example/longcollectionname#grp"
+        ).exists()
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://pub.example/longcollectionname#grp"
 
-    def test_a_matched_collection_s_over_long_name_is_still_only_set_aside_keeping_the_old_name(self, db, tmp_path):
+    def test_a_matched_collection_s_over_long_name_is_still_only_set_aside_keeping_the_old_name(
+        self, db, tmp_path
+    ):
         """The matched-row half of T044 for a collection: an already-imported collection keeps
         its stored name, and the collection itself is not removed, when a re-import's name is
         unusable. Would fail if the created-only ``continue`` fired for a matched row too.
@@ -1979,7 +2327,9 @@ class TestSlugAndNameLengthAreBoundedToTheField:
             '<http://pub.example/longcollectionname2#grp> a skos:Collection ; skos:prefLabel "Group"@en .\n'
         )
         import_skos(path)
-        collection = Collection.objects.get(static_uri="http://pub.example/longcollectionname2#grp")
+        collection = Collection.objects.get(
+            static_uri="http://pub.example/longcollectionname2#grp"
+        )
         assert collection.name == "Group"
 
         long_name = "N" * 300
@@ -1992,7 +2342,11 @@ class TestSlugAndNameLengthAreBoundedToTheField:
         assert report.fatal == []
         collection.refresh_from_db()
         assert collection.name == "Group"
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VALUE_TOO_LONG]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ]
         assert len(entries) == 1
 
 
@@ -2024,13 +2378,17 @@ class TestOverLongNameSetAsideReportsThePublishedLanguage:
     fallback exists because nothing resolved to it.
     """
 
-    def test_a_matched_scheme_s_over_long_fallback_name_reports_its_own_language_not_the_default(self, db, tmp_path):
+    def test_a_matched_scheme_s_over_long_fallback_name_reports_its_own_language_not_the_default(
+        self, db, tmp_path
+    ):
         """The scheme's effective default language is frozen at 'en' (a matched row, D46/D50 —
         resolve_scheme never assigns default_language to a matched row). Its own prefLabel is
         published only in 'fr', so the VALUE_TOO_LONG set-aside must say 'fr'. Would fail
         (reporting 'en') if winning_tag stayed at its pre-fallback default.
         """
-        scheme = ConceptSchemeFactory(name="Existing", static_uri="http://pub.example/corr305scheme")
+        scheme = ConceptSchemeFactory(
+            name="Existing", static_uri="http://pub.example/corr305scheme"
+        )
         long_name = "N" * 300
         path = tmp_path / "corr305_scheme.ttl"
         path.write_text(
@@ -2040,7 +2398,11 @@ class TestOverLongNameSetAsideReportsThePublishedLanguage:
         with override_settings(LANGUAGES=[("en", "English"), ("fr", "French")]):
             report = import_skos(path)
 
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VALUE_TOO_LONG]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ]
         assert len(entries) == 1
         assert entries[0].params["language"] == "fr"
         scheme.refresh_from_db()
@@ -2053,9 +2415,13 @@ class TestOverLongNameSetAsideReportsThePublishedLanguage:
         default language 'en', the collection's re-published name is 'fr'-only and over-long.
         Would fail (reporting 'en') without the fix.
         """
-        scheme = ConceptSchemeFactory(name="Vocab", static_uri="http://pub.example/corr305collscheme")
+        scheme = ConceptSchemeFactory(
+            name="Vocab", static_uri="http://pub.example/corr305collscheme"
+        )
         collection = CollectionFactory(
-            scheme=scheme, name="Existing Group", static_uri="http://pub.example/corr305collscheme#grp"
+            scheme=scheme,
+            name="Existing Group",
+            static_uri="http://pub.example/corr305collscheme#grp",
         )
         long_name = "N" * 300
         path = tmp_path / "corr305_collection.ttl"
@@ -2067,7 +2433,11 @@ class TestOverLongNameSetAsideReportsThePublishedLanguage:
         with override_settings(LANGUAGES=[("en", "English"), ("fr", "French")]):
             report = import_skos(path)
 
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VALUE_TOO_LONG]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ]
         assert len(entries) == 1
         assert entries[0].params["language"] == "fr"
         collection.refresh_from_db()
@@ -2100,7 +2470,9 @@ class TestAnyLanguageFallbackPrefersAStorableName:
         assert report.fatal == []
         scheme = ConceptScheme.objects.get(static_uri="http://pub.example/sec401scheme")
         assert scheme.name == "Zebra Vocabulary"
-        assert Concept.objects.filter(static_uri="http://pub.example/sec401scheme#c1").exists()
+        assert Concept.objects.filter(
+            static_uri="http://pub.example/sec401scheme#c1"
+        ).exists()
 
     def test_a_created_collection_with_one_over_long_and_one_storable_name_imports_using_the_storable_one(
         self, db, tmp_path
@@ -2117,7 +2489,9 @@ class TestAnyLanguageFallbackPrefersAStorableName:
         )
         report = import_skos(path)
         assert report.fatal == []
-        collection = Collection.objects.get(static_uri="http://pub.example/sec401collscheme#grp")
+        collection = Collection.objects.get(
+            static_uri="http://pub.example/sec401collscheme#grp"
+        )
         assert collection.name == "Zebra Group"
 
 
@@ -2143,17 +2517,33 @@ class TestADroppedCollectionIsDistinguishableFromAMatchedOneThatKeptItsName:
         )
         report = import_skos(path)
         assert report.fatal == []
-        assert not Collection.objects.filter(static_uri="http://pub.example/corr404collscheme#grp").exists()
-        value_too_long = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VALUE_TOO_LONG]
+        assert not Collection.objects.filter(
+            static_uri="http://pub.example/corr404collscheme#grp"
+        ).exists()
+        value_too_long = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ]
         assert len(value_too_long) == 1
-        not_created = [entry for entry in report.set_aside if entry.reason is SetAsideReason.COLLECTION_NOT_CREATED]
+        not_created = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.COLLECTION_NOT_CREATED
+        ]
         assert len(not_created) == 1
         assert not_created[0].subject == "http://pub.example/corr404collscheme#grp"
 
-    def test_a_matched_collection_kept_name_reports_only_value_too_long_not_not_created(self, db, tmp_path):
-        scheme = ConceptSchemeFactory(name="Vocab", static_uri="http://pub.example/corr404collscheme2")
+    def test_a_matched_collection_kept_name_reports_only_value_too_long_not_not_created(
+        self, db, tmp_path
+    ):
+        scheme = ConceptSchemeFactory(
+            name="Vocab", static_uri="http://pub.example/corr404collscheme2"
+        )
         collection = CollectionFactory(
-            scheme=scheme, name="Existing Group", static_uri="http://pub.example/corr404collscheme2#grp"
+            scheme=scheme,
+            name="Existing Group",
+            static_uri="http://pub.example/corr404collscheme2#grp",
         )
         long_name = "N" * 300
         path = tmp_path / "corr404_collection_matched.ttl"
@@ -2166,7 +2556,11 @@ class TestADroppedCollectionIsDistinguishableFromAMatchedOneThatKeptItsName:
         assert report.fatal == []
         collection.refresh_from_db()
         assert collection.name == "Existing Group"
-        not_created = [entry for entry in report.set_aside if entry.reason is SetAsideReason.COLLECTION_NOT_CREATED]
+        not_created = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.COLLECTION_NOT_CREATED
+        ]
         assert not_created == []
 
 
@@ -2192,9 +2586,15 @@ class TestOverLongDefaultLanguageNameFallsBackToAnotherStorableLanguage:
         )
         report = import_skos(path)
         assert report.fatal == []
-        scheme = ConceptScheme.objects.get(static_uri="http://pub.example/corr402scheme")
+        scheme = ConceptScheme.objects.get(
+            static_uri="http://pub.example/corr402scheme"
+        )
         assert scheme.name == "Roches"
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VALUE_TOO_LONG]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ]
         assert len(entries) == 1
         assert entries[0].params["language"] == "en"
 
@@ -2213,9 +2613,15 @@ class TestOverLongDefaultLanguageNameFallsBackToAnotherStorableLanguage:
         )
         report = import_skos(path)
         assert report.fatal == []
-        collection = Collection.objects.get(static_uri="http://pub.example/corr402collscheme#grp")
+        collection = Collection.objects.get(
+            static_uri="http://pub.example/corr402collscheme#grp"
+        )
         assert collection.name == "Roches"
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VALUE_TOO_LONG]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ]
         assert len(entries) == 1
         assert entries[0].params["language"] == "en"
 
@@ -2229,7 +2635,9 @@ class TestNoPublishedNameAtAllIsUnusableTheSameAsOverLong:
     already declares impossible for a created record, reached by a different route.
     """
 
-    def test_a_created_scheme_with_no_preflabel_at_all_is_fatal_not_persisted_blank(self, db, tmp_path):
+    def test_a_created_scheme_with_no_preflabel_at_all_is_fatal_not_persisted_blank(
+        self, db, tmp_path
+    ):
         """T058, CORR-504, decisions.md D68 (fix cycle 6): overturns the reason this test
         asserted since fix cycle 5 (D59) — ``VOCABULARY_NAME_UNUSABLE``, whose template says the
         published name is "longer than this application can store." Nothing is published here at
@@ -2263,9 +2671,13 @@ class TestNoPublishedNameAtAllIsUnusableTheSameAsOverLong:
         message = report.fatal[0].render()
         assert "longer than" not in message
         assert "no skos:prefLabel with a usable value was published" in message
-        assert not ConceptScheme.objects.filter(static_uri="http://pub.example/sec404scheme").exists()
+        assert not ConceptScheme.objects.filter(
+            static_uri="http://pub.example/sec404scheme"
+        ).exists()
 
-    def test_a_created_collection_with_no_preflabel_at_all_is_set_aside_not_persisted_blank(self, db, tmp_path):
+    def test_a_created_collection_with_no_preflabel_at_all_is_set_aside_not_persisted_blank(
+        self, db, tmp_path
+    ):
         path = tmp_path / "sec404_collection.ttl"
         path.write_text(
             "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
@@ -2277,10 +2689,16 @@ class TestNoPublishedNameAtAllIsUnusableTheSameAsOverLong:
         )
         report = import_skos(path)
         assert report.fatal == []
-        assert not Collection.objects.filter(static_uri="http://pub.example/sec404collscheme#grp").exists()
+        assert not Collection.objects.filter(
+            static_uri="http://pub.example/sec404collscheme#grp"
+        ).exists()
         # CORR-404, decisions.md D60 (fix cycle 5): COLLECTION_NOT_CREATED, not a reused
         # VALUE_TOO_LONG — there is no over-long value to name for this trigger.
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.COLLECTION_NOT_CREATED]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.COLLECTION_NOT_CREATED
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://pub.example/sec404collscheme#grp"
 
@@ -2322,7 +2740,9 @@ class TestAnEmptyPublishedLiteralIsNeverTreatedAsAUsableName:
         )
         report = import_skos(path)
         assert report.fatal == []
-        scheme = ConceptScheme.objects.get(static_uri="http://pub.example/sec501schemea")
+        scheme = ConceptScheme.objects.get(
+            static_uri="http://pub.example/sec501schemea"
+        )
         assert scheme.name == "Geology Vocabulary"
 
     def test_a_created_scheme_with_only_an_empty_default_language_literal_falls_back_to_another_language(
@@ -2343,10 +2763,14 @@ class TestAnEmptyPublishedLiteralIsNeverTreatedAsAUsableName:
         )
         report = import_skos(path)
         assert report.fatal == []
-        scheme = ConceptScheme.objects.get(static_uri="http://pub.example/sec501schemeb")
+        scheme = ConceptScheme.objects.get(
+            static_uri="http://pub.example/sec501schemeb"
+        )
         assert scheme.name == "Geologie"
 
-    def test_a_created_collection_with_an_empty_and_a_usable_name_uses_the_usable_one(self, db, tmp_path):
+    def test_a_created_collection_with_an_empty_and_a_usable_name_uses_the_usable_one(
+        self, db, tmp_path
+    ):
         """SEC-501 probe C, collection counterpart."""
         path = tmp_path / "sec501_collection.ttl"
         path.write_text(
@@ -2359,10 +2783,14 @@ class TestAnEmptyPublishedLiteralIsNeverTreatedAsAUsableName:
         )
         report = import_skos(path)
         assert report.fatal == []
-        collection = Collection.objects.get(static_uri="http://pub.example/sec501collscheme#grp")
+        collection = Collection.objects.get(
+            static_uri="http://pub.example/sec501collscheme#grp"
+        )
         assert collection.name == "Igneous Rocks"
 
-    def test_a_created_scheme_s_second_chance_fallback_never_picks_the_empty_literal(self, db, tmp_path):
+    def test_a_created_scheme_s_second_chance_fallback_never_picks_the_empty_literal(
+        self, db, tmp_path
+    ):
         """SEC-502/CORR-501: the over-long default-language name has nowhere storable to fall
         back to except the empty ``de`` literal and the storable ``fr`` one — before the fix, the
         second-chance fallback (T054, D58) treated the empty literal as found and persisted
@@ -2382,7 +2810,9 @@ class TestAnEmptyPublishedLiteralIsNeverTreatedAsAUsableName:
         scheme = ConceptScheme.objects.get(static_uri="http://pub.example/sec502scheme")
         assert scheme.name == "Geologie Vokabular"
 
-    def test_a_created_collection_s_second_chance_fallback_never_picks_the_empty_literal(self, db, tmp_path):
+    def test_a_created_collection_s_second_chance_fallback_never_picks_the_empty_literal(
+        self, db, tmp_path
+    ):
         """SEC-502/CORR-501, collection counterpart."""
         long_name = "A" * 300
         path = tmp_path / "sec502_collection.ttl"
@@ -2396,10 +2826,14 @@ class TestAnEmptyPublishedLiteralIsNeverTreatedAsAUsableName:
         )
         report = import_skos(path)
         assert report.fatal == []
-        collection = Collection.objects.get(static_uri="http://pub.example/sec502collscheme#grp")
+        collection = Collection.objects.get(
+            static_uri="http://pub.example/sec502collscheme#grp"
+        )
         assert collection.name == "Geologie Vokabular"
 
-    def test_a_whitespace_only_literal_is_treated_the_same_as_an_empty_one(self, db, tmp_path):
+    def test_a_whitespace_only_literal_is_treated_the_same_as_an_empty_one(
+        self, db, tmp_path
+    ):
         """SEC-504: a whitespace-only literal sorts ahead of a real name exactly as an empty
         string does, and has no visible content once stored — the same emptiness test must treat
         it the same way.
@@ -2417,7 +2851,9 @@ class TestAnEmptyPublishedLiteralIsNeverTreatedAsAUsableName:
         scheme = ConceptScheme.objects.get(static_uri="http://pub.example/sec504scheme")
         assert scheme.name == "Geology Vocabulary"
 
-    def test_a_node_publishing_only_an_empty_literal_is_treated_as_no_usable_name_at_all(self, db, tmp_path):
+    def test_a_node_publishing_only_an_empty_literal_is_treated_as_no_usable_name_at_all(
+        self, db, tmp_path
+    ):
         """The record-level outcome when *every* published literal is unusable must be unchanged:
         this is not a new way to have a name, it is the same "nothing storable" case D59 already
         makes fatal for a created scheme — reported as ``VOCABULARY_NAME_UNPUBLISHED`` (T058,
@@ -2436,9 +2872,13 @@ class TestAnEmptyPublishedLiteralIsNeverTreatedAsAUsableName:
         report = exc_info.value.report
         assert len(report.fatal) == 1
         assert report.fatal[0].reason is FatalReason.VOCABULARY_NAME_UNPUBLISHED
-        assert not ConceptScheme.objects.filter(static_uri="http://pub.example/sec501schemenone").exists()
+        assert not ConceptScheme.objects.filter(
+            static_uri="http://pub.example/sec501schemenone"
+        ).exists()
 
-    def test_a_whitespace_only_vocabulary_name_is_refused_with_a_message_that_stays_true(self, db, tmp_path):
+    def test_a_whitespace_only_vocabulary_name_is_refused_with_a_message_that_stays_true(
+        self, db, tmp_path
+    ):
         """T061 — SEC-603 (round 6, medium): a scheme publishing only a whitespace-only
         ``skos:prefLabel`` reaches this identical fatal (T055's filter makes ``name`` arrive
         ``None``, exactly as if nothing had been published), but a triple *was* published — the
@@ -2459,7 +2899,9 @@ class TestAnEmptyPublishedLiteralIsNeverTreatedAsAUsableName:
         message = report.fatal[0].render()
         assert "at all" not in message
         assert "no skos:prefLabel with a usable value was published" in message
-        assert not ConceptScheme.objects.filter(static_uri="http://pub.example/sec603schemewsonly").exists()
+        assert not ConceptScheme.objects.filter(
+            static_uri="http://pub.example/sec603schemewsonly"
+        ).exists()
 
 
 class TestAnEmptyPublishedLiteralIsNeverAUsableNameForAnyRecordKind:
@@ -2479,7 +2921,9 @@ class TestAnEmptyPublishedLiteralIsNeverAUsableNameForAnyRecordKind:
     """
 
     @pytest.mark.parametrize("record_kind", ["scheme", "concept", "collection"])
-    def test_an_empty_literal_never_beats_a_real_one_regardless_of_record_kind(self, db, tmp_path, record_kind):
+    def test_an_empty_literal_never_beats_a_real_one_regardless_of_record_kind(
+        self, db, tmp_path, record_kind
+    ):
         """One parametrized test drives all three record kinds through the identical fixture
         shape — an empty literal published alongside a real one, in the record's own name
         predicate — so a regression in any single kind's selection path fails this one test,
@@ -2515,14 +2959,23 @@ class TestAnEmptyPublishedLiteralIsNeverAUsableNameForAnyRecordKind:
         assert report.fatal == []
 
         if record_kind == "scheme":
-            stored_name = ConceptScheme.objects.get(static_uri="http://pub.example/t059scheme").name
+            stored_name = ConceptScheme.objects.get(
+                static_uri="http://pub.example/t059scheme"
+            ).name
         elif record_kind == "concept":
-            stored_name = Concept.objects.get(static_uri="http://pub.example/t059concept#c1").label
+            stored_name = Concept.objects.get(
+                static_uri="http://pub.example/t059concept#c1"
+            ).label
         else:
-            stored_name = Collection.objects.get(static_uri="http://pub.example/t059collection#grp").name
+            stored_name = Collection.objects.get(
+                static_uri="http://pub.example/t059collection#grp"
+            ).name
 
         assert stored_name == "Real Name"
-        assert not any(entry.reason is SetAsideReason.SURPLUS_PREFERRED_LABEL for entry in report.set_aside)
+        assert not any(
+            entry.reason is SetAsideReason.SURPLUS_PREFERRED_LABEL
+            for entry in report.set_aside
+        )
 
     def test_a_whitespace_only_alternative_label_is_not_stored(self, db, tmp_path):
         """Audit finding, T059 brief: ``ConceptImporter.import_labels`` reads ``skos:altLabel``/
@@ -2547,7 +3000,9 @@ class TestAnEmptyPublishedLiteralIsNeverAUsableNameForAnyRecordKind:
         concept = Concept.objects.get(static_uri="http://pub.example/t059altlabel#c1")
         assert list(concept.labels.all()) == []
 
-    def test_an_empty_only_non_default_language_preferred_label_is_silently_absent_not_a_crash(self, db, tmp_path):
+    def test_an_empty_only_non_default_language_preferred_label_is_silently_absent_not_a_crash(
+        self, db, tmp_path
+    ):
         """Audit finding, T059 brief: before the raw ``import_labels`` loop was routed through
         ``is_usable_literal``, closing ``preferred_label_in``'s own gap alone would have made
         this scenario raise ``KeyError`` instead of importing cleanly — a concept whose *only*
@@ -2565,7 +3020,9 @@ class TestAnEmptyPublishedLiteralIsNeverAUsableNameForAnyRecordKind:
         with override_settings(LANGUAGES=[("en", "English"), ("fr", "French")]):
             report = import_skos(path)
         assert report.fatal == []
-        concept = Concept.objects.get(static_uri="http://pub.example/t059variantonly#c1")
+        concept = Concept.objects.get(
+            static_uri="http://pub.example/t059variantonly#c1"
+        )
         assert concept.label == "One"
         assert list(concept.labels.all()) == []
 
@@ -2580,7 +3037,9 @@ class TestAStoredSlugThatFailsValidationIsSetAsideNotEscaped:
     own (``SkosImportError``/``SkosImportFailed``) exception hierarchy.
     """
 
-    def test_a_scheme_s_out_of_band_slug_failing_validation_does_not_escape_import_skos(self, db, tmp_path):
+    def test_a_scheme_s_out_of_band_slug_failing_validation_does_not_escape_import_skos(
+        self, db, tmp_path
+    ):
         """T052, CORR-401/SEC-402, decisions.md D57 (fix cycle 5): overturns the version of this
         test fix cycle 4 shipped, which asserted ``report.fatal == []`` — the scheme could not be
         resolved, so nothing else in the file has a target to import into, and a run that imports
@@ -2588,7 +3047,9 @@ class TestAStoredSlugThatFailsValidationIsSetAsideNotEscaped:
         ``resolve_scheme`` is preceded by ``add_fatal``; this one was not). The set-aside naming
         the bad slug is unchanged; a fatal is now added alongside it.
         """
-        scheme = ConceptSchemeFactory(name="Sec Three O One Scheme", static_uri="http://pub.example/sec301scheme")
+        scheme = ConceptSchemeFactory(
+            name="Sec Three O One Scheme", static_uri="http://pub.example/sec301scheme"
+        )
         ConceptScheme.objects.filter(pk=scheme.pk).update(slug="has spaces/and-slash")
         path = tmp_path / "sec301_scheme.ttl"
         path.write_text(
@@ -2602,7 +3063,11 @@ class TestAStoredSlugThatFailsValidationIsSetAsideNotEscaped:
         report = exc_info.value.report
         assert len(report.fatal) == 1
         assert report.fatal[0].reason is FatalReason.VOCABULARY_RECORD_INVALID
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.STORED_SLUG_INVALID]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.STORED_SLUG_INVALID
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://pub.example/sec301scheme"
         scheme.refresh_from_db()
@@ -2641,9 +3106,15 @@ class TestAStoredSlugThatFailsValidationIsSetAsideNotEscaped:
         report = exc_info.value.report
         assert len(report.fatal) == 1
         assert report.fatal[0].reason is FatalReason.VOCABULARY_RECORD_INVALID
-        slug_entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.STORED_SLUG_INVALID]
+        slug_entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.STORED_SLUG_INVALID
+        ]
         assert slug_entries == []
-        assert not Concept.objects.filter(static_uri="http://pub.example/corr401scheme#c1").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://pub.example/corr401scheme#c1"
+        ).exists()
         scheme.refresh_from_db()
         assert scheme.default_language == "de"
 
@@ -2661,7 +3132,10 @@ class TestAStoredSlugThatFailsValidationIsSetAsideNotEscaped:
         exists to give. Reproduced by monkeypatching ``ConceptScheme.save`` directly, the same
         shape a downstream receiver produces.
         """
-        ConceptSchemeFactory(name="Corr Five O Five Scheme", static_uri="http://pub.example/corr505scheme")
+        ConceptSchemeFactory(
+            name="Corr Five O Five Scheme",
+            static_uri="http://pub.example/corr505scheme",
+        )
         path = tmp_path / "corr505_scheme.ttl"
         path.write_text(
             "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
@@ -2679,10 +3153,16 @@ class TestAStoredSlugThatFailsValidationIsSetAsideNotEscaped:
         report = exc_info.value.report
         assert len(report.fatal) == 1
         assert report.fatal[0].reason is FatalReason.VOCABULARY_RECORD_INVALID
-        slug_entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.STORED_SLUG_INVALID]
+        slug_entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.STORED_SLUG_INVALID
+        ]
         assert slug_entries == []
 
-    def test_a_concept_s_out_of_band_slug_failing_validation_does_not_escape_import_skos(self, db, tmp_path):
+    def test_a_concept_s_out_of_band_slug_failing_validation_does_not_escape_import_skos(
+        self, db, tmp_path
+    ):
         path = tmp_path / "sec301_concept.ttl"
         path.write_text(
             "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
@@ -2697,13 +3177,19 @@ class TestAStoredSlugThatFailsValidationIsSetAsideNotEscaped:
         report = import_skos(path)
 
         assert report.fatal == []
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.STORED_SLUG_INVALID]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.STORED_SLUG_INVALID
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://pub.example/sec301concept#one"
         concept.refresh_from_db()
         assert concept.slug == "has spaces/and-slash"
 
-    def test_a_collection_s_out_of_band_slug_failing_validation_does_not_escape_import_skos(self, db, tmp_path):
+    def test_a_collection_s_out_of_band_slug_failing_validation_does_not_escape_import_skos(
+        self, db, tmp_path
+    ):
         path = tmp_path / "sec301_collection.ttl"
         path.write_text(
             "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
@@ -2711,13 +3197,19 @@ class TestAStoredSlugThatFailsValidationIsSetAsideNotEscaped:
             '<http://pub.example/sec301collection#grp> a skos:Collection ; skos:prefLabel "Group"@en .\n'
         )
         import_skos(path)
-        collection = Collection.objects.get(static_uri="http://pub.example/sec301collection#grp")
+        collection = Collection.objects.get(
+            static_uri="http://pub.example/sec301collection#grp"
+        )
         Collection.objects.filter(pk=collection.pk).update(slug="has spaces/and-slash")
 
         report = import_skos(path)
 
         assert report.fatal == []
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.STORED_SLUG_INVALID]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.STORED_SLUG_INVALID
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://pub.example/sec301collection#grp"
         collection.refresh_from_db()
@@ -2738,7 +3230,9 @@ class TestSlugAssignmentQueryCountIsLinearInASharedLabelGroup:
     sub-branches) can plausibly carry a group this size.
     """
 
-    def test_query_count_stays_bounded_as_the_shared_label_group_grows(self, db, tmp_path):
+    def test_query_count_stays_bounded_as_the_shared_label_group_grows(
+        self, db, tmp_path
+    ):
         # A small N, chosen to keep the test itself fast, but large enough to
         # separate the two shapes clearly. Measured directly against this
         # exact fixture and settings: the *pre-fix* quadratic version (one
@@ -2756,7 +3250,12 @@ class TestSlugAssignmentQueryCountIsLinearInASharedLabelGroup:
         with CaptureQueriesContext(connection) as ctx:
             report = import_skos(path)
         assert report.fatal == []
-        assert Concept.objects.filter(scheme__static_uri="http://example.org/sharedslug/").count() == n
+        assert (
+            Concept.objects.filter(
+                scheme__static_uri="http://example.org/sharedslug/"
+            ).count()
+            == n
+        )
         assert len(ctx.captured_queries) < 12 * n
 
     def test_the_same_file_imported_twice_produces_the_same_slugs(self, db, tmp_path):
@@ -2767,15 +3266,21 @@ class TestSlugAssignmentQueryCountIsLinearInASharedLabelGroup:
         import_skos(path)
         first_pass = {
             concept.static_uri: concept.slug
-            for concept in Concept.objects.filter(scheme__static_uri="http://example.org/sharedslug/")
+            for concept in Concept.objects.filter(
+                scheme__static_uri="http://example.org/sharedslug/"
+            )
         }
         import_skos(path)
         second_pass = {
             concept.static_uri: concept.slug
-            for concept in Concept.objects.filter(scheme__static_uri="http://example.org/sharedslug/")
+            for concept in Concept.objects.filter(
+                scheme__static_uri="http://example.org/sharedslug/"
+            )
         }
         assert first_pass == second_pass
-        assert len(set(first_pass.values())) == 12, "each concept in the shared-label group must get a distinct slug"
+        assert len(set(first_pass.values())) == 12, (
+            "each concept in the shared-label group must get a distinct slug"
+        )
 
 
 def _write_file_with_a_shared_broader_parent(tmp_path: Path, n: int) -> Path:
@@ -2797,7 +3302,9 @@ def _write_file_with_a_shared_broader_parent(tmp_path: Path, n: int) -> Path:
             f'skos:prefLabel "Child {i}"@en ; skos:broader <http://example.org/inclause/root> .'
         )
         collection_uri = f"http://example.org/inclause/group{i:04d}"
-        lines.append(f'<{collection_uri}> a skos:Collection ; skos:prefLabel "Group {i}"@en ; skos:member <{uri}> .')
+        lines.append(
+            f'<{collection_uri}> a skos:Collection ; skos:prefLabel "Group {i}"@en ; skos:member <{uri}> .'
+        )
     path = tmp_path / "in_clause.ttl"
     path.write_text("\n".join(lines))
     return path
@@ -2836,7 +3343,9 @@ class TestQueryParameterCountDoesNotScaleWithConceptCount:
     query — rather than trying to reproduce the failure at production scale.
     """
 
-    def test_no_query_carries_an_in_clause_sized_by_the_concept_count(self, db, tmp_path):
+    def test_no_query_carries_an_in_clause_sized_by_the_concept_count(
+        self, db, tmp_path
+    ):
         # A modest N, deliberately far below any real parameter ceiling —
         # this is a query-shape assertion, not a scale reproduction. If any
         # query's IN clause grows with N at all, it is already the wrong
@@ -2849,7 +3358,10 @@ class TestQueryParameterCountDoesNotScaleWithConceptCount:
             report = import_skos(path)  # second pass: exercises the existing-row lookup
         assert report.fatal == []
 
-        worst = max((_max_in_clause_size(entry["sql"]) for entry in ctx.captured_queries), default=0)
+        worst = max(
+            (_max_in_clause_size(entry["sql"]) for entry in ctx.captured_queries),
+            default=0,
+        )
         assert worst < 20, (
             f"a query carried an IN clause with {worst} items for only {n} concepts — "
             "its parameter count scales with the file's own concept count"
@@ -2889,13 +3401,17 @@ class TestFatalFindingsAndAtomicity:
         # The scheme and the one perfectly valid concept alongside the two
         # fatal ones must not survive either — the run is all-or-nothing.
         assert ConceptScheme.objects.count() == 0
-        assert not Concept.objects.filter(static_uri="http://example.org/mixed/ordinary").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/mixed/ordinary"
+        ).exists()
 
     def test_a_fatal_reimport_rolls_back_a_scheme_field_update_too(self, db):
         # The scheme row is written to (its name set to the file's own) before
         # the fatal concepts are even reached — proving the rollback undoes
         # that write, not just the concept creation, is the point here.
-        existing = ConceptSchemeFactory(name="Original name", static_uri="http://example.org/mixed/")
+        existing = ConceptSchemeFactory(
+            name="Original name", static_uri="http://example.org/mixed/"
+        )
         concept_count_before = Concept.objects.count()
 
         with pytest.raises(SkosImportFailed):
@@ -2917,8 +3433,13 @@ class TestVocabularyDefaultLanguageMustItselfBeConfigured:
     ``LANGUAGES``), a configuration most consuming projects hold simply by never
     overriding either setting."""
 
-    def test_an_unconfigured_default_language_fails_the_run_with_one_fatal_finding(self, db):
-        with override_settings(LANGUAGE_CODE="pt"), pytest.raises(SkosImportFailed) as exc_info:
+    def test_an_unconfigured_default_language_fails_the_run_with_one_fatal_finding(
+        self, db
+    ):
+        with (
+            override_settings(LANGUAGE_CODE="pt"),
+            pytest.raises(SkosImportFailed) as exc_info,
+        ):
             import_skos(FIXTURES / "unconfigured_language_vocabulary.ttl")
         report = exc_info.value.report
         assert len(report.fatal) == 1
@@ -2929,7 +3450,9 @@ class TestVocabularyDefaultLanguageMustItselfBeConfigured:
         # SC-023: one problem, not one NO_PREFERRED_LABEL per concept.
         assert report.set_aside == []
 
-    def test_djangos_own_shipped_defaults_are_refused_cleanly_not_silently_emptied(self, db, tmp_path):
+    def test_djangos_own_shipped_defaults_are_refused_cleanly_not_silently_emptied(
+        self, db, tmp_path
+    ):
         # SEC-001's exact repro: an existing, concept-bearing scheme whose
         # default_language is frozen blank (D18) falls back to LANGUAGE_CODE,
         # and LANGUAGE_CODE='en-us' is not itself in Django's own 99-code global
@@ -2945,12 +3468,19 @@ class TestVocabularyDefaultLanguageMustItselfBeConfigured:
                 skos:prefLabel "Clay"@en-us .
             """
         )
-        with override_settings(LANGUAGE_CODE="en-us", LANGUAGES=global_settings.LANGUAGES):
-            target = ConceptSchemeFactory(static_uri="https://example.org/v/soils", default_language="")
+        with override_settings(
+            LANGUAGE_CODE="en-us", LANGUAGES=global_settings.LANGUAGES
+        ):
+            target = ConceptSchemeFactory(
+                static_uri="https://example.org/v/soils", default_language=""
+            )
             ConceptFactory(scheme=target)
             with pytest.raises(SkosImportFailed) as exc_info:
                 import_skos(path, scheme=target)
-        assert exc_info.value.report.fatal[0].reason is FatalReason.DEFAULT_LANGUAGE_UNCONFIGURED
+        assert (
+            exc_info.value.report.fatal[0].reason
+            is FatalReason.DEFAULT_LANGUAGE_UNCONFIGURED
+        )
         assert exc_info.value.report.fatal[0].params["language"] == "en-us"
 
     def test_the_sites_own_configured_default_never_trips_this(self, db):
@@ -2972,7 +3502,9 @@ class TestVocabularySlugUnusableIsFatalNotAValidationError:
     the rest of the file to import into.
     """
 
-    def test_an_identifier_segment_that_slugifies_to_empty_fails_the_run_with_one_fatal_finding(self, db, tmp_path):
+    def test_an_identifier_segment_that_slugifies_to_empty_fails_the_run_with_one_fatal_finding(
+        self, db, tmp_path
+    ):
         path = tmp_path / "unusable_scheme_slug.ttl"
         path.write_text(
             """
@@ -2989,7 +3521,9 @@ class TestVocabularySlugUnusableIsFatalNotAValidationError:
         assert report.fatal[0].subject == "http://c.org/vocab/#±"
         assert ConceptScheme.objects.count() == 0
 
-    def test_the_name_is_never_used_as_a_fallback_for_the_unusable_slug(self, db, tmp_path):
+    def test_the_name_is_never_used_as_a_fallback_for_the_unusable_slug(
+        self, db, tmp_path
+    ):
         # FR-018's whole point: a local address never derives from a translated label. Falling
         # back to the name here would reinstate the exact defect FR-018 exists to remove.
         path = tmp_path / "unusable_scheme_slug_fallback.ttl"
@@ -3062,14 +3596,26 @@ class TestReportPopulatedByARealRun:
     def test_created_updated_and_set_aside_all_coexist_in_one_run(self, db):
         # Pre-seed one of mixed_scheme_membership.ttl's concepts so this run
         # exercises created, updated, and set-aside together.
-        scheme = ConceptSchemeFactory(name="Minerals", static_uri="http://example.org/minerals/")
-        Concept.objects.create(scheme=scheme, static_uri="http://example.org/minerals/quartz", label="Old quartz")
+        scheme = ConceptSchemeFactory(
+            name="Minerals", static_uri="http://example.org/minerals/"
+        )
+        Concept.objects.create(
+            scheme=scheme,
+            static_uri="http://example.org/minerals/quartz",
+            label="Old quartz",
+        )
 
         report = import_skos(FIXTURES / "mixed_scheme_membership.ttl")
 
         assert "http://example.org/minerals/quartz" in report.updated
-        assert {"http://example.org/minerals/feldspar", "http://example.org/minerals/mica"} <= set(report.created)
-        assert any(entry.reason is SetAsideReason.VOCABULARY_MISMATCH for entry in report.set_aside)
+        assert {
+            "http://example.org/minerals/feldspar",
+            "http://example.org/minerals/mica",
+        } <= set(report.created)
+        assert any(
+            entry.reason is SetAsideReason.VOCABULARY_MISMATCH
+            for entry in report.set_aside
+        )
         assert report.fatal == []
 
 
@@ -3090,7 +3636,9 @@ class TestIdempotentReimport:
     def test_every_primary_key_is_stable_across_two_identical_runs(self, db):
         import_skos(FIXTURES / "rocks.ttl")
         scheme_pk = ConceptScheme.objects.get(static_uri=ROCKS_URI).pk
-        concept_pks = {c.static_uri: c.pk for c in Concept.objects.filter(scheme_id=scheme_pk)}
+        concept_pks = {
+            c.static_uri: c.pk for c in Concept.objects.filter(scheme_id=scheme_pk)
+        }
         assert len(concept_pks) == 5
 
         import_skos(FIXTURES / "rocks.ttl")
@@ -3102,7 +3650,9 @@ class TestIdempotentReimport:
         for uri, pk in concept_pks.items():
             assert Concept.objects.get(static_uri=uri).pk == pk
 
-    def test_a_reference_made_between_two_runs_still_resolves_after_the_second(self, db):
+    def test_a_reference_made_between_two_runs_still_resolves_after_the_second(
+        self, db
+    ):
         # The illustrative reference is deliberately made to a concept
         # created locally in granite's own scheme rather than to basalt:
         # rocks.ttl states granite's own hierarchy down to basalt, so the
@@ -3114,7 +3664,9 @@ class TestIdempotentReimport:
         import_skos(FIXTURES / "rocks.ttl")
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
         outsider = ConceptFactory(scheme=granite.scheme, label="Local outsider")
-        relation = ConceptRelation.objects.create(source=granite, target=outsider, kind=ConceptRelation.Kind.BROADER)
+        relation = ConceptRelation.objects.create(
+            source=granite, target=outsider, kind=ConceptRelation.Kind.BROADER
+        )
 
         import_skos(FIXTURES / "rocks.ttl")
 
@@ -3141,14 +3693,20 @@ class TestAuthoritativeUpdateForContainedRecords:
     same fixture pair.
     """
 
-    def test_a_corrected_preferred_label_lands_and_keeps_the_concept_s_identity(self, db):
+    def test_a_corrected_preferred_label_lands_and_keeps_the_concept_s_identity(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
-        granite_before = Concept.objects.get(static_uri="http://example.org/rocks/granite")
+        granite_before = Concept.objects.get(
+            static_uri="http://example.org/rocks/granite"
+        )
         pk_before = granite_before.pk
 
         report = import_skos(FIXTURES / "rocks_updated.ttl")
 
-        granite_after = Concept.objects.get(static_uri="http://example.org/rocks/granite")
+        granite_after = Concept.objects.get(
+            static_uri="http://example.org/rocks/granite"
+        )
         assert granite_after.pk == pk_before
         assert granite_after.label == "Granite (revised)"
         assert "http://example.org/rocks/granite" in report.updated
@@ -3167,7 +3725,9 @@ class TestRecordsAbsentFromSource:
         quartz = Concept.objects.get(static_uri="http://example.org/rocks/quartz")
         quartz_pk, quartz_label = quartz.pk, quartz.label
         basalt = Concept.objects.get(static_uri="http://example.org/rocks/basalt")
-        reference = ConceptRelation.objects.create(source=basalt, target=quartz, kind=ConceptRelation.Kind.RELATED)
+        reference = ConceptRelation.objects.create(
+            source=basalt, target=quartz, kind=ConceptRelation.Kind.RELATED
+        )
 
         report = import_skos(FIXTURES / "rocks_updated.ttl")
 
@@ -3202,7 +3762,9 @@ class TestVocabularyMetadataUpdate:
         assert scheme.name == "Gemstones"
         assert scheme.description == "A vocabulary of gemstone types."
 
-    def test_a_changed_name_and_description_land_on_reimport_with_identifier_unchanged(self, db):
+    def test_a_changed_name_and_description_land_on_reimport_with_identifier_unchanged(
+        self, db
+    ):
         import_skos(FIXTURES / "vocabulary_metadata.ttl")
         scheme_pk = ConceptScheme.objects.get(static_uri="http://example.org/gems/").pk
 
@@ -3212,7 +3774,10 @@ class TestVocabularyMetadataUpdate:
         assert scheme.pk == scheme_pk
         assert scheme.static_uri == "http://example.org/gems/"
         assert scheme.name == "Precious stones"
-        assert scheme.description == "An updated vocabulary of gemstones and precious stones."
+        assert (
+            scheme.description
+            == "An updated vocabulary of gemstones and precious stones."
+        )
 
     def test_a_description_removed_from_the_file_is_cleared_not_left_stale(self, db):
         import_skos(FIXTURES / "vocabulary_metadata.ttl")
@@ -3230,15 +3795,25 @@ class TestFrozenDefaultLanguageConflictIsReported:
     database but says nothing to the curator — a re-imported file that
     genuinely declares a different default language now gets reported."""
 
-    def test_a_conflicting_declared_default_language_is_reported_not_silently_dropped(self, db):
-        scheme = ConceptSchemeFactory(name="Geology", static_uri="http://example.org/geology/", default_language="")
+    def test_a_conflicting_declared_default_language_is_reported_not_silently_dropped(
+        self, db
+    ):
+        scheme = ConceptSchemeFactory(
+            name="Geology",
+            static_uri="http://example.org/geology/",
+            default_language="",
+        )
         ConceptFactory(scheme=scheme, label="Existing concept")
 
         report = import_skos(FIXTURES / "french_vocabulary.ttl")
 
         scheme.refresh_from_db()
         assert scheme.default_language == ""
-        conflicts = [entry for entry in report.set_aside if entry.reason is SetAsideReason.DEFAULT_LANGUAGE_FROZEN]
+        conflicts = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.DEFAULT_LANGUAGE_FROZEN
+        ]
         assert len(conflicts) == 1
         assert conflicts[0].subject == "http://example.org/geology/"
         assert conflicts[0].params == {"declared": "fr", "frozen": "en"}
@@ -3246,7 +3821,10 @@ class TestFrozenDefaultLanguageConflictIsReported:
     def test_an_agreeing_declared_default_language_produces_no_conflict(self, db):
         import_skos(FIXTURES / "rocks.ttl")
         report = import_skos(FIXTURES / "rocks.ttl")
-        assert not any(entry.reason is SetAsideReason.DEFAULT_LANGUAGE_FROZEN for entry in report.set_aside)
+        assert not any(
+            entry.reason is SetAsideReason.DEFAULT_LANGUAGE_FROZEN
+            for entry in report.set_aside
+        )
 
 
 class TestAtomicityOnAPopulatedDatabase:
@@ -3259,7 +3837,9 @@ class TestAtomicityOnAPopulatedDatabase:
 
     def test_a_failed_reimport_leaves_a_populated_database_exactly_as_it_was(self, db):
         import_skos(FIXTURES / "rocks.ttl")
-        granite_before = Concept.objects.get(static_uri="http://example.org/rocks/granite")
+        granite_before = Concept.objects.get(
+            static_uri="http://example.org/rocks/granite"
+        )
         pk_before, label_before = granite_before.pk, granite_before.label
         concept_count_before = Concept.objects.count()
         scheme = ConceptScheme.objects.get(static_uri=ROCKS_URI)
@@ -3290,16 +3870,25 @@ class TestConceptLabels:
     def test_preferred_labels_in_other_configured_languages_are_stored(self, db):
         import_skos(FIXTURES / "rocks.ttl")
         igneous = Concept.objects.get(static_uri="http://example.org/rocks/igneous")
-        others = {(row.language, row.text) for row in igneous.labels.filter(kind=ConceptLabel.Kind.PREFERRED)}
+        others = {
+            (row.language, row.text)
+            for row in igneous.labels.filter(kind=ConceptLabel.Kind.PREFERRED)
+        }
         assert others == {("de", "Magmatisches Gestein"), ("fr", "Roche ignée")}
 
-    def test_default_language_preferred_label_is_not_duplicated_as_a_concept_label(self, db):
+    def test_default_language_preferred_label_is_not_duplicated_as_a_concept_label(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
         igneous = Concept.objects.get(static_uri="http://example.org/rocks/igneous")
         assert igneous.label == "Igneous rock"
-        assert not igneous.labels.filter(language="en", kind=ConceptLabel.Kind.PREFERRED).exists()
+        assert not igneous.labels.filter(
+            language="en", kind=ConceptLabel.Kind.PREFERRED
+        ).exists()
 
-    def test_alternative_and_hidden_labels_are_stored_with_their_own_kind_and_language(self, db):
+    def test_alternative_and_hidden_labels_are_stored_with_their_own_kind_and_language(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
         quartz = Concept.objects.get(static_uri="http://example.org/rocks/quartz")
@@ -3307,9 +3896,13 @@ class TestConceptLabels:
         assert granite.hidden_labels("en") == ["Granit rock"]
         assert quartz.alt_labels("de") == ["Quartz"]
 
-    def test_reimport_removes_an_alternative_label_the_publisher_dropped_leaving_the_concept_intact(self, db):
+    def test_reimport_removes_an_alternative_label_the_publisher_dropped_leaving_the_concept_intact(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
-        granite_pk = Concept.objects.get(static_uri="http://example.org/rocks/granite").pk
+        granite_pk = Concept.objects.get(
+            static_uri="http://example.org/rocks/granite"
+        ).pk
         assert Concept.objects.get(pk=granite_pk).alt_labels("en") == ["Magma rock"]
 
         import_skos(FIXTURES / "rocks_updated.ttl")
@@ -3337,12 +3930,21 @@ class TestSurplusPreferredLabelInAnotherConfiguredLanguage:
         assert report.fatal == []
         gadget = Concept.objects.get(static_uri="http://example.org/surplus/gadget")
         assert gadget.preferred_label("de") == "Apparat"
-        assert ConceptLabel.objects.filter(concept=gadget, language="de", kind=ConceptLabel.Kind.PREFERRED).count() == 1
+        assert (
+            ConceptLabel.objects.filter(
+                concept=gadget, language="de", kind=ConceptLabel.Kind.PREFERRED
+            ).count()
+            == 1
+        )
 
     def test_the_surplus_value_is_set_aside_and_reported(self, db):
         report = import_skos(FIXTURES / "surplus_preferred_label.ttl")
         gadget_uri = "http://example.org/surplus/gadget"
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.SURPLUS_PREFERRED_LABEL]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.SURPLUS_PREFERRED_LABEL
+        ]
         assert len(entries) == 1
         assert entries[0].subject == gadget_uri
         assert entries[0].params["language"] == "de"
@@ -3364,7 +3966,9 @@ class TestSurplusPreferredLabelInTheDefaultLanguage:
         import_skos(FIXTURES / "surplus_preferred_label_default_language.ttl")
         widget = Concept.objects.get(static_uri="http://example.org/surplus2/widget")
         assert widget.label == "Doohickey"
-        assert not widget.labels.filter(language="en", kind=ConceptLabel.Kind.PREFERRED).exists()
+        assert not widget.labels.filter(
+            language="en", kind=ConceptLabel.Kind.PREFERRED
+        ).exists()
 
     def test_the_surplus_default_language_value_is_set_aside_and_reported(self, db):
         report = import_skos(FIXTURES / "surplus_preferred_label_default_language.ttl")
@@ -3372,7 +3976,8 @@ class TestSurplusPreferredLabelInTheDefaultLanguage:
         entries = [
             entry
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.SURPLUS_PREFERRED_LABEL and entry.subject == widget_uri
+            if entry.reason is SetAsideReason.SURPLUS_PREFERRED_LABEL
+            and entry.subject == widget_uri
         ]
         assert len(entries) == 1
         assert entries[0].params["language"] == "en"
@@ -3415,21 +4020,32 @@ class TestPreferredLabelWinnerIsReKeyedOnTheResolvedLanguage:
         )
         return path
 
-    def test_two_different_tags_resolving_to_one_non_default_language_no_longer_crash_the_run(self, db, tmp_path):
+    def test_two_different_tags_resolving_to_one_non_default_language_no_longer_crash_the_run(
+        self, db, tmp_path
+    ):
         path = self._predominant_variant_contest(tmp_path)
         with override_settings(LANGUAGES=[("en", "English"), ("de", "German")]):
             report = import_skos(path)
         assert report.fatal == []
 
-    def test_the_predominant_variant_is_stored_not_the_alphabetically_first_tag_or_value(self, db, tmp_path):
+    def test_the_predominant_variant_is_stored_not_the_alphabetically_first_tag_or_value(
+        self, db, tmp_path
+    ):
         path = self._predominant_variant_contest(tmp_path)
         with override_settings(LANGUAGES=[("en", "English"), ("de", "German")]):
             import_skos(path)
         target = Concept.objects.get(static_uri="http://example.org/predominant/target")
         assert target.preferred_label("de") == "Ziel-AT"
-        assert ConceptLabel.objects.filter(concept=target, language="de", kind=ConceptLabel.Kind.PREFERRED).count() == 1
+        assert (
+            ConceptLabel.objects.filter(
+                concept=target, language="de", kind=ConceptLabel.Kind.PREFERRED
+            ).count()
+            == 1
+        )
 
-    def test_importing_the_same_file_twice_stores_the_same_value_both_times(self, db, tmp_path):
+    def test_importing_the_same_file_twice_stores_the_same_value_both_times(
+        self, db, tmp_path
+    ):
         # SC-006's second clause.
         path = self._predominant_variant_contest(tmp_path)
         with override_settings(LANGUAGES=[("en", "English"), ("de", "German")]):
@@ -3438,7 +4054,9 @@ class TestPreferredLabelWinnerIsReKeyedOnTheResolvedLanguage:
         target = Concept.objects.get(static_uri="http://example.org/predominant/target")
         assert target.preferred_label("de") == "Ziel-AT"
 
-    def test_an_exact_match_in_a_non_default_language_wins_over_a_more_predominant_variant(self, db, tmp_path):
+    def test_an_exact_match_in_a_non_default_language_wins_over_a_more_predominant_variant(
+        self, db, tmp_path
+    ):
         # SC-005, applied to call site 3's own contest rather than Concept.label's.
         path = tmp_path / "exact_over_predominant_de.ttl"
         path.write_text(
@@ -3464,7 +4082,9 @@ class TestPreferredLabelWinnerIsReKeyedOnTheResolvedLanguage:
         with override_settings(LANGUAGES=[("en", "English"), ("de", "German")]):
             report = import_skos(path)
         assert report.fatal == []
-        target = Concept.objects.get(static_uri="http://example.org/exactnondefault/target")
+        target = Concept.objects.get(
+            static_uri="http://example.org/exactnondefault/target"
+        )
         assert target.preferred_label("de") == "Ziel"
 
     def test_the_winner_reported_by_import_labels_agrees_with_concept_label_for_the_default_language(
@@ -3497,13 +4117,16 @@ class TestPreferredLabelWinnerIsReKeyedOnTheResolvedLanguage:
         )
         with override_settings(LANGUAGES=[("en", "English")]):
             report = import_skos(path)
-        target = Concept.objects.get(static_uri="http://example.org/predominantdefault/target")
+        target = Concept.objects.get(
+            static_uri="http://example.org/predominantdefault/target"
+        )
         assert target.label == "Zed"
         losers = [
             entry
             for entry in report.set_aside
             if entry.subject == target.static_uri
-            and entry.reason in (SetAsideReason.SURPLUS_PREFERRED_LABEL, SetAsideReason.VARIANT_NOT_KEPT)
+            and entry.reason
+            in (SetAsideReason.SURPLUS_PREFERRED_LABEL, SetAsideReason.VARIANT_NOT_KEPT)
         ]
         assert len(losers) == 1
         assert losers[0].params["language"] != "en-us"
@@ -3525,7 +4148,9 @@ class TestExactMatchPreferredLabelFailingOnItsOwnMeritsIsNotBackfilledByAVariant
     is the failure this test needs.
     """
 
-    def test_the_concept_is_set_aside_under_value_too_long_and_the_variants_value_is_not_promoted(self, db, tmp_path):
+    def test_the_concept_is_set_aside_under_value_too_long_and_the_variants_value_is_not_promoted(
+        self, db, tmp_path
+    ):
         path = tmp_path / "exact_fails_variant_available.ttl"
         path.write_text(
             f"""
@@ -3544,10 +4169,13 @@ class TestExactMatchPreferredLabelFailingOnItsOwnMeritsIsNotBackfilledByAVariant
         entries = [
             entry
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.VALUE_TOO_LONG and entry.subject == "http://example.org/emptyexact/target"
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+            and entry.subject == "http://example.org/emptyexact/target"
         ]
         assert len(entries) == 1
-        assert not Concept.objects.filter(static_uri="http://example.org/emptyexact/target").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/emptyexact/target"
+        ).exists()
 
 
 class TestVariantContestLosersAreDiscriminatedInEveryConfiguredLanguage:
@@ -3586,28 +4214,41 @@ class TestVariantContestLosersAreDiscriminatedInEveryConfiguredLanguage:
         return path
 
     def test_the_run_succeeds_and_stores_exactly_one_de_label(self, db, tmp_path):
-        path = self._three_preferred_labels_two_under_one_tag_one_under_a_variant(tmp_path)
+        path = self._three_preferred_labels_two_under_one_tag_one_under_a_variant(
+            tmp_path
+        )
         with override_settings(LANGUAGES=[("en", "English"), ("de", "German")]):
             report = import_skos(path)
         assert report.fatal == []
         target = Concept.objects.get(static_uri="http://example.org/mixedlosers/target")
         assert target.preferred_label("de") == "Ziel-AT-1"
-        assert ConceptLabel.objects.filter(concept=target, language="de", kind=ConceptLabel.Kind.PREFERRED).count() == 1
+        assert (
+            ConceptLabel.objects.filter(
+                concept=target, language="de", kind=ConceptLabel.Kind.PREFERRED
+            ).count()
+            == 1
+        )
 
-    def test_one_entry_of_each_reason_and_only_the_variant_reaches_the_language_account(self, db, tmp_path):
-        path = self._three_preferred_labels_two_under_one_tag_one_under_a_variant(tmp_path)
+    def test_one_entry_of_each_reason_and_only_the_variant_reaches_the_language_account(
+        self, db, tmp_path
+    ):
+        path = self._three_preferred_labels_two_under_one_tag_one_under_a_variant(
+            tmp_path
+        )
         with override_settings(LANGUAGES=[("en", "English"), ("de", "German")]):
             report = import_skos(path)
         target_uri = "http://example.org/mixedlosers/target"
         surplus = [
             entry
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.SURPLUS_PREFERRED_LABEL and entry.subject == target_uri
+            if entry.reason is SetAsideReason.SURPLUS_PREFERRED_LABEL
+            and entry.subject == target_uri
         ]
         variant = [
             entry
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.VARIANT_NOT_KEPT and entry.subject == target_uri
+            if entry.reason is SetAsideReason.VARIANT_NOT_KEPT
+            and entry.subject == target_uri
         ]
         assert len(surplus) == 1
         assert surplus[0].params["language"] == "de"
@@ -3630,7 +4271,9 @@ class TestAnEmptyLiteralDoesNotVoteOnPredominance:
     literals that could not themselves be stored anywhere.
     """
 
-    def test_two_unusable_literals_in_one_variant_cannot_flip_predominance_for_another_concept(self, db, tmp_path):
+    def test_two_unusable_literals_in_one_variant_cannot_flip_predominance_for_another_concept(
+        self, db, tmp_path
+    ):
         """Baseline predominance (without ``unusable1``/``unusable2``): ``de-de`` appears twice
         (``filler`` and ``c1``), ``de-at`` once (``c1`` only) — ``de-de`` wins and
         ``c1.preferred_label("de")`` is ``"Alpha DE"``. Before the fix, ``unusable1`` and
@@ -3675,32 +4318,49 @@ class TestConceptNotes:
     documentary note kinds are stored against their concept, each in its own
     language, through ``Concept.add_note``."""
 
-    def test_definition_and_each_note_kind_are_stored_against_the_right_concept(self, db):
+    def test_definition_and_each_note_kind_are_stored_against_the_right_concept(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
         igneous = Concept.objects.get(static_uri="http://example.org/rocks/igneous")
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
         basalt = Concept.objects.get(static_uri="http://example.org/rocks/basalt")
-        sedimentary = Concept.objects.get(static_uri="http://example.org/rocks/sedimentary")
+        sedimentary = Concept.objects.get(
+            static_uri="http://example.org/rocks/sedimentary"
+        )
         quartz = Concept.objects.get(static_uri="http://example.org/rocks/quartz")
 
-        assert igneous.definition("en") == "Rock formed by the cooling and solidification of magma or lava."
-        assert granite.notes("en", ConceptNote.Kind.SCOPE) == ["Used here for coarse-grained intrusive igneous rock."]
-        assert basalt.notes("en", ConceptNote.Kind.EXAMPLE) == ["Columnar basalt at the Giant's Causeway."]
+        assert (
+            igneous.definition("en")
+            == "Rock formed by the cooling and solidification of magma or lava."
+        )
+        assert granite.notes("en", ConceptNote.Kind.SCOPE) == [
+            "Used here for coarse-grained intrusive igneous rock."
+        ]
+        assert basalt.notes("en", ConceptNote.Kind.EXAMPLE) == [
+            "Columnar basalt at the Giant's Causeway."
+        ]
         assert sedimentary.notes("en", ConceptNote.Kind.EDITORIAL) == [
             "Confirm classification against the regional survey before publishing."
         ]
         assert quartz.notes("en", ConceptNote.Kind.HISTORY) == [
             "Reclassified from 'Silica minerals' in the 2020 revision."
         ]
-        assert quartz.notes("en", ConceptNote.Kind.CHANGE) == ["Definition tightened in 2022."]
-        assert quartz.notes("en", ConceptNote.Kind.NOTE) == ["See also feldspar for a related silicate."]
+        assert quartz.notes("en", ConceptNote.Kind.CHANGE) == [
+            "Definition tightened in 2022."
+        ]
+        assert quartz.notes("en", ConceptNote.Kind.NOTE) == [
+            "See also feldspar for a related silicate."
+        ]
 
-    def test_reimport_removes_a_note_the_publisher_dropped_leaving_the_concept_intact(self, db):
+    def test_reimport_removes_a_note_the_publisher_dropped_leaving_the_concept_intact(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
         basalt_pk = Concept.objects.get(static_uri="http://example.org/rocks/basalt").pk
-        assert Concept.objects.get(pk=basalt_pk).notes("en", ConceptNote.Kind.EXAMPLE) == [
-            "Columnar basalt at the Giant's Causeway."
-        ]
+        assert Concept.objects.get(pk=basalt_pk).notes(
+            "en", ConceptNote.Kind.EXAMPLE
+        ) == ["Columnar basalt at the Giant's Causeway."]
 
         import_skos(FIXTURES / "rocks_updated.ttl")
 
@@ -3720,13 +4380,17 @@ class TestAlternativeLabelsHiddenLabelsAndNotesHaveNoPerLanguageContest:
     alternative label and a note alongside its preferred label, should reach this branch's plain
     resolve-and-store path unchanged, with no production code of its own."""
 
-    def test_alternative_labels_in_two_variants_of_one_configured_language_are_both_kept(self, db):
+    def test_alternative_labels_in_two_variants_of_one_configured_language_are_both_kept(
+        self, db
+    ):
         report = import_skos(FIXTURES / "variants.ttl")
         assert report.fatal == []
         colour = Concept.objects.get(static_uri="http://example.org/colours/colour")
         assert set(colour.alt_labels("en")) == {"Colour", "Color"}
 
-    def test_neither_alternative_label_is_set_aside_as_a_duplicate_or_a_contest_loser(self, db):
+    def test_neither_alternative_label_is_set_aside_as_a_duplicate_or_a_contest_loser(
+        self, db
+    ):
         # The concept's *preferred* label does have a contest (en-gb vs en-us for the default "en"
         # slot, T008) and legitimately contributes exactly one loser entry; if the alternative label
         # were wrongly run through the same contest, a second entry would appear alongside it.
@@ -3736,7 +4400,8 @@ class TestAlternativeLabelsHiddenLabelsAndNotesHaveNoPerLanguageContest:
             entry
             for entry in report.set_aside
             if entry.subject == colour_uri
-            and entry.reason in (SetAsideReason.SURPLUS_PREFERRED_LABEL, SetAsideReason.VARIANT_NOT_KEPT)
+            and entry.reason
+            in (SetAsideReason.SURPLUS_PREFERRED_LABEL, SetAsideReason.VARIANT_NOT_KEPT)
         ]
         assert len(losses) == 1
 
@@ -3756,7 +4421,9 @@ class TestReimportAfterAddingALanguageStoresItsValues:
     as left behind. ``rocks.ttl`` already carries ``en``/``de``/``fr`` preferred labels for exactly
     this population (decisions.md D16's own reference fixture)."""
 
-    def test_the_added_language_s_preferred_labels_are_stored_for_existing_concepts(self, db):
+    def test_the_added_language_s_preferred_labels_are_stored_for_existing_concepts(
+        self, db
+    ):
         with override_settings(LANGUAGES=[("en", "English")]):
             import_skos(FIXTURES / "rocks.ttl")
         igneous = Concept.objects.get(static_uri="http://example.org/rocks/igneous")
@@ -3767,12 +4434,16 @@ class TestReimportAfterAddingALanguageStoresItsValues:
 
         igneous.refresh_from_db()
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
-        sedimentary = Concept.objects.get(static_uri="http://example.org/rocks/sedimentary")
+        sedimentary = Concept.objects.get(
+            static_uri="http://example.org/rocks/sedimentary"
+        )
         assert igneous.preferred_label("fr") == "Roche ignée"
         assert granite.preferred_label("fr") == "Granite"
         assert sedimentary.preferred_label("fr") == "Roche sédimentaire"
 
-    def test_the_second_run_s_report_no_longer_counts_the_newly_stored_language_as_left_behind(self, db):
+    def test_the_second_run_s_report_no_longer_counts_the_newly_stored_language_as_left_behind(
+        self, db
+    ):
         with override_settings(LANGUAGES=[("en", "English")]):
             first_report = import_skos(FIXTURES / "rocks.ttl")
         assert first_report.language_account().get("fr") == 3
@@ -3794,7 +4465,9 @@ class TestReimportAfterAddingALanguageKeepsEveryOtherRecordUnchanged:
     def _identity(obj) -> tuple[int, str, str | None, str, str]:
         return (obj.pk, obj.uri, obj.static_uri, obj.slug, obj.local_url)
 
-    def test_every_concept_scheme_and_collection_keeps_its_identity_across_the_reimport(self, db):
+    def test_every_concept_scheme_and_collection_keeps_its_identity_across_the_reimport(
+        self, db
+    ):
         with override_settings(LANGUAGES=[("en", "English")]):
             import_skos(FIXTURES / "rocks.ttl")
 
@@ -3810,17 +4483,32 @@ class TestReimportAfterAddingALanguageKeepsEveryOtherRecordUnchanged:
             "http://example.org/rocks/collection/silica-bearing",
             "http://example.org/rocks/collection/example-sequence",
         ]
-        concepts_before = {uri: self._identity(Concept.objects.get(static_uri=uri)) for uri in concept_uris}
-        collections_before = {uri: self._identity(Collection.objects.get(static_uri=uri)) for uri in collection_uris}
+        concepts_before = {
+            uri: self._identity(Concept.objects.get(static_uri=uri))
+            for uri in concept_uris
+        }
+        collections_before = {
+            uri: self._identity(Collection.objects.get(static_uri=uri))
+            for uri in collection_uris
+        }
 
         with override_settings(LANGUAGES=[("en", "English"), ("fr", "French")]):
             import_skos(FIXTURES / "rocks.ttl")
 
-        assert self._identity(ConceptScheme.objects.get(static_uri=ROCKS_URI)) == scheme_before
+        assert (
+            self._identity(ConceptScheme.objects.get(static_uri=ROCKS_URI))
+            == scheme_before
+        )
         for uri in concept_uris:
-            assert self._identity(Concept.objects.get(static_uri=uri)) == concepts_before[uri]
+            assert (
+                self._identity(Concept.objects.get(static_uri=uri))
+                == concepts_before[uri]
+            )
         for uri in collection_uris:
-            assert self._identity(Collection.objects.get(static_uri=uri)) == collections_before[uri]
+            assert (
+                self._identity(Collection.objects.get(static_uri=uri))
+                == collections_before[uri]
+            )
 
     def test_content_already_held_in_english_is_unchanged_by_the_reimport(self, db):
         with override_settings(LANGUAGES=[("en", "English")]):
@@ -3832,11 +4520,16 @@ class TestReimportAfterAddingALanguageKeepsEveryOtherRecordUnchanged:
         igneous = Concept.objects.get(static_uri="http://example.org/rocks/igneous")
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
         assert igneous.label == "Igneous rock"
-        assert igneous.definition("en") == "Rock formed by the cooling and solidification of magma or lava."
+        assert (
+            igneous.definition("en")
+            == "Rock formed by the cooling and solidification of magma or lava."
+        )
         assert granite.label == "Granite"
         assert granite.alt_labels("en") == ["Magma rock"]
         assert granite.hidden_labels("en") == ["Granit rock"]
-        assert granite.notes("en", ConceptNote.Kind.SCOPE) == ["Used here for coarse-grained intrusive igneous rock."]
+        assert granite.notes("en", ConceptNote.Kind.SCOPE) == [
+            "Used here for coarse-grained intrusive igneous rock."
+        ]
 
 
 class TestUnconfiguredLanguageValuesAreSetAside:
@@ -3848,13 +4541,16 @@ class TestUnconfiguredLanguageValuesAreSetAside:
     would refuse these too, but the importer must not rely on that exception
     as its control flow."""
 
-    def test_labels_and_notes_in_an_unconfigured_language_are_set_aside_and_named(self, db):
+    def test_labels_and_notes_in_an_unconfigured_language_are_set_aside_and_named(
+        self, db
+    ):
         report = import_skos(FIXTURES / "unconfigured_language_values.ttl")
         schist = Concept.objects.get(static_uri="http://example.org/quarry3/schist")
         entries = [
             entry
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE and entry.subject == schist.static_uri
+            if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE
+            and entry.subject == schist.static_uri
         ]
         # Two alternative labels and one scope note, each named individually
         # rather than merged into a single "some values were dropped" entry.
@@ -3894,10 +4590,16 @@ class TestUntaggedOrNonLiteralValuesAreSetAside:
         entries = [
             entry
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.NO_LANGUAGE_TAG and entry.subject == alpha_uri
+            if entry.reason is SetAsideReason.NO_LANGUAGE_TAG
+            and entry.subject == alpha_uri
         ]
-        assert len(entries) == 2, "expected one entry for the untagged altLabel and one for the untagged definition"
-        assert {entry.params.get("predicate") for entry in entries} == {"skos:altLabel", "skos:definition"}
+        assert len(entries) == 2, (
+            "expected one entry for the untagged altLabel and one for the untagged definition"
+        )
+        assert {entry.params.get("predicate") for entry in entries} == {
+            "skos:altLabel",
+            "skos:definition",
+        }
 
     def test_the_untagged_alternative_label_is_not_stored_under_any_language(self, db):
         import_skos(FIXTURES / "untagged_literal_values.ttl")
@@ -3914,7 +4616,8 @@ class TestUntaggedOrNonLiteralValuesAreSetAside:
         entries = [
             entry
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.NO_LANGUAGE_TAG and entry.subject == beta_uri
+            if entry.reason is SetAsideReason.NO_LANGUAGE_TAG
+            and entry.subject == beta_uri
         ]
         assert len(entries) == 1
         assert entries[0].params["predicate"] == "skos:definition"
@@ -3930,18 +4633,26 @@ class TestUntaggedOrNonLiteralValuesAreSetAside:
         entries = [
             entry
             for entry in report.set_aside
-            if entry.reason is SetAsideReason.NO_LANGUAGE_TAG and entry.subject == gamma_uri
+            if entry.reason is SetAsideReason.NO_LANGUAGE_TAG
+            and entry.subject == gamma_uri
         ]
         assert len(entries) == 1
         assert entries[0].params["predicate"] == "dcterms:description"
         gamma = Concept.objects.get(static_uri=gamma_uri)
         assert gamma.notes("en") == []
-        assert report.normalized == [] or all(entry.subject != gamma_uri for entry in report.normalized)
+        assert report.normalized == [] or all(
+            entry.subject != gamma_uri for entry in report.normalized
+        )
 
     def test_the_concepts_still_import_successfully_on_their_usable_content(self, db):
         report = import_skos(FIXTURES / "untagged_literal_values.ttl")
         assert report.fatal == []
-        assert Concept.objects.filter(scheme__static_uri="http://example.org/untagged/").count() == 3
+        assert (
+            Concept.objects.filter(
+                scheme__static_uri="http://example.org/untagged/"
+            ).count()
+            == 3
+        )
         alpha = Concept.objects.get(static_uri="http://example.org/untagged/alpha")
         assert alpha.label == "Alpha"
 
@@ -3959,29 +4670,48 @@ class TestUnheldValuesAndNormalisation:
     def test_the_concepts_still_import_successfully(self, db):
         report = import_skos(FIXTURES / "unmodelled_and_normalised_values.ttl")
         assert report.fatal == []
-        assert Concept.objects.filter(scheme__static_uri="http://example.org/hardware/").count() == 2
+        assert (
+            Concept.objects.filter(
+                scheme__static_uri="http://example.org/hardware/"
+            ).count()
+            == 2
+        )
 
     def test_a_notation_is_set_aside(self, db):
         report = import_skos(FIXTURES / "unmodelled_and_normalised_values.ttl")
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.NOTATION]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.NOTATION
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/hardware/widget"
 
     def test_a_mapping_predicate_is_set_aside_naming_the_predicate(self, db):
         report = import_skos(FIXTURES / "unmodelled_and_normalised_values.ttl")
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.MAPPING]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.MAPPING
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/hardware/widget"
         assert entries[0].params["predicate"] == "skos:exactMatch"
 
     def test_a_predicate_from_outside_skos_is_set_aside_naming_the_predicate(self, db):
         report = import_skos(FIXTURES / "unmodelled_and_normalised_values.ttl")
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.UNMODELLED_PREDICATE]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.UNMODELLED_PREDICATE
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/hardware/widget"
         assert entries[0].params["predicate"] == "http://example.org/ns#customAttribute"
 
-    def test_a_foreign_description_is_read_as_the_definition_and_reported_as_normalised(self, db):
+    def test_a_foreign_description_is_read_as_the_definition_and_reported_as_normalised(
+        self, db
+    ):
         report = import_skos(FIXTURES / "unmodelled_and_normalised_values.ttl")
         gadget = Concept.objects.get(static_uri="http://example.org/hardware/gadget")
         assert gadget.definition("en") == "A small mechanical device."
@@ -3999,13 +4729,18 @@ class TestUnheldValuesAndNormalisation:
         report = import_skos(FIXTURES / "rocks.ttl")
         assert report.normalized == []
 
-    def test_broader_related_and_collection_membership_are_not_reported_as_unmodelled(self, db):
+    def test_broader_related_and_collection_membership_are_not_reported_as_unmodelled(
+        self, db
+    ):
         # skos:broader/related/member/memberList are SKOS predicates this
         # importer does not read yet (US-4/US-5), but the models do have a
         # place for them — they must never be reported as UNMODELLED_PREDICATE
         # merely because this story doesn't build that read path yet.
         report = import_skos(FIXTURES / "rocks.ttl")
-        assert not any(entry.reason is SetAsideReason.UNMODELLED_PREDICATE for entry in report.set_aside)
+        assert not any(
+            entry.reason is SetAsideReason.UNMODELLED_PREDICATE
+            for entry in report.set_aside
+        )
 
 
 class TestUnmodelledPredicatesAreReportedForSchemeAndCollectionNodesToo:
@@ -4020,27 +4755,48 @@ class TestUnmodelledPredicatesAreReportedForSchemeAndCollectionNodesToo:
     predicate genuinely outside SKOS."""
 
     def test_an_unmodelled_predicate_on_the_scheme_node_is_reported(self, db):
-        report = import_skos(FIXTURES / "unmodelled_predicate_on_scheme_and_collection.ttl")
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.UNMODELLED_PREDICATE]
-        matches = [entry for entry in entries if entry.subject == "http://example.org/scheme-collection-unmodelled/"]
+        report = import_skos(
+            FIXTURES / "unmodelled_predicate_on_scheme_and_collection.ttl"
+        )
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.UNMODELLED_PREDICATE
+        ]
+        matches = [
+            entry
+            for entry in entries
+            if entry.subject == "http://example.org/scheme-collection-unmodelled/"
+        ]
         assert len(matches) == 1
         assert matches[0].params["predicate"] == "http://example.org/custom#owner"
 
     def test_an_unmodelled_predicate_on_a_collection_node_is_reported(self, db):
-        report = import_skos(FIXTURES / "unmodelled_predicate_on_scheme_and_collection.ttl")
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.UNMODELLED_PREDICATE]
+        report = import_skos(
+            FIXTURES / "unmodelled_predicate_on_scheme_and_collection.ttl"
+        )
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.UNMODELLED_PREDICATE
+        ]
         matches = [
             entry
             for entry in entries
-            if entry.subject == "http://example.org/scheme-collection-unmodelled/collection/group"
+            if entry.subject
+            == "http://example.org/scheme-collection-unmodelled/collection/group"
         ]
         assert len(matches) == 1
         assert matches[0].params["predicate"] == "http://example.org/custom#curatedBy"
 
     def test_the_scheme_and_collection_still_import_successfully(self, db):
-        report = import_skos(FIXTURES / "unmodelled_predicate_on_scheme_and_collection.ttl")
+        report = import_skos(
+            FIXTURES / "unmodelled_predicate_on_scheme_and_collection.ttl"
+        )
         assert report.fatal == []
-        assert ConceptScheme.objects.filter(static_uri="http://example.org/scheme-collection-unmodelled/").exists()
+        assert ConceptScheme.objects.filter(
+            static_uri="http://example.org/scheme-collection-unmodelled/"
+        ).exists()
         assert Collection.objects.filter(
             static_uri="http://example.org/scheme-collection-unmodelled/collection/group"
         ).exists()
@@ -4058,17 +4814,30 @@ class TestNoPreferredLabelFinishedByUS3:
     content (labels, in this fixture) alongside the set-aside concept, not a
     production change."""
 
-    def test_the_concept_with_no_default_language_label_is_set_aside_and_named(self, db):
+    def test_the_concept_with_no_default_language_label_is_set_aside_and_named(
+        self, db
+    ):
         report = import_skos(FIXTURES / "no_default_language_label.ttl")
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.NO_PREFERRED_LABEL]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.NO_PREFERRED_LABEL
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/quarry/c"
         assert entries[0].params["language"] == "en"
-        assert not Concept.objects.filter(static_uri="http://example.org/quarry/c").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/quarry/c"
+        ).exists()
 
     def test_the_rest_of_the_vocabulary_imports_with_its_own_content_intact(self, db):
         import_skos(FIXTURES / "no_default_language_label.ttl")
-        assert Concept.objects.filter(scheme__static_uri="http://example.org/quarry/").count() == 2
+        assert (
+            Concept.objects.filter(
+                scheme__static_uri="http://example.org/quarry/"
+            ).count()
+            == 2
+        )
         b = Concept.objects.get(static_uri="http://example.org/quarry/b")
         assert b.label == "B"
         assert b.alt_labels("en") == ["B-alt"]
@@ -4085,13 +4854,19 @@ class TestNoPreferredLabelConceptStillAccountsItsOwnLanguages:
     configured code) into the account the way a published tag is would be
     D14's failure mode all over again."""
 
-    def test_the_skipped_concepts_own_published_language_is_visible_in_the_account(self, db):
+    def test_the_skipped_concepts_own_published_language_is_visible_in_the_account(
+        self, db
+    ):
         with override_settings(LANGUAGES=[("en", "English")]):
             report = import_skos(FIXTURES / "no_default_language_label.ttl")
         assert "fr" in report.language_account()
-        assert not Concept.objects.filter(static_uri="http://example.org/quarry/c").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/quarry/c"
+        ).exists()
 
-    def test_the_configured_default_language_itself_never_appears_in_the_account(self, db):
+    def test_the_configured_default_language_itself_never_appears_in_the_account(
+        self, db
+    ):
         # D14's failure mode: NO_PREFERRED_LABEL's own params["language"] is the
         # *configured* default the concept lacks, never a published tag — must
         # never be folded into the account as though it were one.
@@ -4102,7 +4877,11 @@ class TestNoPreferredLabelConceptStillAccountsItsOwnLanguages:
     def test_the_no_preferred_label_entry_itself_is_still_reported_unchanged(self, db):
         with override_settings(LANGUAGES=[("en", "English")]):
             report = import_skos(FIXTURES / "no_default_language_label.ttl")
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.NO_PREFERRED_LABEL]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.NO_PREFERRED_LABEL
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/quarry/c"
         assert entries[0].params["language"] == "en"
@@ -4122,29 +4901,48 @@ class TestEmptySlugLabelIsSetAsideNotCrashed:
     message — rather than crashing the run on an uncaught
     ``ValidationError``."""
 
-    def test_an_identifier_segment_that_slugifies_to_empty_is_set_aside_and_named(self, db):
+    def test_an_identifier_segment_that_slugifies_to_empty_is_set_aside_and_named(
+        self, db
+    ):
         report = import_skos(FIXTURES / "empty_slug_label.ttl")
         assert report.fatal == []
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.EMPTY_SLUG]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.EMPTY_SLUG
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/emptyslug/symbol#±"
-        assert not Concept.objects.filter(static_uri="http://example.org/emptyslug/symbol#±").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/emptyslug/symbol#±"
+        ).exists()
 
     def test_the_rest_of_the_vocabulary_imports_with_its_own_content_intact(self, db):
         import_skos(FIXTURES / "empty_slug_label.ttl")
-        assert Concept.objects.filter(scheme__static_uri="http://example.org/emptyslug/").count() == 1
+        assert (
+            Concept.objects.filter(
+                scheme__static_uri="http://example.org/emptyslug/"
+            ).count()
+            == 1
+        )
         normal = Concept.objects.get(static_uri="http://example.org/emptyslug/normal")
         assert normal.label == "Normal"
         assert normal.alt_labels("en") == ["Normal-alt"]
 
-    def test_the_message_does_not_blame_a_preferred_label_that_is_perfectly_usable(self, db):
+    def test_the_message_does_not_blame_a_preferred_label_that_is_perfectly_usable(
+        self, db
+    ):
         """CORR-701 (review round 7, decisions.md D72) — the set-aside concept's label is
         ``"Symbol"``, which slugifies perfectly well; it is the identifier's own ``#±``
         fragment that does not. Since T029/decisions.md D35 moved the slug off the label
         entirely, a message blaming the preferred label sends a curator to correct a value
         that is not at fault, on every one of this reason's call sites."""
         report = import_skos(FIXTURES / "empty_slug_label.ttl")
-        entry = next(entry for entry in report.set_aside if entry.reason is SetAsideReason.EMPTY_SLUG)
+        entry = next(
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.EMPTY_SLUG
+        )
         message = entry.render()
         assert entry.subject in message
         assert "preferred label" not in message
@@ -4156,7 +4954,11 @@ class TestEmptySlugLabelIsSetAsideNotCrashed:
         label are both perfectly usable and the slug is empty only because the collision
         loop ran out of candidates, so a message naming characters ``slugify()`` strips is
         false about a value the file never got wrong."""
-        monkeypatch.setattr(ConceptImporter, "assign_unique_slug", staticmethod(lambda *args, **kwargs: None))
+        monkeypatch.setattr(
+            ConceptImporter,
+            "assign_unique_slug",
+            staticmethod(lambda *args, **kwargs: None),
+        )
         source = tmp_path / "give_up.ttl"
         source.write_text(
             "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
@@ -4170,8 +4972,14 @@ class TestEmptySlugLabelIsSetAsideNotCrashed:
             encoding="utf-8",
         )
         report = import_skos(source)
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.EMPTY_SLUG]
-        assert [entry.subject for entry in entries] == ["http://giveup.example/scheme/c1"]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.EMPTY_SLUG
+        ]
+        assert [entry.subject for entry in entries] == [
+            "http://giveup.example/scheme/c1"
+        ]
         assert "preferred label" not in entries[0].render()
 
 
@@ -4187,12 +4995,18 @@ class TestOverlongValueIsSetAsideNotCrashed:
     def test_an_overlong_alt_label_is_set_aside_and_named_not_raised(self, db):
         report = import_skos(FIXTURES / "value_too_long_label.ttl")
         assert report.fatal == []
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.VALUE_TOO_LONG]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/longvalue/toolong"
         assert entries[0].params["language"] == "en-GB"
 
-    def test_the_concept_carrying_the_overlong_value_still_imports_on_its_other_content(self, db):
+    def test_the_concept_carrying_the_overlong_value_still_imports_on_its_other_content(
+        self, db
+    ):
         import_skos(FIXTURES / "value_too_long_label.ttl")
         toolong = Concept.objects.get(static_uri="http://example.org/longvalue/toolong")
         assert toolong.label == "TooLong"
@@ -4221,7 +5035,9 @@ class TestBroaderAndNarrowerRelations:
         basalt = Concept.objects.get(static_uri="http://example.org/rocks/basalt")
         assert list(basalt.broader()) == [igneous]
         assert basalt in igneous.narrower()
-        assert ConceptRelation.objects.get(source=basalt, target=igneous, kind=ConceptRelation.Kind.BROADER)
+        assert ConceptRelation.objects.get(
+            source=basalt, target=igneous, kind=ConceptRelation.Kind.BROADER
+        )
 
     def test_a_broader_triple_lands_with_the_ends_the_right_way_round(self, db):
         # rocks.ttl's granite states "skos:broader igneous" directly — granite
@@ -4230,7 +5046,9 @@ class TestBroaderAndNarrowerRelations:
         igneous = Concept.objects.get(static_uri="http://example.org/rocks/igneous")
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
         assert list(granite.broader()) == [igneous]
-        assert ConceptRelation.objects.get(source=granite, target=igneous, kind=ConceptRelation.Kind.BROADER)
+        assert ConceptRelation.objects.get(
+            source=granite, target=igneous, kind=ConceptRelation.Kind.BROADER
+        )
 
     def test_both_directions_of_one_pair_produce_exactly_one_row(self, db):
         # relation_both_directions.ttl states the parent/child pair from both
@@ -4239,9 +5057,15 @@ class TestBroaderAndNarrowerRelations:
         parent = Concept.objects.get(static_uri="http://example.org/hierarchy/parent")
         child = Concept.objects.get(static_uri="http://example.org/hierarchy/child")
         assert (
-            ConceptRelation.objects.filter(source=child, target=parent, kind=ConceptRelation.Kind.BROADER).count() == 1
+            ConceptRelation.objects.filter(
+                source=child, target=parent, kind=ConceptRelation.Kind.BROADER
+            ).count()
+            == 1
         )
-        assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.BROADER).count() == 1
+        assert (
+            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.BROADER).count()
+            == 1
+        )
 
     def test_reimporting_the_identical_file_does_not_duplicate_the_relation(self, db):
         import_skos(FIXTURES / "rocks.ttl")
@@ -4249,7 +5073,9 @@ class TestBroaderAndNarrowerRelations:
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
         igneous = Concept.objects.get(static_uri="http://example.org/rocks/igneous")
         assert (
-            ConceptRelation.objects.filter(source=granite, target=igneous, kind=ConceptRelation.Kind.BROADER).count()
+            ConceptRelation.objects.filter(
+                source=granite, target=igneous, kind=ConceptRelation.Kind.BROADER
+            ).count()
             == 1
         )
 
@@ -4270,7 +5096,10 @@ class TestSelfReferentialBroaderIsSkippedLikeSelfReferentialRelated:
         assert report.fatal == []
         loop = Concept.objects.get(static_uri="http://example.org/selfref/loop")
         assert list(loop.broader()) == []
-        assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.BROADER).count() == 0
+        assert (
+            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.BROADER).count()
+            == 0
+        )
 
 
 class TestRelatedRelations:
@@ -4283,7 +5112,10 @@ class TestRelatedRelations:
         quartz = Concept.objects.get(static_uri="http://example.org/rocks/quartz")
         assert quartz in granite.related()
         assert granite in quartz.related()
-        assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count() == 1
+        assert (
+            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count()
+            == 1
+        )
 
     def test_both_directions_of_one_related_pair_produce_exactly_one_row(self, db):
         # relation_both_directions.ttl states east-related-west AND
@@ -4292,12 +5124,20 @@ class TestRelatedRelations:
         east = Concept.objects.get(static_uri="http://example.org/hierarchy/east")
         west = Concept.objects.get(static_uri="http://example.org/hierarchy/west")
         assert west in east.related()
-        assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count() == 1
+        assert (
+            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count()
+            == 1
+        )
 
-    def test_reimporting_the_identical_file_does_not_duplicate_the_related_row(self, db):
+    def test_reimporting_the_identical_file_does_not_duplicate_the_related_row(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
         import_skos(FIXTURES / "rocks.ttl")
-        assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count() == 1
+        assert (
+            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count()
+            == 1
+        )
 
 
 class TestRelationEndpointsMissingOrKnown:
@@ -4314,8 +5154,12 @@ class TestRelationEndpointsMissingOrKnown:
 
     def test_an_end_already_in_the_database_from_an_earlier_import_is_stored(self, db):
         import_skos(FIXTURES / "relation_endpoints.ttl")
-        alpha_pk = Concept.objects.get(static_uri="http://example.org/relendpoints/alpha").pk
-        beta_pk = Concept.objects.get(static_uri="http://example.org/relendpoints/beta").pk
+        alpha_pk = Concept.objects.get(
+            static_uri="http://example.org/relendpoints/alpha"
+        ).pk
+        beta_pk = Concept.objects.get(
+            static_uri="http://example.org/relendpoints/beta"
+        ).pk
 
         import_skos(FIXTURES / "relation_endpoints_updated.ttl")
 
@@ -4325,16 +5169,24 @@ class TestRelationEndpointsMissingOrKnown:
         # beta is untouched — the file no longer mentions it as a concept at all.
         assert Concept.objects.filter(pk=beta_pk).exists()
 
-    def test_an_end_neither_in_the_file_nor_the_database_is_set_aside_naming_both_ends(self, db):
+    def test_an_end_neither_in_the_file_nor_the_database_is_set_aside_naming_both_ends(
+        self, db
+    ):
         import_skos(FIXTURES / "relation_endpoints.ttl")
 
         report = import_skos(FIXTURES / "relation_endpoints_updated.ttl")
 
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.MISSING_RELATION_END]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.MISSING_RELATION_END
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/relendpoints/alpha"
         assert entries[0].params["other"] == "http://example.org/relendpoints/ghost"
-        assert not Concept.objects.filter(static_uri="http://example.org/relendpoints/ghost").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/relendpoints/ghost"
+        ).exists()
 
     def test_the_run_succeeds_and_every_other_relationship_still_lands(self, db):
         import_skos(FIXTURES / "relation_endpoints.ttl")
@@ -4346,7 +5198,9 @@ class TestRelationEndpointsMissingOrKnown:
         beta = Concept.objects.get(static_uri="http://example.org/relendpoints/beta")
         assert beta in alpha.broader()
 
-    def test_an_end_that_exists_but_in_a_different_vocabulary_is_set_aside_not_a_crash(self, db):
+    def test_an_end_that_exists_but_in_a_different_vocabulary_is_set_aside_not_a_crash(
+        self, db
+    ):
         # ConceptRelation only ever joins concepts of the same scheme
         # (models.py _reject_cross_scheme); asserting one across vocabularies
         # must not raise an uncaught ValidationError (decisions.md D29).
@@ -4355,9 +5209,15 @@ class TestRelationEndpointsMissingOrKnown:
         report = import_skos(FIXTURES / "relation_cross_scheme_target.ttl")
 
         assert report.fatal == []
-        outsider = Concept.objects.get(static_uri="http://example.org/outsiders/outsider")
+        outsider = Concept.objects.get(
+            static_uri="http://example.org/outsiders/outsider"
+        )
         assert list(outsider.broader()) == []
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.MISSING_RELATION_END]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.MISSING_RELATION_END
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/outsiders/outsider"
         assert entries[0].params["other"] == "http://example.org/rocks/granite"
@@ -4420,7 +5280,9 @@ class TestRelationRemovalOnReimport:
         # relation touching quarry.
         import_skos(FIXTURES / "relation_lifecycle.ttl")
         quarry = Concept.objects.get(static_uri="http://example.org/lifecycle/quarry")
-        companion = Concept.objects.get(static_uri="http://example.org/lifecycle/companion")
+        companion = Concept.objects.get(
+            static_uri="http://example.org/lifecycle/companion"
+        )
 
         import_skos(FIXTURES / "relation_lifecycle_updated.ttl")
 
@@ -4442,42 +5304,64 @@ class TestRelationDisjointness:
     either direction.
     """
 
-    def test_broader_and_related_stated_together_keeps_broader_and_sets_aside_related(self, db):
+    def test_broader_and_related_stated_together_keeps_broader_and_sets_aside_related(
+        self, db
+    ):
         report = import_skos(FIXTURES / "relation_disjointness_conflict.ttl")
         assert report.fatal == []
         child = Concept.objects.get(static_uri="http://example.org/disjoint/child")
         parent = Concept.objects.get(static_uri="http://example.org/disjoint/parent")
         assert parent in child.broader()
         assert parent not in child.related()
-        assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count() == 0
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.RELATION_DISJOINTNESS]
+        assert (
+            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count()
+            == 0
+        )
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.RELATION_DISJOINTNESS
+        ]
         assert len(entries) == 1
         assert {entries[0].subject, entries[0].params["other"]} == {
             "http://example.org/disjoint/child",
             "http://example.org/disjoint/parent",
         }
 
-    def test_a_related_row_from_an_earlier_run_does_not_crash_a_later_run_stating_broader(self, db):
+    def test_a_related_row_from_an_earlier_run_does_not_crash_a_later_run_stating_broader(
+        self, db
+    ):
         import_skos(FIXTURES / "relation_disjointness_prior_related.ttl")
         a = Concept.objects.get(static_uri="http://example.org/disjoint2/a")
         b = Concept.objects.get(static_uri="http://example.org/disjoint2/b")
         assert b in a.related()
 
-        report = import_skos(FIXTURES / "relation_disjointness_prior_related_updated.ttl")
+        report = import_skos(
+            FIXTURES / "relation_disjointness_prior_related_updated.ttl"
+        )
 
         assert report.fatal == []
         a.refresh_from_db()
         assert b in a.broader()
         assert b not in a.related()
-        assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count() == 0
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.RELATION_DISJOINTNESS]
+        assert (
+            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count()
+            == 0
+        )
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.RELATION_DISJOINTNESS
+        ]
         assert len(entries) == 1
         assert {entries[0].subject, entries[0].params["other"]} == {
             "http://example.org/disjoint2/a",
             "http://example.org/disjoint2/b",
         }
 
-    def test_a_broader_row_from_an_earlier_run_does_not_crash_a_later_run_stating_related(self, db):
+    def test_a_broader_row_from_an_earlier_run_does_not_crash_a_later_run_stating_related(
+        self, db
+    ):
         # The symmetric route: the earlier-run survivor is a BROADER row this
         # time, and the later run states RELATED for the same pair instead.
         import_skos(FIXTURES / "relation_disjointness_prior_broader.ttl")
@@ -4485,13 +5369,22 @@ class TestRelationDisjointness:
         b = Concept.objects.get(static_uri="http://example.org/disjoint3/b")
         assert b in a.broader()
 
-        report = import_skos(FIXTURES / "relation_disjointness_prior_broader_updated.ttl")
+        report = import_skos(
+            FIXTURES / "relation_disjointness_prior_broader_updated.ttl"
+        )
 
         assert report.fatal == []
         assert b in a.broader()
         assert b not in a.related()
-        assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count() == 0
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.RELATION_DISJOINTNESS]
+        assert (
+            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count()
+            == 0
+        )
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.RELATION_DISJOINTNESS
+        ]
         assert len(entries) == 1
         assert {entries[0].subject, entries[0].params["other"]} == {
             "http://example.org/disjoint3/a",
@@ -4510,7 +5403,9 @@ class TestCollectionSlugFollowsThePublishedIdentifier:
     slug from its name (FR-019).
     """
 
-    def test_a_publisher_rename_leaves_the_collection_s_slug_and_local_url_unchanged(self, db, tmp_path):
+    def test_a_publisher_rename_leaves_the_collection_s_slug_and_local_url_unchanged(
+        self, db, tmp_path
+    ):
         first = tmp_path / "renamed_collection_first.ttl"
         first.write_text(
             """
@@ -4528,7 +5423,9 @@ class TestCollectionSlugFollowsThePublishedIdentifier:
             """
         )
         import_skos(first)
-        collection_before = Collection.objects.get(static_uri="http://pub.example/x#grp")
+        collection_before = Collection.objects.get(
+            static_uri="http://pub.example/x#grp"
+        )
         slug_before = collection_before.slug
         local_url_before = collection_before.local_url
         assert collection_before.name == "Colours"
@@ -4557,16 +5454,24 @@ class TestCollectionSlugFollowsThePublishedIdentifier:
         assert collection_after.slug == slug_before
         assert collection_after.local_url == local_url_before
 
-    def test_a_collection_s_slug_is_the_last_segment_of_its_identifier_not_its_name(self, db):
+    def test_a_collection_s_slug_is_the_last_segment_of_its_identifier_not_its_name(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
-        collection = Collection.objects.get(static_uri="http://example.org/rocks/collection/silica-bearing")
+        collection = Collection.objects.get(
+            static_uri="http://example.org/rocks/collection/silica-bearing"
+        )
         # The URI's own last path segment is "silica-bearing"; the name is
         # "Silica-bearing rocks", which would slugify to "silica-bearing-rocks"
         # under the superseded name-derived rule (D6).
         assert collection.slug == "silica-bearing"
 
-    def test_a_collection_created_on_this_site_still_derives_its_slug_from_its_name(self, db, scheme):
-        collection = Collection.objects.create(scheme=scheme, name="Silica bearing rocks")
+    def test_a_collection_created_on_this_site_still_derives_its_slug_from_its_name(
+        self, db, scheme
+    ):
+        collection = Collection.objects.create(
+            scheme=scheme, name="Silica bearing rocks"
+        )
         assert collection.static_uri is None
         assert collection.slug_is_manual is False
         assert collection.slug == "silica-bearing-rocks"
@@ -4586,7 +5491,9 @@ class TestUnusableCollectionSlugIsSetAsideNotCrashed:
     something the rest of the file needs in order to import, so this is a set-aside, not fatal.
     """
 
-    def test_an_identifier_segment_that_slugifies_to_empty_is_set_aside_and_named(self, db, tmp_path):
+    def test_an_identifier_segment_that_slugifies_to_empty_is_set_aside_and_named(
+        self, db, tmp_path
+    ):
         path = tmp_path / "unusable_collection_slug.ttl"
         path.write_text(
             """
@@ -4605,10 +5512,16 @@ class TestUnusableCollectionSlugIsSetAsideNotCrashed:
         )
         report = import_skos(path)
         assert report.fatal == []
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.EMPTY_SLUG]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.EMPTY_SLUG
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://c.org/vocab3/#±"
-        assert not Collection.objects.filter(static_uri="http://c.org/vocab3/#±").exists()
+        assert not Collection.objects.filter(
+            static_uri="http://c.org/vocab3/#±"
+        ).exists()
 
     def test_the_rest_of_the_file_still_imports(self, db, tmp_path):
         path = tmp_path / "unusable_collection_slug2.ttl"
@@ -4643,7 +5556,9 @@ class TestCollectionsCollidingOnlyByNameNoLongerCrash:
     fix :class:`TestCollectionSlugFollowsThePublishedIdentifier` already proves.
     """
 
-    def test_two_collections_sharing_a_name_but_not_an_identifier_both_import(self, db, tmp_path):
+    def test_two_collections_sharing_a_name_but_not_an_identifier_both_import(
+        self, db, tmp_path
+    ):
         path = tmp_path / "collection_name_collision.ttl"
         path.write_text(
             """
@@ -4673,22 +5588,37 @@ class TestCollectionsAndMembership:
 
     def test_a_collection_is_created_holding_its_published_identifier(self, db):
         import_skos(FIXTURES / "rocks.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/rocks/collection/silica-bearing")
-        assert collection.scheme == ConceptScheme.objects.get(static_uri="http://example.org/rocks/")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/rocks/collection/silica-bearing"
+        )
+        assert collection.scheme == ConceptScheme.objects.get(
+            static_uri="http://example.org/rocks/"
+        )
         assert collection.ordered is False
 
     def test_the_collection_holds_exactly_its_published_members(self, db):
         import_skos(FIXTURES / "rocks.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/rocks/collection/silica-bearing")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/rocks/collection/silica-bearing"
+        )
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
         quartz = Concept.objects.get(static_uri="http://example.org/rocks/quartz")
         assert set(collection.members()) == {granite, quartz}
 
-    def test_reimporting_the_identical_file_does_not_duplicate_the_collection_or_its_members(self, db):
+    def test_reimporting_the_identical_file_does_not_duplicate_the_collection_or_its_members(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
         import_skos(FIXTURES / "rocks.ttl")
-        assert Collection.objects.filter(static_uri="http://example.org/rocks/collection/silica-bearing").count() == 1
-        collection = Collection.objects.get_by_uri("http://example.org/rocks/collection/silica-bearing")
+        assert (
+            Collection.objects.filter(
+                static_uri="http://example.org/rocks/collection/silica-bearing"
+            ).count()
+            == 1
+        )
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/rocks/collection/silica-bearing"
+        )
         assert collection.memberships.count() == 2
 
     def test_a_first_import_reports_the_collection_as_created(self, db):
@@ -4704,36 +5634,52 @@ class TestOrderedCollectionMemberOrder:
 
     def test_an_ordered_collection_is_marked_ordered(self, db):
         import_skos(FIXTURES / "rocks.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/rocks/collection/example-sequence")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/rocks/collection/example-sequence"
+        )
         assert collection.ordered is True
 
     def test_members_come_back_in_the_files_own_order(self, db):
         import_skos(FIXTURES / "rocks.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/rocks/collection/example-sequence")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/rocks/collection/example-sequence"
+        )
         basalt = Concept.objects.get(static_uri="http://example.org/rocks/basalt")
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
-        sedimentary = Concept.objects.get(static_uri="http://example.org/rocks/sedimentary")
+        sedimentary = Concept.objects.get(
+            static_uri="http://example.org/rocks/sedimentary"
+        )
         assert collection.members() == [basalt, granite, sedimentary]
 
     def test_a_reimport_that_changes_the_order_updates_the_positions_to_match(self, db):
         import_skos(FIXTURES / "rocks.ttl")
-        collection_pk = Collection.objects.get_by_uri("http://example.org/rocks/collection/example-sequence").pk
+        collection_pk = Collection.objects.get_by_uri(
+            "http://example.org/rocks/collection/example-sequence"
+        ).pk
 
         import_skos(FIXTURES / "rocks_updated.ttl")
 
         collection = Collection.objects.get(pk=collection_pk)
         granite = Concept.objects.get(static_uri="http://example.org/rocks/granite")
-        sedimentary = Concept.objects.get(static_uri="http://example.org/rocks/sedimentary")
+        sedimentary = Concept.objects.get(
+            static_uri="http://example.org/rocks/sedimentary"
+        )
         basalt = Concept.objects.get(static_uri="http://example.org/rocks/basalt")
         assert collection.members() == [granite, sedimentary, basalt]
 
-    def test_the_ordered_collections_own_identifier_is_unchanged_by_reordering(self, db):
+    def test_the_ordered_collections_own_identifier_is_unchanged_by_reordering(
+        self, db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
-        before = Collection.objects.get_by_uri("http://example.org/rocks/collection/example-sequence")
+        before = Collection.objects.get_by_uri(
+            "http://example.org/rocks/collection/example-sequence"
+        )
 
         import_skos(FIXTURES / "rocks_updated.ttl")
 
-        after = Collection.objects.get_by_uri("http://example.org/rocks/collection/example-sequence")
+        after = Collection.objects.get_by_uri(
+            "http://example.org/rocks/collection/example-sequence"
+        )
         assert after.pk == before.pk
         assert after.static_uri == before.static_uri
 
@@ -4754,9 +5700,15 @@ class TestOrderedCollectionFallsBackToMember:
 
     def test_an_ordered_collection_with_only_member_is_not_empty(self, db):
         report = import_skos(FIXTURES / "ordered_collection_member_only.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/ordered-member-only/collection/group")
-        alpha = Concept.objects.get(static_uri="http://example.org/ordered-member-only/alpha")
-        beta = Concept.objects.get(static_uri="http://example.org/ordered-member-only/beta")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/ordered-member-only/collection/group"
+        )
+        alpha = Concept.objects.get(
+            static_uri="http://example.org/ordered-member-only/alpha"
+        )
+        beta = Concept.objects.get(
+            static_uri="http://example.org/ordered-member-only/beta"
+        )
         assert collection.ordered is True
         assert collection.members() == [alpha, beta]
         assert report.fatal == []
@@ -4768,12 +5720,16 @@ class TestOrderedCollectionFallsBackToMember:
         # it plainly does.
         import_skos(FIXTURES / "ordered_collection_member_only.ttl")
         import_skos(FIXTURES / "ordered_collection_member_only.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/ordered-member-only/collection/group")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/ordered-member-only/collection/group"
+        )
         assert collection.memberships.count() == 2
 
     def test_memberlist_governs_order_and_member_only_entries_are_appended(self, db):
         import_skos(FIXTURES / "ordered_collection_member_and_memberlist.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/ordered-mixed/collection/group")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/ordered-mixed/collection/group"
+        )
         alpha = Concept.objects.get(static_uri="http://example.org/ordered-mixed/alpha")
         beta = Concept.objects.get(static_uri="http://example.org/ordered-mixed/beta")
         gamma = Concept.objects.get(static_uri="http://example.org/ordered-mixed/gamma")
@@ -4790,27 +5746,50 @@ class TestCollectionMembershipMissingOrAbsentEnds:
     longer mentions *at all* survives, exactly as that concept itself
     survives (``report.absent_from_source``)."""
 
-    def test_a_member_neither_in_the_file_nor_the_database_is_set_aside_naming_both(self, db):
+    def test_a_member_neither_in_the_file_nor_the_database_is_set_aside_naming_both(
+        self, db
+    ):
         report = import_skos(FIXTURES / "collection_lifecycle.ttl")
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.MISSING_MEMBER]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.MISSING_MEMBER
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/lifecycle-collections/missing"
-        assert entries[0].params["collection"] == "http://example.org/lifecycle-collections/collection/group"
+        assert (
+            entries[0].params["collection"]
+            == "http://example.org/lifecycle-collections/collection/group"
+        )
 
     def test_the_collection_is_still_created_and_the_run_succeeds(self, db):
         report = import_skos(FIXTURES / "collection_lifecycle.ttl")
         assert report.fatal == []
-        collection = Collection.objects.get_by_uri("http://example.org/lifecycle-collections/collection/group")
-        alpha = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/alpha")
-        beta = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/beta")
-        gamma = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/gamma")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/lifecycle-collections/collection/group"
+        )
+        alpha = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/alpha"
+        )
+        beta = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/beta"
+        )
+        gamma = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/gamma"
+        )
         assert set(collection.members()) == {alpha, beta, gamma}
-        assert not Concept.objects.filter(static_uri="http://example.org/lifecycle-collections/missing").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/lifecycle-collections/missing"
+        ).exists()
 
     def test_a_member_the_file_still_states_survives_the_reimport(self, db):
         import_skos(FIXTURES / "collection_lifecycle.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/lifecycle-collections/collection/group")
-        alpha = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/alpha")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/lifecycle-collections/collection/group"
+        )
+        alpha = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/alpha"
+        )
 
         import_skos(FIXTURES / "collection_lifecycle_updated.ttl")
 
@@ -4821,15 +5800,21 @@ class TestCollectionMembershipMissingOrAbsentEnds:
         # "group"'s own member list no longer names it — a genuine
         # retraction, since beta was mentioned (and rewritten) this run.
         import_skos(FIXTURES / "collection_lifecycle.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/lifecycle-collections/collection/group")
-        beta = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/beta")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/lifecycle-collections/collection/group"
+        )
+        beta = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/beta"
+        )
 
         import_skos(FIXTURES / "collection_lifecycle_updated.ttl")
 
         assert beta not in collection.members()
         assert Concept.objects.filter(pk=beta.pk).exists()
 
-    def test_a_member_whose_concept_the_file_no_longer_mentions_at_all_survives(self, db):
+    def test_a_member_whose_concept_the_file_no_longer_mentions_at_all_survives(
+        self, db
+    ):
         # decisions.md D30's rule, applied to membership rather than a
         # relation: gamma leaves collection_lifecycle_updated.ttl entirely,
         # so this run never rewrites gamma at all — the file's silence about
@@ -4837,33 +5822,52 @@ class TestCollectionMembershipMissingOrAbsentEnds:
         # membership is left exactly as it was, same as gamma's own concept
         # row (report.absent_from_source).
         import_skos(FIXTURES / "collection_lifecycle.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/lifecycle-collections/collection/group")
-        gamma = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/gamma")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/lifecycle-collections/collection/group"
+        )
+        gamma = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/gamma"
+        )
 
         report = import_skos(FIXTURES / "collection_lifecycle_updated.ttl")
 
         assert gamma in collection.members()
         assert Concept.objects.filter(pk=gamma.pk).exists()
-        assert "http://example.org/lifecycle-collections/gamma" in report.absent_from_source
+        assert (
+            "http://example.org/lifecycle-collections/gamma"
+            in report.absent_from_source
+        )
 
     def test_a_new_member_is_added_on_reimport(self, db):
         import_skos(FIXTURES / "collection_lifecycle.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/lifecycle-collections/collection/group")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/lifecycle-collections/collection/group"
+        )
 
         import_skos(FIXTURES / "collection_lifecycle_updated.ttl")
 
-        delta = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/delta")
+        delta = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/delta"
+        )
         assert delta in collection.members()
 
     def test_the_final_membership_matches_the_updated_file_plus_the_survivor(self, db):
         import_skos(FIXTURES / "collection_lifecycle.ttl")
-        collection = Collection.objects.get_by_uri("http://example.org/lifecycle-collections/collection/group")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/lifecycle-collections/collection/group"
+        )
 
         import_skos(FIXTURES / "collection_lifecycle_updated.ttl")
 
-        alpha = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/alpha")
-        gamma = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/gamma")
-        delta = Concept.objects.get(static_uri="http://example.org/lifecycle-collections/delta")
+        alpha = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/alpha"
+        )
+        gamma = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/gamma"
+        )
+        delta = Concept.objects.get(
+            static_uri="http://example.org/lifecycle-collections/delta"
+        )
         assert set(collection.members()) == {alpha, gamma, delta}
 
 
@@ -4877,22 +5881,38 @@ class TestCollectionAbsentFromSource:
 
     def test_a_collection_dropped_from_the_file_is_untouched_and_named_absent(self, db):
         import_skos(FIXTURES / "collection_absent_from_source.ttl")
-        dropped = Collection.objects.get_by_uri("http://example.org/vanishing-collections/collection/dropped")
+        dropped = Collection.objects.get_by_uri(
+            "http://example.org/vanishing-collections/collection/dropped"
+        )
         dropped_pk, dropped_name = dropped.pk, dropped.name
 
         report = import_skos(FIXTURES / "collection_absent_from_source_updated.ttl")
 
-        dropped_after = Collection.objects.get_by_uri("http://example.org/vanishing-collections/collection/dropped")
+        dropped_after = Collection.objects.get_by_uri(
+            "http://example.org/vanishing-collections/collection/dropped"
+        )
         assert dropped_after.pk == dropped_pk
         assert dropped_after.name == dropped_name
-        assert "http://example.org/vanishing-collections/collection/dropped" in report.absent_from_source
-        assert "http://example.org/vanishing-collections/collection/dropped" not in report.updated
-        assert "http://example.org/vanishing-collections/collection/dropped" not in report.created
+        assert (
+            "http://example.org/vanishing-collections/collection/dropped"
+            in report.absent_from_source
+        )
+        assert (
+            "http://example.org/vanishing-collections/collection/dropped"
+            not in report.updated
+        )
+        assert (
+            "http://example.org/vanishing-collections/collection/dropped"
+            not in report.created
+        )
 
     def test_a_collection_still_mentioned_in_the_file_is_not_reported_absent(self, db):
         import_skos(FIXTURES / "collection_absent_from_source.ttl")
         report = import_skos(FIXTURES / "collection_absent_from_source_updated.ttl")
-        assert "http://example.org/vanishing-collections/collection/kept" not in report.absent_from_source
+        assert (
+            "http://example.org/vanishing-collections/collection/kept"
+            not in report.absent_from_source
+        )
 
     def test_a_dropped_collections_membership_survives_untouched(self, db):
         # FR-013's "left untouched", not only "not deleted": the concept
@@ -4900,8 +5920,12 @@ class TestCollectionAbsentFromSource:
         # exactly as an absent concept's own foreign-key references survive
         # (TestRecordsAbsentFromSource, T015).
         import_skos(FIXTURES / "collection_absent_from_source.ttl")
-        dropped = Collection.objects.get_by_uri("http://example.org/vanishing-collections/collection/dropped")
-        alpha = Concept.objects.get(static_uri="http://example.org/vanishing-collections/alpha")
+        dropped = Collection.objects.get_by_uri(
+            "http://example.org/vanishing-collections/collection/dropped"
+        )
+        alpha = Concept.objects.get(
+            static_uri="http://example.org/vanishing-collections/alpha"
+        )
 
         import_skos(FIXTURES / "collection_absent_from_source_updated.ttl")
 
@@ -4980,7 +6004,11 @@ class TestExistingConceptIsNotSilentlyMovedBetweenVocabularies:
 
         report = import_skos(FIXTURES / "vocabulary_reassignment.ttl", scheme=second)
 
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.ALREADY_IN_ANOTHER_VOCABULARY]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.ALREADY_IN_ANOTHER_VOCABULARY
+        ]
         assert {entry.subject for entry in entries} == {
             "http://example.org/reassignment/a",
             "http://example.org/reassignment/b",
@@ -5019,10 +6047,16 @@ class TestExistingCollectionIsNotSilentlyReassignedBetweenVocabularies:
         import_skos(FIXTURES / "shared_collection_vocab_a.ttl")
         import_skos(FIXTURES / "shared_collection_vocab_b.ttl")
 
-        vocab_a = ConceptScheme.objects.get(static_uri="http://example.org/shared-collection/vocab-a/")
+        vocab_a = ConceptScheme.objects.get(
+            static_uri="http://example.org/shared-collection/vocab-a/"
+        )
         collection = Collection.objects.get_by_uri("http://example.org/shared/coll")
-        concept_a = Concept.objects.get(static_uri="http://example.org/shared-collection/vocab-a/concept-a")
-        concept_b = Concept.objects.get(static_uri="http://example.org/shared-collection/vocab-b/concept-b")
+        concept_a = Concept.objects.get(
+            static_uri="http://example.org/shared-collection/vocab-a/concept-a"
+        )
+        concept_b = Concept.objects.get(
+            static_uri="http://example.org/shared-collection/vocab-b/concept-b"
+        )
 
         assert collection.scheme_id == vocab_a.pk
         assert collection.members() == [concept_a]
@@ -5030,12 +6064,18 @@ class TestExistingCollectionIsNotSilentlyReassignedBetweenVocabularies:
 
     def test_the_conflict_is_reported_naming_both_vocabularies(self, db):
         import_skos(FIXTURES / "shared_collection_vocab_a.ttl")
-        vocab_a = ConceptScheme.objects.get(static_uri="http://example.org/shared-collection/vocab-a/")
+        vocab_a = ConceptScheme.objects.get(
+            static_uri="http://example.org/shared-collection/vocab-a/"
+        )
         vocab_b_uri = "http://example.org/shared-collection/vocab-b/"
 
         report = import_skos(FIXTURES / "shared_collection_vocab_b.ttl")
 
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.ALREADY_IN_ANOTHER_VOCABULARY]
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.ALREADY_IN_ANOTHER_VOCABULARY
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/shared/coll"
         assert entries[0].params["current"] == vocab_a.uri
@@ -5059,9 +6099,17 @@ class TestUriHeldByARecordOfADifferentKind:
 
         report = import_skos(FIXTURES / "uri_kind_concept_second.ttl")
 
-        assert not Concept.objects.filter(static_uri="http://example.org/kind-clash/thing").exists()
-        assert Collection.objects.filter(static_uri="http://example.org/kind-clash/thing").exists()
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.URI_HELD_BY_DIFFERENT_KIND]
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/kind-clash/thing"
+        ).exists()
+        assert Collection.objects.filter(
+            static_uri="http://example.org/kind-clash/thing"
+        ).exists()
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.URI_HELD_BY_DIFFERENT_KIND
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/kind-clash/thing"
 
@@ -5070,9 +6118,17 @@ class TestUriHeldByARecordOfADifferentKind:
 
         report = import_skos(FIXTURES / "uri_kind_collection_first.ttl")
 
-        assert not Collection.objects.filter(static_uri="http://example.org/kind-clash/thing").exists()
-        assert Concept.objects.filter(static_uri="http://example.org/kind-clash/thing").exists()
-        entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.URI_HELD_BY_DIFFERENT_KIND]
+        assert not Collection.objects.filter(
+            static_uri="http://example.org/kind-clash/thing"
+        ).exists()
+        assert Concept.objects.filter(
+            static_uri="http://example.org/kind-clash/thing"
+        ).exists()
+        entries = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.URI_HELD_BY_DIFFERENT_KIND
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "http://example.org/kind-clash/thing"
 
@@ -5086,14 +6142,20 @@ class TestBlankNodeCollectionFails:
     def test_a_blank_node_collection_fails_the_run(self, db):
         with pytest.raises(SkosImportFailed) as excinfo:
             import_skos(FIXTURES / "blank_node_collection.ttl")
-        entries = [entry for entry in excinfo.value.report.fatal if entry.reason is FatalReason.MISSING_IDENTITY]
+        entries = [
+            entry
+            for entry in excinfo.value.report.fatal
+            if entry.reason is FatalReason.MISSING_IDENTITY
+        ]
         assert len(entries) == 1
         assert entries[0].subject == "Nameless collection"
 
     def test_a_blank_node_collection_writes_nothing(self, db):
         with pytest.raises(SkosImportFailed):
             import_skos(FIXTURES / "blank_node_collection.ttl")
-        assert not Concept.objects.filter(static_uri="http://example.org/rocks/igneous").exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/rocks/igneous"
+        ).exists()
         assert not Collection.objects.exists()
 
     def test_an_ordered_collections_list_cells_are_not_identities(self, db):
@@ -5103,7 +6165,9 @@ class TestBlankNodeCollectionFails:
         # cells as a record needing its own identity.
         report = import_skos(FIXTURES / "rocks.ttl")
         assert report.fatal == []
-        collection = Collection.objects.get_by_uri("http://example.org/rocks/collection/example-sequence")
+        collection = Collection.objects.get_by_uri(
+            "http://example.org/rocks/collection/example-sequence"
+        )
         assert collection.ordered is True
 
 
@@ -5126,13 +6190,17 @@ class TestFixtureCorpus:
     @pytest.mark.parametrize("filename,fmt", ALL_FIXTURES)
     def test_every_fixture_is_discoverable_and_parses(self, filename, fmt):
         path = FIXTURES / filename
-        assert path.is_file(), f"{filename} is not discoverable under tests/fixtures/skos/"
+        assert path.is_file(), (
+            f"{filename} is not discoverable under tests/fixtures/skos/"
+        )
         graph = rdflib.Graph()
         graph.parse(path, format=fmt)
         assert len(graph) > 0, f"{filename} parsed to an empty graph"
 
     @pytest.mark.parametrize("filename,fmt", BASE_SERIALIZATIONS)
-    def test_base_vocabulary_declares_the_scheme_and_its_top_concepts(self, filename, fmt):
+    def test_base_vocabulary_declares_the_scheme_and_its_top_concepts(
+        self, filename, fmt
+    ):
         graph = rdflib.Graph()
         graph.parse(FIXTURES / filename, format=fmt)
         assert (ROCKS_SCHEME_URI, rdflib.RDF.type, SKOS.ConceptScheme) in graph
@@ -5143,7 +6211,9 @@ class TestFixtureCorpus:
         }
 
     @pytest.mark.parametrize("filename,fmt", BASE_SERIALIZATIONS)
-    def test_base_vocabulary_carries_multilingual_labels_notes_hierarchy_related_and_collections(self, filename, fmt):
+    def test_base_vocabulary_carries_multilingual_labels_notes_hierarchy_related_and_collections(
+        self, filename, fmt
+    ):
         graph = rdflib.Graph()
         graph.parse(FIXTURES / filename, format=fmt)
         granite = rdflib.URIRef("http://example.org/rocks/granite")
@@ -5151,8 +6221,14 @@ class TestFixtureCorpus:
         igneous = rdflib.URIRef("http://example.org/rocks/igneous")
 
         # Multilingual preferred labels (en/de/fr — the test settings' configured languages).
-        granite_labels = {(o.language, str(o)) for o in graph.objects(granite, SKOS.prefLabel)}
-        assert granite_labels == {("en", "Granite"), ("de", "Granit"), ("fr", "Granite")}
+        granite_labels = {
+            (o.language, str(o)) for o in graph.objects(granite, SKOS.prefLabel)
+        }
+        assert granite_labels == {
+            ("en", "Granite"),
+            ("de", "Granit"),
+            ("fr", "Granite"),
+        }
 
         # Notes of several kinds, spread across concepts.
         assert (igneous, SKOS.definition, None) in graph
@@ -5186,8 +6262,12 @@ class TestFixtureCorpus:
             graph = rdflib.Graph()
             graph.parse(FIXTURES / filename, format=fmt)
             graphs.append(graph)
-        assert isomorphic(graphs[0], graphs[1]), "rocks.ttl and rocks.rdf are not isomorphic"
-        assert isomorphic(graphs[0], graphs[2]), "rocks.ttl and rocks.jsonld are not isomorphic"
+        assert isomorphic(graphs[0], graphs[1]), (
+            "rocks.ttl and rocks.rdf are not isomorphic"
+        )
+        assert isomorphic(graphs[0], graphs[2]), (
+            "rocks.ttl and rocks.jsonld are not isomorphic"
+        )
 
     def test_updated_fixture_carries_the_four_re_import_edits(self):
         graph = rdflib.Graph()
@@ -5196,8 +6276,16 @@ class TestFixtureCorpus:
         quartz = rdflib.URIRef("http://example.org/rocks/quartz")
 
         # 1. A corrected preferred label.
-        assert (granite, SKOS.prefLabel, rdflib.Literal("Granite (revised)", lang="en")) in graph
-        assert (granite, SKOS.prefLabel, rdflib.Literal("Granite", lang="en")) not in graph
+        assert (
+            granite,
+            SKOS.prefLabel,
+            rdflib.Literal("Granite (revised)", lang="en"),
+        ) in graph
+        assert (
+            granite,
+            SKOS.prefLabel,
+            rdflib.Literal("Granite", lang="en"),
+        ) not in graph
 
         # 2. A removed alternative label.
         assert (granite, SKOS.altLabel, None) not in graph
@@ -5219,7 +6307,9 @@ class TestFixtureCorpus:
             rdflib.URIRef("http://example.org/rocks/basalt"),
         ]
 
-    def test_variants_fixture_carries_several_variants_of_one_base_language_across_labels_and_notes(self):
+    def test_variants_fixture_carries_several_variants_of_one_base_language_across_labels_and_notes(
+        self,
+    ):
         # T005/FR-015/SC-020: several variants of one base language (en), spread
         # across preferred labels, alternative labels, and notes — the contest
         # population US-3 needs, reused rather than rebuilt by #52 (spec US-5).
@@ -5227,10 +6317,14 @@ class TestFixtureCorpus:
         graph.parse(FIXTURES / "variants.ttl", format="turtle")
         colour = rdflib.URIRef("http://example.org/colours/colour")
 
-        pref_labels = {(o.language, str(o)) for o in graph.objects(colour, SKOS.prefLabel)}
+        pref_labels = {
+            (o.language, str(o)) for o in graph.objects(colour, SKOS.prefLabel)
+        }
         assert pref_labels == {("en-gb", "Colour"), ("en-us", "Color")}
 
-        alt_labels = {(o.language, str(o)) for o in graph.objects(colour, SKOS.altLabel)}
+        alt_labels = {
+            (o.language, str(o)) for o in graph.objects(colour, SKOS.altLabel)
+        }
         assert alt_labels == {("en-gb", "Colour"), ("en-us", "Color")}
 
         note_languages = {o.language for o in graph.objects(colour, SKOS.note)}
@@ -5241,17 +6335,23 @@ class TestFixtureCorpus:
         # only for en (no bare "en" tag anywhere in this file).
         graph = rdflib.Graph()
         graph.parse(FIXTURES / "en-gb-only.ttl", format="turtle")
-        languages = {literal.language for literal in graph.objects(None, SKOS.prefLabel)}
+        languages = {
+            literal.language for literal in graph.objects(None, SKOS.prefLabel)
+        }
         assert languages == {"en-gb"}
 
-    def test_declares_de_at_fixture_declares_itself_in_a_variant_of_a_configured_language(self):
+    def test_declares_de_at_fixture_declares_itself_in_a_variant_of_a_configured_language(
+        self,
+    ):
         # T005/SC-010: the vocabulary's own skos:prefLabel is a single de-at tag,
         # for the default-language resolution path.
         graph = rdflib.Graph()
         graph.parse(FIXTURES / "declares-de-at.ttl", format="turtle")
         scheme = rdflib.URIRef("http://example.org/farben/")
         assert (scheme, rdflib.RDF.type, SKOS.ConceptScheme) in graph
-        scheme_labels = {(o.language, str(o)) for o in graph.objects(scheme, SKOS.prefLabel)}
+        scheme_labels = {
+            (o.language, str(o)) for o in graph.objects(scheme, SKOS.prefLabel)
+        }
         assert scheme_labels == {("de-at", "Farben")}
 
     def test_blank_node_concept_fixture_has_no_uri_identity(self):
@@ -5259,14 +6359,18 @@ class TestFixtureCorpus:
         graph.parse(FIXTURES / "blank_node_concept.ttl", format="turtle")
         concepts = list(graph.subjects(rdflib.RDF.type, SKOS.Concept))
         assert len(concepts) == 1
-        assert isinstance(concepts[0], rdflib.BNode), "the fixture's concept must be a blank node, not a URI"
+        assert isinstance(concepts[0], rdflib.BNode), (
+            "the fixture's concept must be a blank node, not a URI"
+        )
 
     def test_blank_node_collection_fixture_has_no_uri_identity(self):
         graph = rdflib.Graph()
         graph.parse(FIXTURES / "blank_node_collection.ttl", format="turtle")
         collections = list(graph.subjects(rdflib.RDF.type, SKOS.Collection))
         assert len(collections) == 1
-        assert isinstance(collections[0], rdflib.BNode), "the fixture's collection must be a blank node, not a URI"
+        assert isinstance(collections[0], rdflib.BNode), (
+            "the fixture's collection must be a blank node, not a URI"
+        )
 
     def test_refused_uri_scheme_fixture_uses_a_disallowed_scheme(self):
         from controlled_vocabularies.conf import DEFAULT_ALLOWED_URI_SCHEMES
@@ -5366,14 +6470,18 @@ _PREDICATE_COVERAGE_EXCLUDED_FIXTURES = frozenset(
 )
 
 _PREDICATE_COVERAGE_FIXTURES = sorted(
-    (filename, fmt) for filename, fmt in ALL_FIXTURES if filename not in _PREDICATE_COVERAGE_EXCLUDED_FIXTURES
+    (filename, fmt)
+    for filename, fmt in ALL_FIXTURES
+    if filename not in _PREDICATE_COVERAGE_EXCLUDED_FIXTURES
 )
 
 
 def _coverage_membership_covered(collection_uri: str, concept_uri: str, report) -> bool:
     """Direct evidence that ``concept_uri`` landed as a member of ``collection_uri``,
     or was reported as a member that could not be found (FIX 13)."""
-    if CollectionMember.objects.filter(collection__static_uri=collection_uri, concept__static_uri=concept_uri).exists():
+    if CollectionMember.objects.filter(
+        collection__static_uri=collection_uri, concept__static_uri=concept_uri
+    ).exists():
         return True
     return any(
         entry.reason is SetAsideReason.MISSING_MEMBER
@@ -5383,28 +6491,42 @@ def _coverage_membership_covered(collection_uri: str, concept_uri: str, report) 
     )
 
 
-def _coverage_relation_covered(kind: str, source_uri: str, target_uri: str, report) -> bool:
+def _coverage_relation_covered(
+    kind: str, source_uri: str, target_uri: str, report
+) -> bool:
     """Direct evidence that a ``kind`` relation between ``source_uri`` and ``target_uri``
     (in that direction) landed, or was reported missing/disjoint (FIX 13)."""
-    if ConceptRelation.objects.filter(kind=kind, source__static_uri=source_uri, target__static_uri=target_uri).exists():
+    if ConceptRelation.objects.filter(
+        kind=kind, source__static_uri=source_uri, target__static_uri=target_uri
+    ).exists():
         return True
     return any(
-        entry.reason in (SetAsideReason.MISSING_RELATION_END, SetAsideReason.RELATION_DISJOINTNESS)
+        entry.reason
+        in (SetAsideReason.MISSING_RELATION_END, SetAsideReason.RELATION_DISJOINTNESS)
         and {entry.subject, entry.params.get("other")} == {source_uri, target_uri}
         for entry in report.set_aside
     )
 
 
-def _coverage_scheme_membership_covered(concept_uri: str, scheme_uri: str, excluded_subjects: set[str]) -> bool:
+def _coverage_scheme_membership_covered(
+    concept_uri: str, scheme_uri: str, excluded_subjects: set[str]
+) -> bool:
     """Direct evidence that ``concept_uri`` landed inside the vocabulary ``scheme_uri``
     names, or that the concept was never created at all this run (FIX 13)."""
     if concept_uri in excluded_subjects:
         return True
-    return Concept.objects.filter(static_uri=concept_uri, scheme__static_uri=scheme_uri).exists()
+    return Concept.objects.filter(
+        static_uri=concept_uri, scheme__static_uri=scheme_uri
+    ).exists()
 
 
 def _coverage_label_covered(
-    subject_uri: str, language: str, text: str, kind: str, excluded_subjects: set[str], report
+    subject_uri: str,
+    language: str,
+    text: str,
+    kind: str,
+    excluded_subjects: set[str],
+    report,
 ) -> bool:
     """Direct evidence that this ``skos:prefLabel``/``altLabel``/``hiddenLabel`` value
     landed — as the scheme's own name, a concept's identity anchor, or a
@@ -5427,7 +6549,9 @@ def _coverage_label_covered(
             return True
         if Collection.objects.filter(static_uri=subject_uri, name=text).exists():
             return True
-    if ConceptLabel.objects.filter(concept__static_uri=subject_uri, kind=kind, text=text).exists():
+    if ConceptLabel.objects.filter(
+        concept__static_uri=subject_uri, kind=kind, text=text
+    ).exists():
         return True
     return any(
         entry.subject == subject_uri
@@ -5445,7 +6569,12 @@ def _coverage_label_covered(
 
 
 def _coverage_note_covered(
-    subject_uri: str, language: str, text: str, kind: str, excluded_subjects: set[str], report
+    subject_uri: str,
+    language: str,
+    text: str,
+    kind: str,
+    excluded_subjects: set[str],
+    report,
 ) -> bool:
     """Direct evidence that this note value landed as a ``ConceptNote`` row, or was
     reported set aside (FIX 13).
@@ -5456,7 +6585,9 @@ def _coverage_note_covered(
     """
     if subject_uri in excluded_subjects:
         return True
-    if ConceptNote.objects.filter(concept__static_uri=subject_uri, kind=kind, value=text).exists():
+    if ConceptNote.objects.filter(
+        concept__static_uri=subject_uri, kind=kind, value=text
+    ).exists():
         return True
     return any(
         entry.subject == subject_uri
@@ -5466,7 +6597,9 @@ def _coverage_note_covered(
     )
 
 
-def _coverage_untagged_covered(subject_uri: str, predicate_curie: str, excluded_subjects: set[str], report) -> bool:
+def _coverage_untagged_covered(
+    subject_uri: str, predicate_curie: str, excluded_subjects: set[str], report
+) -> bool:
     """Direct evidence that a label/note object with no language tag — or one that is not
     even a Literal — was reported set aside under ``NO_LANGUAGE_TAG`` (FIX 15, decisions.md
     D48), rather than silently skipped the way this gate used to skip it too."""
@@ -5502,12 +6635,20 @@ def _coverage_predicate_covered(
                 # — the exact blind spot that let an untagged/non-literal value
                 # go unreported and unnoticed by this gate.
                 if not _coverage_untagged_covered(
-                    subject_uri, _COVERAGE_LABEL_NOTE_CURIE[predicate], excluded_subjects, report
+                    subject_uri,
+                    _COVERAGE_LABEL_NOTE_CURIE[predicate],
+                    excluded_subjects,
+                    report,
                 ):
                     return False, subject_uri
                 continue
             if not _coverage_label_covered(
-                subject_uri, literal.language, str(literal), kind, excluded_subjects, report
+                subject_uri,
+                literal.language,
+                str(literal),
+                kind,
+                excluded_subjects,
+                report,
             ):
                 return False, subject_uri
         return True, None
@@ -5521,11 +6662,21 @@ def _coverage_predicate_covered(
             if not isinstance(literal, rdflib.Literal) or not literal.language:
                 # FIX 15 (review, decisions.md D48): same blind spot, the note side.
                 if not _coverage_untagged_covered(
-                    subject_uri, _COVERAGE_LABEL_NOTE_CURIE[predicate], excluded_subjects, report
+                    subject_uri,
+                    _COVERAGE_LABEL_NOTE_CURIE[predicate],
+                    excluded_subjects,
+                    report,
                 ):
                     return False, subject_uri
                 continue
-            if not _coverage_note_covered(subject_uri, literal.language, str(literal), kind, excluded_subjects, report):
+            if not _coverage_note_covered(
+                subject_uri,
+                literal.language,
+                str(literal),
+                kind,
+                excluded_subjects,
+                report,
+            ):
                 return False, subject_uri
         return True, None
 
@@ -5551,7 +6702,8 @@ def _coverage_predicate_covered(
             if subject_uri not in in_scope or subject_uri in excluded_subjects:
                 continue
             reported = any(
-                entry.reason is SetAsideReason.NOTATION and entry.subject == subject_uri for entry in report.set_aside
+                entry.reason is SetAsideReason.NOTATION and entry.subject == subject_uri
+                for entry in report.set_aside
             )
             if not reported:
                 return False, subject_uri
@@ -5565,9 +6717,13 @@ def _coverage_predicate_covered(
             if subject_uri in excluded_subjects or object_uri in excluded_subjects:
                 continue
             narrower_uri, broader_uri = (
-                (subject_uri, object_uri) if predicate == SKOS.broader else (object_uri, subject_uri)
+                (subject_uri, object_uri)
+                if predicate == SKOS.broader
+                else (object_uri, subject_uri)
             )
-            if not _coverage_relation_covered(ConceptRelation.Kind.BROADER, narrower_uri, broader_uri, report):
+            if not _coverage_relation_covered(
+                ConceptRelation.Kind.BROADER, narrower_uri, broader_uri, report
+            ):
                 return False, subject_uri
         return True, None
 
@@ -5580,7 +6736,9 @@ def _coverage_predicate_covered(
                 continue
             covered = _coverage_relation_covered(
                 ConceptRelation.Kind.RELATED, subject_uri, object_uri, report
-            ) or _coverage_relation_covered(ConceptRelation.Kind.RELATED, object_uri, subject_uri, report)
+            ) or _coverage_relation_covered(
+                ConceptRelation.Kind.RELATED, object_uri, subject_uri, report
+            )
             if not covered:
                 return False, subject_uri
         return True, None
@@ -5590,7 +6748,9 @@ def _coverage_predicate_covered(
             concept_uri, scheme_uri = str(subject_node), str(object_node)
             if concept_uri not in in_scope:
                 continue
-            if not _coverage_scheme_membership_covered(concept_uri, scheme_uri, excluded_subjects):
+            if not _coverage_scheme_membership_covered(
+                concept_uri, scheme_uri, excluded_subjects
+            ):
                 return False, concept_uri
         return True, None
 
@@ -5599,7 +6759,9 @@ def _coverage_predicate_covered(
             scheme_uri, concept_uri = str(subject_node), str(object_node)
             if scheme_uri not in in_scope:
                 continue
-            if not _coverage_scheme_membership_covered(concept_uri, scheme_uri, excluded_subjects):
+            if not _coverage_scheme_membership_covered(
+                concept_uri, scheme_uri, excluded_subjects
+            ):
                 return False, scheme_uri
         return True, None
 
@@ -5659,13 +6821,17 @@ class TestEverySkosPredicateIsReadOrReported:
     """
 
     @pytest.mark.parametrize("filename,fmt", _PREDICATE_COVERAGE_FIXTURES)
-    def test_every_skos_predicate_in_this_fixture_is_read_or_reported(self, db, filename, fmt):
+    def test_every_skos_predicate_in_this_fixture_is_read_or_reported(
+        self, db, filename, fmt
+    ):
         path = FIXTURES / filename
         graph = rdflib.Graph()
         graph.parse(path, format=fmt)
 
         report = import_skos(path)
-        assert report.fatal == [], f"{filename} unexpectedly failed to import: {[f.render() for f in report.fatal]}"
+        assert report.fatal == [], (
+            f"{filename} unexpectedly failed to import: {[f.render() for f in report.fatal]}"
+        )
 
         concept_nodes = set(graph.subjects(rdflib.RDF.type, SKOS.Concept))
         collection_nodes = set(graph.subjects(rdflib.RDF.type, SKOS.Collection)) | set(
@@ -5677,18 +6843,26 @@ class TestEverySkosPredicateIsReadOrReported:
         # record this importer creates, so its own predicates are not this
         # importer's to account for.
         resolved_scheme_uris = set(
-            ConceptScheme.objects.filter(static_uri__in=[str(node) for node in scheme_nodes]).values_list(
-                "static_uri", flat=True
-            )
+            ConceptScheme.objects.filter(
+                static_uri__in=[str(node) for node in scheme_nodes]
+            ).values_list("static_uri", flat=True)
         )
         in_scope = (
-            {str(node) for node in concept_nodes} | {str(node) for node in collection_nodes} | resolved_scheme_uris
+            {str(node) for node in concept_nodes}
+            | {str(node) for node in collection_nodes}
+            | resolved_scheme_uris
         )
 
         excluded_subjects = {
-            entry.subject for entry in report.set_aside if entry.reason in _COVERAGE_WHOLE_RECORD_EXCLUDED_REASONS
+            entry.subject
+            for entry in report.set_aside
+            if entry.reason in _COVERAGE_WHOLE_RECORD_EXCLUDED_REASONS
         }
-        predicates = {predicate for predicate in graph.predicates() if str(predicate).startswith(str(SKOS))}
+        predicates = {
+            predicate
+            for predicate in graph.predicates()
+            if str(predicate).startswith(str(SKOS))
+        }
 
         failures = []
         for predicate in predicates:
@@ -5717,7 +6891,9 @@ class TestExchangePackage:
     def test_package_has_a_module_docstring(self):
         # A public package gets documented (Article VI); this catches an
         # accidentally-empty __init__.py before anything is re-exported from it.
-        assert exchange.__doc__, "controlled_vocabularies.exchange has no module docstring"
+        assert exchange.__doc__, (
+            "controlled_vocabularies.exchange has no module docstring"
+        )
 
 
 class TestSafetyExceptionsAreExportedAndPartOfTheDocumentedHierarchy:
@@ -5741,7 +6917,9 @@ class TestSafetyExceptionsAreExportedAndPartOfTheDocumentedHierarchy:
         assert "UnsafeRdfXmlError" in exchange.__all__
         assert "UnsafeJsonLdError" in exchange.__all__
 
-    def test_a_consumer_catching_only_the_documented_pair_still_catches_a_hostile_rdf_xml_file(self, db):
+    def test_a_consumer_catching_only_the_documented_pair_still_catches_a_hostile_rdf_xml_file(
+        self, db
+    ):
         # The actual consumer-facing failure this fix closes: code written
         # against only the two documented exception types must not let a
         # hostile file through as an unhandled exception.
@@ -5751,16 +6929,22 @@ class TestSafetyExceptionsAreExportedAndPartOfTheDocumentedHierarchy:
             caught = True
         else:
             caught = False
-        assert caught, "a hostile RDF/XML file escaped the documented (SkosImportError, SkosImportFailed) pair"
+        assert caught, (
+            "a hostile RDF/XML file escaped the documented (SkosImportError, SkosImportFailed) pair"
+        )
 
-    def test_a_consumer_catching_only_the_documented_pair_still_catches_a_hostile_json_ld_file(self, db):
+    def test_a_consumer_catching_only_the_documented_pair_still_catches_a_hostile_json_ld_file(
+        self, db
+    ):
         try:
             import_skos(SECURITY_FIXTURES / "exfil_via_import.jsonld")
         except (SkosImportError, SkosImportFailed):
             caught = True
         else:
             caught = False
-        assert caught, "a hostile JSON-LD file escaped the documented (SkosImportError, SkosImportFailed) pair"
+        assert caught, (
+            "a hostile JSON-LD file escaped the documented (SkosImportError, SkosImportFailed) pair"
+        )
 
 
 def _write_deeply_nested_jsonld(tmp_path: Path, depth: int) -> Path:
@@ -5797,7 +6981,9 @@ class TestCraftedFilesStayInsideTheExceptionContract:
     scan stage entirely.
     """
 
-    def test_a_turtle_file_renamed_to_rdf_raises_skosimporterror_not_a_bare_sax_exception(self, tmp_path):
+    def test_a_turtle_file_renamed_to_rdf_raises_skosimporterror_not_a_bare_sax_exception(
+        self, tmp_path
+    ):
         # Not well-formed XML at all — no angle brackets, no doctype, nothing
         # defusedxml.sax's own EntitiesForbidden/ExternalReferenceForbidden
         # guards were built to catch. This is scan_rdf_xml's own parser
@@ -5808,27 +6994,42 @@ class TestCraftedFilesStayInsideTheExceptionContract:
             SkosGraph.from_file(bad)
         err = excinfo.value
         assert err.code == "skos_parse_failed"
-        assert err.__cause__ is not None, "the underlying SAX exception must be chained for developer diagnostics"
+        assert err.__cause__ is not None, (
+            "the underlying SAX exception must be chained for developer diagnostics"
+        )
 
-    def test_a_deeply_nested_json_ld_document_raises_skosimporterror_not_a_bare_recursionerror(self, tmp_path):
+    def test_a_deeply_nested_json_ld_document_raises_skosimporterror_not_a_bare_recursionerror(
+        self, tmp_path
+    ):
         path = _write_deeply_nested_jsonld(tmp_path, 3000)
         with pytest.raises(SkosImportError) as excinfo:
             SkosGraph.from_file(path, serialization="json-ld")
         err = excinfo.value
         assert err.code == "skos_parse_failed"
-        assert err.__cause__ is not None, "the underlying RecursionError must be chained for developer diagnostics"
+        assert err.__cause__ is not None, (
+            "the underlying RecursionError must be chained for developer diagnostics"
+        )
 
-    def test_an_unsafe_rdf_xml_document_still_raises_unsaferdfxmlerror_not_wrapped(self):
+    def test_an_unsafe_rdf_xml_document_still_raises_unsaferdfxmlerror_not_wrapped(
+        self,
+    ):
         # The wrapping added for the malformed-XML case above must not
         # swallow the *deliberate* safety refusal into a generic
         # SkosImportError — a caller distinguishing "unsafe" from "merely
         # unreadable" needs the specific type to keep working.
         with pytest.raises(UnsafeRdfXmlError):
-            SkosGraph.from_file(SECURITY_FIXTURES / "entity_bomb.rdf", serialization="xml")
+            SkosGraph.from_file(
+                SECURITY_FIXTURES / "entity_bomb.rdf", serialization="xml"
+            )
 
-    def test_an_unsafe_json_ld_document_still_raises_unsafejsonlderror_not_wrapped(self):
+    def test_an_unsafe_json_ld_document_still_raises_unsafejsonlderror_not_wrapped(
+        self,
+    ):
         with pytest.raises(UnsafeJsonLdError):
-            SkosGraph.from_file(SECURITY_FIXTURES / "remote_context_string.jsonld", serialization="json-ld")
+            SkosGraph.from_file(
+                SECURITY_FIXTURES / "remote_context_string.jsonld",
+                serialization="json-ld",
+            )
 
     @pytest.mark.django_db
     def test_a_cyclic_memberlist_raises_skosimporterror_not_a_bare_valueerror(self):
@@ -5836,7 +7037,9 @@ class TestCraftedFilesStayInsideTheExceptionContract:
             import_skos(FIXTURES / "cyclic_member_list.ttl")
         err = excinfo.value
         assert err.code == "skos_cyclic_member_list"
-        assert err.__cause__ is not None, "the underlying ValueError must be chained for developer diagnostics"
+        assert err.__cause__ is not None, (
+            "the underlying ValueError must be chained for developer diagnostics"
+        )
 
     @pytest.mark.django_db
     def test_a_cyclic_memberlist_rolls_back_the_whole_run(self):
@@ -5845,8 +7048,12 @@ class TestCraftedFilesStayInsideTheExceptionContract:
         # must not survive if the run as a whole is refused.
         with pytest.raises(SkosImportError):
             import_skos(FIXTURES / "cyclic_member_list.ttl")
-        assert not ConceptScheme.objects.filter(static_uri="http://example.org/cyclic/").exists()
-        assert not Concept.objects.filter(static_uri="http://example.org/cyclic/a").exists()
+        assert not ConceptScheme.objects.filter(
+            static_uri="http://example.org/cyclic/"
+        ).exists()
+        assert not Concept.objects.filter(
+            static_uri="http://example.org/cyclic/a"
+        ).exists()
 
 
 class TestFailureMessagesUseOnlyNamedPlaceholders:
@@ -5890,7 +7097,9 @@ class TestFailureMessagesUseOnlyNamedPlaceholders:
         # Developer-diagnostic exemption: the raw rdflib parser exception is
         # chained onto __cause__, not translated — only the curator-facing
         # wrapper message just checked above is held to Article XII.
-        assert err.__cause__ is not None, "the underlying rdflib exception must be chained for developer diagnostics"
+        assert err.__cause__ is not None, (
+            "the underlying rdflib exception must be chained for developer diagnostics"
+        )
 
     @pytest.mark.django_db
     def test_import_failed_message(self, uses_only_named_placeholders):
@@ -5918,13 +7127,20 @@ class TestNoContentIsStoredInAnUnconfiguredLanguage:
         for scheme in ConceptScheme.objects.all():
             assert scheme.effective_default_language in configured
 
-    @pytest.mark.parametrize("filename", ["rocks.ttl", "variants.ttl", "en-gb-only.ttl", "declares-de-at.ttl"])
-    def test_no_stray_language_lands_across_every_matching_path_this_feature_touches(self, db, filename):
+    @pytest.mark.parametrize(
+        "filename",
+        ["rocks.ttl", "variants.ttl", "en-gb-only.ttl", "declares-de-at.ttl"],
+    )
+    def test_no_stray_language_lands_across_every_matching_path_this_feature_touches(
+        self, db, filename
+    ):
         report = import_skos(FIXTURES / filename)
         assert report.fatal == []
         self._assert_only_configured_languages_are_stored()
 
-    def test_the_invariant_holds_under_djangos_own_99_language_default(self, db, tmp_path):
+    def test_the_invariant_holds_under_djangos_own_99_language_default(
+        self, db, tmp_path
+    ):
         # tests/settings.py declares its own three-language LANGUAGES list, so simply not
         # overriding it here would silently mean that list rather than Django's own default —
         # the obvious-looking test that pins nothing (decisions.md D12/D17). The ordinary
@@ -5951,7 +7167,11 @@ class TestNoContentIsStoredInAnUnconfiguredLanguage:
             self._assert_only_configured_languages_are_stored()
             # A tag sharing no base with any of Django's 99 shipped languages is still refused,
             # even under the largest configured set the package will ever see.
-            entries = [entry for entry in report.set_aside if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE]
+            entries = [
+                entry
+                for entry in report.set_aside
+                if entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE
+            ]
             assert any(entry.params["language"] == "zzz" for entry in entries)
 
 
@@ -5982,22 +7202,44 @@ class TestAddingABaseSharingLanguageLeavesEveryAddressWhereItWas:
         with override_settings(LANGUAGES=[("en", "English")]):
             assert import_skos(FIXTURES / "variants.ttl").fatal == []
 
-        scheme_before = self._address(ConceptScheme.objects.get(static_uri=self.SCHEME_URI))
+        scheme_before = self._address(
+            ConceptScheme.objects.get(static_uri=self.SCHEME_URI)
+        )
         concept_before = self._address(Concept.objects.get(static_uri=self.CONCEPT_URI))
 
-        with override_settings(LANGUAGES=[("en", "English"), ("en-gb", "British English")]):
+        with override_settings(
+            LANGUAGES=[("en", "English"), ("en-gb", "British English")]
+        ):
             assert import_skos(FIXTURES / "variants.ttl").fatal == []
 
-        assert self._address(ConceptScheme.objects.get(static_uri=self.SCHEME_URI)) == scheme_before
-        assert self._address(Concept.objects.get(static_uri=self.CONCEPT_URI)) == concept_before
+        assert (
+            self._address(ConceptScheme.objects.get(static_uri=self.SCHEME_URI))
+            == scheme_before
+        )
+        assert (
+            self._address(Concept.objects.get(static_uri=self.CONCEPT_URI))
+            == concept_before
+        )
 
     def test_the_added_language_does_reach_the_stored_content(self, db):
         # The guard above is only meaningful if the second run genuinely changed what is stored;
         # otherwise it would pass against an import that did nothing at all.
         with override_settings(LANGUAGES=[("en", "English")]):
             import_skos(FIXTURES / "variants.ttl")
-        assert Concept.objects.get(static_uri=self.CONCEPT_URI).labels.filter(language="en-gb").count() == 0
+        assert (
+            Concept.objects.get(static_uri=self.CONCEPT_URI)
+            .labels.filter(language="en-gb")
+            .count()
+            == 0
+        )
 
-        with override_settings(LANGUAGES=[("en", "English"), ("en-gb", "British English")]):
+        with override_settings(
+            LANGUAGES=[("en", "English"), ("en-gb", "British English")]
+        ):
             import_skos(FIXTURES / "variants.ttl")
-        assert Concept.objects.get(static_uri=self.CONCEPT_URI).labels.filter(language="en-gb").count() > 0
+        assert (
+            Concept.objects.get(static_uri=self.CONCEPT_URI)
+            .labels.filter(language="en-gb")
+            .count()
+            > 0
+        )

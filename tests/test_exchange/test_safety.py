@@ -13,7 +13,12 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.utils.functional import Promise
 
-from controlled_vocabularies.exchange.safety import UnsafeJsonLdError, UnsafeRdfXmlError, scan_json_ld, scan_rdf_xml
+from controlled_vocabularies.exchange.safety import (
+    UnsafeJsonLdError,
+    UnsafeRdfXmlError,
+    scan_json_ld,
+    scan_rdf_xml,
+)
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "security"
 
@@ -34,18 +39,26 @@ class TestScanRdfXml:
             scan_rdf_xml(_read("entity_bomb.rdf"))
         err = excinfo.value
         assert isinstance(err, ValidationError)
-        assert isinstance(err.message, Promise), "entity-bomb refusal message is not lazily translatable"
-        assert "%(name)s" in str(err.message), "entity-bomb refusal message lacks a named %(name)s placeholder"
+        assert isinstance(err.message, Promise), (
+            "entity-bomb refusal message is not lazily translatable"
+        )
+        assert "%(name)s" in str(err.message), (
+            "entity-bomb refusal message lacks a named %(name)s placeholder"
+        )
         assert err.params == {"name": "e0"}
         assert "e0" in err.messages[0]
         assert err.code == "rdf_xml_entities_forbidden"
-        assert isinstance(err.__cause__, Exception), "the underlying defusedxml exception must be chained"
+        assert isinstance(err.__cause__, Exception), (
+            "the underlying defusedxml exception must be chained"
+        )
 
     def test_an_ordinary_rdf_xml_document_passes_untouched(self):
         # No DTD, no entities: scan_rdf_xml is a no-op and raises nothing.
         assert scan_rdf_xml(_read("ordinary.rdf")) is None
 
-    def test_a_document_declaring_an_external_entity_is_refused_not_silently_emptied(self):
+    def test_a_document_declaring_an_external_entity_is_refused_not_silently_emptied(
+        self,
+    ):
         # research.md R3's own canary probe: a document referencing a file on disk via
         # a declared external entity. Before this scan it parsed cleanly with the
         # reference resolving to an empty string; now declaring the entity at all is
@@ -53,7 +66,9 @@ class TestScanRdfXml:
         with pytest.raises(UnsafeRdfXmlError) as excinfo:
             scan_rdf_xml(_read("external_entity.rdf"))
         err = excinfo.value
-        assert isinstance(err.message, Promise), "external-entity refusal message is not lazily translatable"
+        assert isinstance(err.message, Promise), (
+            "external-entity refusal message is not lazily translatable"
+        )
         assert "%(name)s" in str(err.message)
         assert err.params == {"name": "xxe"}
         assert err.code == "rdf_xml_entities_forbidden"
@@ -64,7 +79,9 @@ class TestScanRdfXml:
         with pytest.raises(UnsafeRdfXmlError) as excinfo:
             scan_rdf_xml(_read("external_dtd.rdf"))
         err = excinfo.value
-        assert isinstance(err.message, Promise), "external-DTD refusal message is not lazily translatable"
+        assert isinstance(err.message, Promise), (
+            "external-DTD refusal message is not lazily translatable"
+        )
         assert "%(system_id)s" in str(err.message)
         assert err.params == {"system_id": "http://example.org/nonexistent.dtd"}
         assert "http://example.org/nonexistent.dtd" in err.messages[0]
@@ -91,7 +108,9 @@ class TestScanJsonLd:
             scan_json_ld(_read("remote_context_string.jsonld"))
         err = excinfo.value
         assert isinstance(err, ValidationError)
-        assert isinstance(err.message, Promise), "remote-context refusal message is not lazily translatable"
+        assert isinstance(err.message, Promise), (
+            "remote-context refusal message is not lazily translatable"
+        )
         assert "%(context)s" in str(err.message)
         assert err.params == {"context": "http://127.0.0.1:1/x.json"}
         assert "http://127.0.0.1:1/x.json" in err.messages[0]
@@ -142,7 +161,9 @@ class TestScanJsonLdRefusesContextImport:
             scan_json_ld(_read("exfil_via_import.jsonld"))
         err = excinfo.value
         assert isinstance(err, ValidationError)
-        assert isinstance(err.message, Promise), "@import refusal message is not lazily translatable"
+        assert isinstance(err.message, Promise), (
+            "@import refusal message is not lazily translatable"
+        )
         assert "%(context)s" in str(err.message)
         assert err.params == {"context": "exfil_secret.jsonld"}
         assert err.code == "jsonld_context_import_forbidden"
@@ -220,7 +241,12 @@ class TestScanJsonLdWalksNestedArrayContexts:
     def test_an_inline_term_map_inside_a_nested_array_still_passes(self):
         # The negative control for the recursion: making the walk total must not
         # start refusing a legitimate context, at any nesting depth.
-        assert scan_json_ld(b'{"@context": [[{"skos": "http://www.w3.org/2004/02/skos/core#"}]]}') is None
+        assert (
+            scan_json_ld(
+                b'{"@context": [[{"skos": "http://www.w3.org/2004/02/skos/core#"}]]}'
+            )
+            is None
+        )
 
 
 class TestRefusalMessagesUseOnlyNamedPlaceholders:
@@ -235,7 +261,9 @@ class TestRefusalMessagesUseOnlyNamedPlaceholders:
     that Article XII does not hold to a translatable, named-placeholder standard.
     """
 
-    def test_entity_bomb_message_and_its_developer_diagnostic_exemption(self, uses_only_named_placeholders):
+    def test_entity_bomb_message_and_its_developer_diagnostic_exemption(
+        self, uses_only_named_placeholders
+    ):
         with pytest.raises(UnsafeRdfXmlError) as excinfo:
             scan_rdf_xml(_read("entity_bomb.rdf"))
         err = excinfo.value
@@ -248,7 +276,9 @@ class TestRefusalMessagesUseOnlyNamedPlaceholders:
             "the underlying defusedxml exception must be chained for developer diagnostics"
         )
 
-    def test_external_dtd_message_and_its_developer_diagnostic_exemption(self, uses_only_named_placeholders):
+    def test_external_dtd_message_and_its_developer_diagnostic_exemption(
+        self, uses_only_named_placeholders
+    ):
         with pytest.raises(UnsafeRdfXmlError) as excinfo:
             scan_rdf_xml(_read("external_dtd.rdf"))
         err = excinfo.value
@@ -259,7 +289,9 @@ class TestRefusalMessagesUseOnlyNamedPlaceholders:
             "the underlying defusedxml exception must be chained for developer diagnostics"
         )
 
-    def test_remote_context_message_uses_only_named_placeholders(self, uses_only_named_placeholders):
+    def test_remote_context_message_uses_only_named_placeholders(
+        self, uses_only_named_placeholders
+    ):
         with pytest.raises(UnsafeJsonLdError) as excinfo:
             scan_json_ld(_read("remote_context_string.jsonld"))
         err = excinfo.value

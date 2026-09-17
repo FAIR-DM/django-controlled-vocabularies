@@ -34,7 +34,9 @@ class ReportRenderer:
     entry also prints, rendered by the entry's own ``render()``. No flag of this feature's own.
     """
 
-    def __init__(self, report: ImportReport, *, dry_run: bool = False, verbosity: int = 1) -> None:
+    def __init__(
+        self, report: ImportReport, *, dry_run: bool = False, verbosity: int = 1
+    ) -> None:
         self.report = report
         self.dry_run = dry_run
         self.verbosity = verbosity
@@ -52,16 +54,32 @@ class ReportRenderer:
             # it is raised as a CommandError, not rendered here.
             return
         yield str(
-            ngettext_lazy("%(count)d record created.", "%(count)d records created.", len(self.report.created))
+            ngettext_lazy(
+                "%(count)d record created.",
+                "%(count)d records created.",
+                len(self.report.created),
+            )
         ) % {"count": len(self.report.created)}
         yield str(
-            ngettext_lazy("%(count)d record updated.", "%(count)d records updated.", len(self.report.updated))
+            ngettext_lazy(
+                "%(count)d record updated.",
+                "%(count)d records updated.",
+                len(self.report.updated),
+            )
         ) % {"count": len(self.report.updated)}
         yield str(
-            ngettext_lazy("%(count)d value set aside.", "%(count)d values set aside.", len(self.report.set_aside))
+            ngettext_lazy(
+                "%(count)d value set aside.",
+                "%(count)d values set aside.",
+                len(self.report.set_aside),
+            )
         ) % {"count": len(self.report.set_aside)}
         yield str(
-            ngettext_lazy("%(count)d value normalized.", "%(count)d values normalized.", len(self.report.normalized))
+            ngettext_lazy(
+                "%(count)d value normalized.",
+                "%(count)d values normalized.",
+                len(self.report.normalized),
+            )
         ) % {"count": len(self.report.normalized)}
         yield str(
             ngettext_lazy(
@@ -116,4 +134,6 @@ class ReportRenderer:
         `decisions.md` D7): existing data left untouched, visibly separate from set-asides and
         never counted among them."""
         for subject in self.report.absent_from_source:
-            yield str(_("'%(subject)s' is present but no longer mentioned by the source.")) % {"subject": subject}
+            yield str(
+                _("'%(subject)s' is present but no longer mentioned by the source.")
+            ) % {"subject": subject}

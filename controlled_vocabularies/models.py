@@ -84,8 +84,14 @@ def validate_static_uri(value: str) -> None:
     """
     if len(value) > STATIC_URI_MAX_LENGTH:
         raise ValidationError(
-            _("A static URI cannot exceed %(max_length)s characters; '%(uri)s' has %(length)s."),
-            params={"max_length": STATIC_URI_MAX_LENGTH, "uri": _echoed_uri(value), "length": len(value)},
+            _(
+                "A static URI cannot exceed %(max_length)s characters; '%(uri)s' has %(length)s."
+            ),
+            params={
+                "max_length": STATIC_URI_MAX_LENGTH,
+                "uri": _echoed_uri(value),
+                "length": len(value),
+            },
             code="static_uri_too_long",
         )
     try:
@@ -105,7 +111,9 @@ def validate_static_uri(value: str) -> None:
     scheme = parsed.scheme.lower()
     if scheme not in conf.get_allowed_uri_schemes():
         raise ValidationError(
-            _("'%(uri)s' uses the scheme '%(scheme)s', which is not one of the accepted schemes."),
+            _(
+                "'%(uri)s' uses the scheme '%(scheme)s', which is not one of the accepted schemes."
+            ),
             params={"uri": _echoed_uri(value), "scheme": parsed.scheme},
             code="static_uri_scheme_not_allowed",
         )
@@ -443,7 +451,9 @@ class ConceptScheme(StaticUriModel):
     name = models.CharField(
         max_length=255,
         verbose_name=_("name"),
-        help_text=_("The human-readable name of the vocabulary. Its slug is derived automatically from this."),
+        help_text=_(
+            "The human-readable name of the vocabulary. Its slug is derived automatically from this."
+        ),
     )
     description = models.TextField(
         blank=True,
@@ -530,8 +540,16 @@ class ConceptScheme(StaticUriModel):
         # every anchor and break the one-preferred-label-per-language invariant. Before
         # any concept exists there is nothing to disturb, so the change is free.
         if self.pk is not None:
-            stored = ConceptScheme.objects.filter(pk=self.pk).values_list("default_language", flat=True).first()
-            if stored is not None and stored != self.default_language and self.concepts.exists():
+            stored = (
+                ConceptScheme.objects.filter(pk=self.pk)
+                .values_list("default_language", flat=True)
+                .first()
+            )
+            if (
+                stored is not None
+                and stored != self.default_language
+                and self.concepts.exists()
+            ):
                 raise ValidationError(
                     {
                         "default_language": _(
@@ -543,11 +561,16 @@ class ConceptScheme(StaticUriModel):
         # An override, when given, must be one of the application's configured
         # languages (validated at runtime, since the field carries no settings-derived
         # choices — see _configured_language_codes).
-        if self.default_language and self.default_language not in _configured_language_codes():
+        if (
+            self.default_language
+            and self.default_language not in _configured_language_codes()
+        ):
             raise ValidationError(
                 {
                     "default_language": ValidationError(
-                        _("'%(language)s' is not one of the application's configured languages."),
+                        _(
+                            "'%(language)s' is not one of the application's configured languages."
+                        ),
                         params={"language": self.default_language},
                     )
                 }
@@ -557,7 +580,9 @@ class ConceptScheme(StaticUriModel):
             # (FR-018, decisions.md D35).
             self.slug = slugify(self.name, allow_unicode=True)
             if not self.slug:
-                raise ValidationError({"name": _("Name must produce a non-empty slug.")})
+                raise ValidationError(
+                    {"name": _("Name must produce a non-empty slug.")}
+                )
         else:
             # ARCH-302, fix cycle 4, decisions.md D54: the empty/malformed-manual-slug guard
             # was byte-identical across all three concrete models — extracted to the shared
@@ -668,7 +693,9 @@ class Concept(StaticUriModel):
         verbose_name = _("concept")
         verbose_name_plural = _("concepts")
         constraints = [
-            models.UniqueConstraint(fields=["scheme", "slug"], name="unique_concept_slug_per_scheme"),
+            models.UniqueConstraint(
+                fields=["scheme", "slug"], name="unique_concept_slug_per_scheme"
+            ),
             models.UniqueConstraint(
                 fields=["static_uri"],
                 condition=Q(static_uri__isnull=False),
@@ -704,7 +731,9 @@ class Concept(StaticUriModel):
                 raise ValidationError(
                     {
                         "label": ValidationError(
-                            _("A preferred label in the default language '%(language)s' is required."),
+                            _(
+                                "A preferred label in the default language '%(language)s' is required."
+                            ),
                             params={"language": self.scheme.effective_default_language},
                         )
                     }
@@ -718,11 +747,17 @@ class Concept(StaticUriModel):
         # rather than minting a duplicate identifier or silently auto-suffixing
         # it (research R4). This guards both derived and explicit slugs (FR-012);
         # the UniqueConstraint is the integrity backstop.
-        if Concept.objects.filter(scheme=self.scheme, slug=self.slug).exclude(pk=self.pk).exists():
+        if (
+            Concept.objects.filter(scheme=self.scheme, slug=self.slug)
+            .exclude(pk=self.pk)
+            .exists()
+        ):
             raise ValidationError(
                 {
                     "slug": ValidationError(
-                        _("A concept with the slug '%(slug)s' already exists in this vocabulary."),
+                        _(
+                            "A concept with the slug '%(slug)s' already exists in this vocabulary."
+                        ),
                         params={"slug": self.slug},
                     )
                 }
@@ -784,7 +819,9 @@ class Concept(StaticUriModel):
         related set so it stays cheap under ``prefetch_related``.
         """
         return [
-            row.text for row in self.labels.all() if row.language == language and row.kind == ConceptLabel.Kind.HIDDEN
+            row.text
+            for row in self.labels.all()
+            if row.language == language and row.kind == ConceptLabel.Kind.HIDDEN
         ]
 
     def add_label(self, language: str, kind: str, text: str) -> "ConceptLabel":
@@ -883,7 +920,9 @@ class Concept(StaticUriModel):
 
     def remove_broader(self, other: "Concept") -> None:
         """Remove the broader edge to ``other`` if present; a no-op otherwise (FR-005)."""
-        ConceptRelation.objects.filter(source=self, target=other, kind=ConceptRelation.Kind.BROADER).delete()
+        ConceptRelation.objects.filter(
+            source=self, target=other, kind=ConceptRelation.Kind.BROADER
+        ).delete()
 
     def related(self) -> "models.QuerySet[Concept]":
         """Concepts related to this one — the symmetric association (FR-003).
@@ -970,13 +1009,17 @@ class ConceptLabel(models.Model):
     language = models.CharField(
         max_length=16,
         verbose_name=_("language"),
-        help_text=_("The language this label is written in, from the application's configured languages."),
+        help_text=_(
+            "The language this label is written in, from the application's configured languages."
+        ),
     )
     kind = models.CharField(
         max_length=16,
         choices=Kind.choices,
         verbose_name=_("kind"),
-        help_text=_("Whether this is the language's preferred label or an alternative or hidden one."),
+        help_text=_(
+            "Whether this is the language's preferred label or an alternative or hidden one."
+        ),
     )
     text = models.CharField(
         max_length=255,
@@ -991,7 +1034,9 @@ class ConceptLabel(models.Model):
         indexes = [
             # The (language, kind, text) label lookup/search path (FR-015); the FK
             # is auto-indexed. Deliberate per Article XIII (decisions.md, data-model).
-            models.Index(fields=["language", "kind", "text"], name="cv_label_lang_kind_text_idx"),
+            models.Index(
+                fields=["language", "kind", "text"], name="cv_label_lang_kind_text_idx"
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -1024,7 +1069,9 @@ class ConceptLabel(models.Model):
             raise ValidationError(
                 {
                     "language": ValidationError(
-                        _("'%(language)s' is not one of the application's configured languages."),
+                        _(
+                            "'%(language)s' is not one of the application's configured languages."
+                        ),
                         params={"language": self.language},
                     )
                 }
@@ -1033,7 +1080,9 @@ class ConceptLabel(models.Model):
             return
         self._reject_default_language_preferred()
         already_preferred = (
-            ConceptLabel.objects.filter(concept=self.concept, language=self.language, kind=self.Kind.PREFERRED)
+            ConceptLabel.objects.filter(
+                concept=self.concept, language=self.language, kind=self.Kind.PREFERRED
+            )
             .exclude(pk=self.pk)
             .exists()
         )
@@ -1041,7 +1090,9 @@ class ConceptLabel(models.Model):
             raise ValidationError(
                 {
                     "language": ValidationError(
-                        _("A preferred label in the language '%(language)s' already exists for this concept."),
+                        _(
+                            "A preferred label in the language '%(language)s' already exists for this concept."
+                        ),
                         params={"language": self.language},
                     )
                 }
@@ -1056,7 +1107,10 @@ class ConceptLabel(models.Model):
         and this invariant has no DB-level constraint to fall back on (a check against a
         column on another table is not expressible).
         """
-        if self.kind == self.Kind.PREFERRED and self.language == self.concept.scheme.effective_default_language:
+        if (
+            self.kind == self.Kind.PREFERRED
+            and self.language == self.concept.scheme.effective_default_language
+        ):
             raise ValidationError(
                 {
                     "language": ValidationError(
@@ -1111,7 +1165,9 @@ class ConceptNote(models.Model):
     language = models.CharField(
         max_length=16,
         verbose_name=_("language"),
-        help_text=_("The language this note is written in, from the application's configured languages."),
+        help_text=_(
+            "The language this note is written in, from the application's configured languages."
+        ),
     )
     kind = models.CharField(
         max_length=16,
@@ -1148,7 +1204,9 @@ class ConceptNote(models.Model):
             raise ValidationError(
                 {
                     "language": ValidationError(
-                        _("'%(language)s' is not one of the application's configured languages."),
+                        _(
+                            "'%(language)s' is not one of the application's configured languages."
+                        ),
                         params={"language": self.language},
                     )
                 }
@@ -1198,7 +1256,9 @@ class ConceptRelation(models.Model):
         max_length=16,
         choices=Kind.choices,
         verbose_name=_("kind"),
-        help_text=_("The kind of link: a broader/narrower hierarchy edge, or a symmetric related association."),
+        help_text=_(
+            "The kind of link: a broader/narrower hierarchy edge, or a symmetric related association."
+        ),
     )
 
     class Meta:
@@ -1209,9 +1269,13 @@ class ConceptRelation(models.Model):
             # No duplicate edge (FR-007). With related's PK-canonicalisation this also
             # blocks a mirror-order related duplicate. A reversed *broader* edge is a
             # different, permitted edge (a 2-cycle), so the ordered triple is exact.
-            models.UniqueConstraint(fields=["source", "target", "kind"], name="unique_concept_relation"),
+            models.UniqueConstraint(
+                fields=["source", "target", "kind"], name="unique_concept_relation"
+            ),
             # No self-relation (FR-006), enforced at the database.
-            models.CheckConstraint(condition=~Q(source=F("target")), name="concept_relation_not_self"),
+            models.CheckConstraint(
+                condition=~Q(source=F("target")), name="concept_relation_not_self"
+            ),
         ]
         indexes = [
             # The reverse reads — derived narrower (query by target, kind=BROADER) and the
@@ -1264,7 +1328,10 @@ class ConceptRelation(models.Model):
                     "A relation can only join concepts in the same vocabulary; "
                     "'%(source)s' and '%(target)s' are in different vocabularies."
                 ),
-                params={"source": self.source.scheme.name, "target": self.target.scheme.name},
+                params={
+                    "source": self.source.scheme.name,
+                    "target": self.target.scheme.name,
+                },
             )
 
     def _reject_disjointness_violation(self) -> None:
@@ -1281,7 +1348,9 @@ class ConceptRelation(models.Model):
         """
         if self.source_id is None or self.target_id is None:
             return
-        other_kind = self.Kind.RELATED if self.kind == self.Kind.BROADER else self.Kind.BROADER
+        other_kind = (
+            self.Kind.RELATED if self.kind == self.Kind.BROADER else self.Kind.BROADER
+        )
         conflict = (
             ConceptRelation.objects.filter(kind=other_kind)
             .filter(
@@ -1367,12 +1436,16 @@ class Collection(StaticUriModel):
         on_delete=models.CASCADE,
         related_name="collections",
         verbose_name=_("vocabulary"),
-        help_text=_("The vocabulary this collection belongs to. Its members are concepts of this vocabulary."),
+        help_text=_(
+            "The vocabulary this collection belongs to. Its members are concepts of this vocabulary."
+        ),
     )
     name = models.CharField(
         max_length=255,
         verbose_name=_("name"),
-        help_text=_("The human-readable name of the collection. Its slug is derived automatically from this."),
+        help_text=_(
+            "The human-readable name of the collection. Its slug is derived automatically from this."
+        ),
     )
     slug = models.SlugField(
         max_length=255,
@@ -1413,7 +1486,9 @@ class Collection(StaticUriModel):
         verbose_name = _("collection")
         verbose_name_plural = _("collections")
         constraints = [
-            models.UniqueConstraint(fields=["scheme", "slug"], name="unique_collection_slug_per_scheme"),
+            models.UniqueConstraint(
+                fields=["scheme", "slug"], name="unique_collection_slug_per_scheme"
+            ),
             models.UniqueConstraint(
                 fields=["static_uri"],
                 condition=Q(static_uri__isnull=False),
@@ -1454,17 +1529,25 @@ class Collection(StaticUriModel):
             # (FR-017, decisions.md D35).
             self.slug = slugify(self.name, allow_unicode=True)
             if not self.slug:
-                raise ValidationError({"name": _("Name must produce a non-empty slug.")})
+                raise ValidationError(
+                    {"name": _("Name must produce a non-empty slug.")}
+                )
         else:
             # ARCH-302, fix cycle 4, decisions.md D54: the empty/malformed-manual-slug guard
             # was byte-identical across all three concrete models — extracted to the shared
             # base (Article XV).
             self._validate_manual_slug()
-        if Collection.objects.filter(scheme=self.scheme, slug=self.slug).exclude(pk=self.pk).exists():
+        if (
+            Collection.objects.filter(scheme=self.scheme, slug=self.slug)
+            .exclude(pk=self.pk)
+            .exists()
+        ):
             raise ValidationError(
                 {
                     "slug": ValidationError(
-                        _("A collection with the slug '%(slug)s' already exists in this vocabulary."),
+                        _(
+                            "A collection with the slug '%(slug)s' already exists in this vocabulary."
+                        ),
                         params={"slug": self.slug},
                     )
                 }
@@ -1507,7 +1590,11 @@ class Collection(StaticUriModel):
         returned as a set (no promised sequence).
         """
         memberships = self.memberships.select_related("concept")
-        memberships = memberships.order_by("position", "id") if self.ordered else memberships.order_by("id")
+        memberships = (
+            memberships.order_by("position", "id")
+            if self.ordered
+            else memberships.order_by("id")
+        )
         return [membership.concept for membership in memberships]
 
     def set_member_order(self, concepts: "list[Concept]") -> None:
@@ -1520,13 +1607,19 @@ class Collection(StaticUriModel):
         """
         if not self.ordered:
             raise ValidationError(
-                _("Only an ordered collection can have its members ordered; '%(name)s' is not ordered."),
+                _(
+                    "Only an ordered collection can have its members ordered; '%(name)s' is not ordered."
+                ),
                 params={"name": self.name},
             )
         current = {membership.concept_id for membership in self.memberships.all()}
         given = [concept.pk for concept in concepts]
         if len(given) != len(current) or set(given) != current:
-            raise ValidationError(_("The given concepts must be exactly this collection's current members."))
+            raise ValidationError(
+                _(
+                    "The given concepts must be exactly this collection's current members."
+                )
+            )
         position_of = {concept_id: index for index, concept_id in enumerate(given)}
         for membership in self.memberships.all():
             new_position = position_of[membership.concept_id]
@@ -1560,7 +1653,9 @@ class CollectionMember(models.Model):
         on_delete=models.CASCADE,
         related_name="collection_memberships",
         verbose_name=_("concept"),
-        help_text=_("The member concept. It must belong to the collection's own vocabulary."),
+        help_text=_(
+            "The member concept. It must belong to the collection's own vocabulary."
+        ),
     )
     position = models.PositiveIntegerField(
         default=0,
@@ -1578,12 +1673,16 @@ class CollectionMember(models.Model):
         constraints = [
             # A concept is held once per collection (FR-004). This also provides the
             # collection-leading membership index.
-            models.UniqueConstraint(fields=["collection", "concept"], name="unique_collection_member"),
+            models.UniqueConstraint(
+                fields=["collection", "concept"], name="unique_collection_member"
+            ),
         ]
         indexes = [
             # Backs the ordered members() read (Article XIII, deliberate). The reverse
             # read (a concept's collections) is covered by the auto-indexed concept FK.
-            models.Index(fields=["collection", "position"], name="cv_collection_member_order_idx"),
+            models.Index(
+                fields=["collection", "position"], name="cv_collection_member_order_idx"
+            ),
         ]
 
     def __str__(self) -> str:

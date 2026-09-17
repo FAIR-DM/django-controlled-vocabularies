@@ -64,15 +64,25 @@ def check_concept_field_vocabularies(app_configs, **kwargs):
         return []
 
     try:
-        existing = set(ConceptScheme.objects.filter(slug__in=slugs).values_list("slug", flat=True))
+        existing = set(
+            ConceptScheme.objects.filter(slug__in=slugs).values_list("slug", flat=True)
+        )
     except DatabaseError:
         return []
 
     return [
         checks.Warning(
-            _("%(model)s.%(field)s names vocabulary '%(vocabulary)s', which has no matching ConceptScheme yet.")
-            % {"model": field.model._meta.label, "field": field.name, "vocabulary": slug},
-            hint=_("Import this vocabulary, or silence this check with SILENCED_SYSTEM_CHECKS."),
+            _(
+                "%(model)s.%(field)s names vocabulary '%(vocabulary)s', which has no matching ConceptScheme yet."
+            )
+            % {
+                "model": field.model._meta.label,
+                "field": field.name,
+                "vocabulary": slug,
+            },
+            hint=_(
+                "Import this vocabulary, or silence this check with SILENCED_SYSTEM_CHECKS."
+            ),
             obj=field,
             id=CHECK_ID,
         )
@@ -131,7 +141,9 @@ def check_concept_field_restriction_targets(app_configs, **kwargs):
             collection_targets.append((field, vocabulary, field.collection))
         if field.concepts is not None:
             (vocabulary,) = field.vocabulary
-            concepts_targets.extend((field, vocabulary, slug) for slug in field.concepts)
+            concepts_targets.extend(
+                (field, vocabulary, slug) for slug in field.concepts
+            )
         if field.branch is not None:
             (vocabulary,) = field.vocabulary
             branch_targets.append((field, vocabulary, field.branch))
@@ -220,7 +232,9 @@ def check_concept_autocomplete_route_included(app_configs, **kwargs):
     except NoReverseMatch:
         return [
             checks.Warning(
-                _("controlled_vocabularies's URL configuration is not included in the project's URLconf."),
+                _(
+                    "controlled_vocabularies's URL configuration is not included in the project's URLconf."
+                ),
                 hint=_(
                     'Add path("<prefix>/", include("controlled_vocabularies.urls")) to the project\'s root URLconf.'
                 ),
@@ -272,7 +286,9 @@ def check_tomselect_middleware_installed(app_configs, **kwargs):
         return []
     return [
         checks.Warning(
-            _("django_tomselect's TomSelectMiddleware is not in the project's MIDDLEWARE."),
+            _(
+                "django_tomselect's TomSelectMiddleware is not in the project's MIDDLEWARE."
+            ),
             hint=_(
                 'Add "django_tomselect.middleware.TomSelectMiddleware" to MIDDLEWARE. Without it '
                 "the concept field renders as an empty select carrying no search control."

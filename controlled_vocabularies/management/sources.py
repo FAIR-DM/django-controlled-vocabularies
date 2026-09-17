@@ -134,7 +134,11 @@ class SourceResolver:
         if len(scheme) <= 1:
             return "path"
         raise CommandError(
-            str(_("'%(source)s' names a source this command does not support ('%(scheme)s' is not http or https)."))
+            str(
+                _(
+                    "'%(source)s' names a source this command does not support ('%(scheme)s' is not http or https)."
+                )
+            )
             % {"source": self.source, "scheme": scheme}
         )
 
@@ -146,10 +150,16 @@ class SourceResolver:
         resolution").
         """
         if self.classify() == "path":
-            return ResolvedSource(path=self.source, base_uri=None, serialization=self.serialization)
+            return ResolvedSource(
+                path=self.source, base_uri=None, serialization=self.serialization
+            )
         fetched = self._fetch()
         serialization = self._resolve_serialization(fetched)
-        return ResolvedSource(path=str(fetched.path), base_uri=fetched.final_url, serialization=serialization)
+        return ResolvedSource(
+            path=str(fetched.path),
+            base_uri=fetched.final_url,
+            serialization=serialization,
+        )
 
     def _retrieval_error(self, exc: OSError) -> CommandError:
         """The one message for a retrieval that could not complete (T008, T010, FR-014).
@@ -159,7 +169,8 @@ class SourceResolver:
         through here rather than each building the message itself.
         """
         return CommandError(
-            str(_("'%(source)s' could not be retrieved: %(error)s")) % {"source": self.source, "error": exc}
+            str(_("'%(source)s' could not be retrieved: %(error)s"))
+            % {"source": self.source, "error": exc}
         )
 
     def _fetch(self) -> Fetched:
@@ -194,16 +205,26 @@ class SourceResolver:
                     written += len(chunk)
                     if written > _MAX_RESPONSE_BYTES:
                         raise CommandError(
-                            str(_("'%(source)s' exceeded the maximum response size and was abandoned."))
+                            str(
+                                _(
+                                    "'%(source)s' exceeded the maximum response size and was abandoned."
+                                )
+                            )
                             % {"source": self.source}
                         )
                     if time.monotonic() - started > _MAX_TOTAL_SECONDS:
                         raise CommandError(
-                            str(_("'%(source)s' took too long to transfer and was abandoned."))
+                            str(
+                                _(
+                                    "'%(source)s' took too long to transfer and was abandoned."
+                                )
+                            )
                             % {"source": self.source}
                         )
                     tmp.write(chunk)
-        return Fetched(path=self._temp_path, content_type=content_type, final_url=final_url)
+        return Fetched(
+            path=self._temp_path, content_type=content_type, final_url=final_url
+        )
 
     def _resolve_serialization(self, fetched: Fetched) -> str:
         """Resolve a fetched document's serialization (T009, research.md R4): explicit

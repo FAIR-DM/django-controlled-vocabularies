@@ -46,7 +46,10 @@ class LanguageResolution:
     @property
     def is_exact(self) -> bool:
         """Whether ``configured_language`` matches ``published_tag`` verbatim, case-insensitively."""
-        return self.configured_language is not None and self.configured_language.lower() == self.published_tag.lower()
+        return (
+            self.configured_language is not None
+            and self.configured_language.lower() == self.published_tag.lower()
+        )
 
 
 class LanguageMatcher:
@@ -63,7 +66,9 @@ class LanguageMatcher:
     over.
     """
 
-    def __init__(self, configured_languages: Sequence[str], tag_counts: Mapping[str, int]) -> None:
+    def __init__(
+        self, configured_languages: Sequence[str], tag_counts: Mapping[str, int]
+    ) -> None:
         self._configured_languages: tuple[str, ...] = tuple(configured_languages)
         self._tag_counts: dict[str, int] = dict(tag_counts)
 
@@ -124,10 +129,19 @@ class LanguageMatcher:
         def sort_key(pair: tuple[str, str]) -> tuple[bool, int, str, str]:
             tag, value = pair
             tag_lower = tag.lower()
-            return (tag_lower != config_lower, -self._tag_counts.get(tag_lower, 0), tag_lower, value)
+            return (
+                tag_lower != config_lower,
+                -self._tag_counts.get(tag_lower, 0),
+                tag_lower,
+                value,
+            )
 
-        ranked = sorted(range(len(candidates)), key=lambda index: sort_key(candidates[index]))
+        ranked = sorted(
+            range(len(candidates)), key=lambda index: sort_key(candidates[index])
+        )
         winner_index = ranked[0]
         winner = candidates[winner_index]
-        losers = [pair for index, pair in enumerate(candidates) if index != winner_index]
+        losers = [
+            pair for index, pair in enumerate(candidates) if index != winner_index
+        ]
         return winner, losers

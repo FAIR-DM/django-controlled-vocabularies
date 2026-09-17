@@ -60,11 +60,15 @@ class ConceptSchemeFactory(factory.django.DjangoModelFactory):
     # ``NoReverseMatch`` — which is a property of the fixture, not of the page under test.
     # ``save()`` recomputes the identical value for a created scheme (``slug_is_manual``
     # stays False), so nothing about a saved fixture changes.
-    slug = factory.LazyAttribute(lambda scheme: slugify(scheme.name, allow_unicode=True))
+    slug = factory.LazyAttribute(
+        lambda scheme: slugify(scheme.name, allow_unicode=True)
+    )
 
     class Params:
         external = factory.Trait(
-            static_uri=factory.Sequence(lambda n: f"http://publisher.example.org/vocab/{n}"),
+            static_uri=factory.Sequence(
+                lambda n: f"http://publisher.example.org/vocab/{n}"
+            ),
         )
 
 
@@ -89,7 +93,9 @@ class ConceptFactory(factory.django.DjangoModelFactory):
 
     class Params:
         external = factory.Trait(
-            static_uri=factory.Sequence(lambda n: f"http://publisher.example.org/concept/{n}"),
+            static_uri=factory.Sequence(
+                lambda n: f"http://publisher.example.org/concept/{n}"
+            ),
         )
         multilingual = factory.Trait(
             # en preferred label is the anchor ``label`` above; de is a real
@@ -163,7 +169,9 @@ class ConceptRelationFactory(factory.django.DjangoModelFactory):
         model = ConceptRelation
 
     source = factory.SubFactory(ConceptFactory)
-    target = factory.SubFactory(ConceptFactory, scheme=factory.SelfAttribute("..source.scheme"))
+    target = factory.SubFactory(
+        ConceptFactory, scheme=factory.SelfAttribute("..source.scheme")
+    )
     kind = ConceptRelation.Kind.BROADER
 
 
@@ -182,7 +190,13 @@ def relation_graph(scheme=None):
     right = ConceptFactory(scheme=scheme)
     child.add_broader(parent)
     left.add_related(right)
-    return {"scheme": scheme, "parent": parent, "child": child, "left": left, "right": right}
+    return {
+        "scheme": scheme,
+        "parent": parent,
+        "child": child,
+        "left": left,
+        "right": right,
+    }
 
 
 class CollectionFactory(factory.django.DjangoModelFactory):
@@ -202,7 +216,9 @@ class CollectionFactory(factory.django.DjangoModelFactory):
 
     class Params:
         external = factory.Trait(
-            static_uri=factory.Sequence(lambda n: f"http://publisher.example.org/collection/{n}"),
+            static_uri=factory.Sequence(
+                lambda n: f"http://publisher.example.org/collection/{n}"
+            ),
         )
 
 
@@ -218,10 +234,14 @@ class CollectionMemberFactory(factory.django.DjangoModelFactory):
         model = CollectionMember
 
     collection = factory.SubFactory(CollectionFactory)
-    concept = factory.SubFactory(ConceptFactory, scheme=factory.SelfAttribute("..collection.scheme"))
+    concept = factory.SubFactory(
+        ConceptFactory, scheme=factory.SelfAttribute("..collection.scheme")
+    )
 
 
-def collection_with_members(scheme=None, labels=("Granite", "Basalt", "Gabbro"), ordered=False, name=None):
+def collection_with_members(
+    scheme=None, labels=("Granite", "Basalt", "Gabbro"), ordered=False, name=None
+):
     """Build a collection populated with concepts and return ``(collection, members)``.
 
     The concepts are created in the collection's own scheme and added through
@@ -236,7 +256,9 @@ def collection_with_members(scheme=None, labels=("Granite", "Basalt", "Gabbro"),
     pointed at whatever slug a sequence happened to produce.
     """
     scheme = scheme or ConceptSchemeFactory()
-    collection = CollectionFactory(scheme=scheme, ordered=ordered, **({"name": name} if name is not None else {}))
+    collection = CollectionFactory(
+        scheme=scheme, ordered=ordered, **({"name": name} if name is not None else {})
+    )
     members = [ConceptFactory(scheme=scheme, label=label) for label in labels]
     for concept in members:
         collection.add(concept)
