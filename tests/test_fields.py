@@ -144,7 +144,12 @@ from django.utils.functional import Promise
 from django.utils.module_loading import import_string
 
 from controlled_vocabularies import checks as checks_module
-from controlled_vocabularies.fields import ConceptField, ConceptFieldMixin, ConceptsField, _branch_closure
+from controlled_vocabularies.fields import (
+    ConceptField,
+    ConceptFieldMixin,
+    ConceptsField,
+    _branch_closure,
+)
 from controlled_vocabularies.models import Concept, ConceptLabel, ConceptScheme
 from tests.factories import (
     ArtifactFactory,
@@ -206,10 +211,14 @@ class TestSharedVocabularyContract:
         assert field.vocabulary == ("rock-type",)
         assert field.get_limit_choices_to() == Q(scheme__slug__in=("rock-type",))
 
-    def test_several_slugs_normalise_to_their_union_with_duplicates_collapsed(self, field_class):
+    def test_several_slugs_normalise_to_their_union_with_duplicates_collapsed(
+        self, field_class
+    ):
         field = field_class(vocabulary=["rock-type", "mineral", "rock-type"])
         assert field.vocabulary == ("rock-type", "mineral")
-        assert field.get_limit_choices_to() == Q(scheme__slug__in=("rock-type", "mineral"))
+        assert field.get_limit_choices_to() == Q(
+            scheme__slug__in=("rock-type", "mineral")
+        )
 
     def test_an_omitted_vocabulary_sets_no_restriction_at_all(self, field_class):
         field = field_class()
@@ -228,12 +237,21 @@ class TestSharedVocabularyContract:
         with pytest.raises(TypeError, match="limit_choices_to"):
             field_class(vocabulary="rock-type", limit_choices_to=Q(label="Granite"))
 
-    def test_help_text_defaults_to_a_translatable_string_and_stays_overridable(self, field_class):
+    def test_help_text_defaults_to_a_translatable_string_and_stays_overridable(
+        self, field_class
+    ):
         assert isinstance(field_class(vocabulary="rock-type").help_text, Promise)
-        assert field_class(vocabulary="rock-type", help_text="Pick one.").help_text == "Pick one."
+        assert (
+            field_class(vocabulary="rock-type", help_text="Pick one.").help_text
+            == "Pick one."
+        )
 
-    @pytest.mark.parametrize("vocabulary", [None, "rock-type", ["rock-type", "mineral"]])
-    def test_deconstruct_records_the_normalised_vocabulary_and_strips_the_fixed_kwargs(self, field_class, vocabulary):
+    @pytest.mark.parametrize(
+        "vocabulary", [None, "rock-type", ["rock-type", "mineral"]]
+    )
+    def test_deconstruct_records_the_normalised_vocabulary_and_strips_the_fixed_kwargs(
+        self, field_class, vocabulary
+    ):
         field = field_class(vocabulary=vocabulary)
         _name, path, args, kwargs = field.deconstruct()
 
@@ -292,7 +310,9 @@ class TestSharedRestrictionArguments:
         assert field.branch == "igneous"
 
     def test_concepts_normalises_and_collapses_duplicates(self, field_class):
-        field = field_class(vocabulary="rock-type", concepts=["granite", "basalt", "granite"])
+        field = field_class(
+            vocabulary="rock-type", concepts=["granite", "basalt", "granite"]
+        )
         assert field.concepts == ("granite", "basalt")
 
     def test_collection_rejects_a_non_string(self, field_class):
@@ -360,7 +380,9 @@ class TestSharedRestrictedHelpText:
         field = field_class(vocabulary="rock-type")
         assert field.help_text == field_class.default_help_text
 
-    def test_a_collection_restricted_field_gets_the_restricted_default(self, field_class):
+    def test_a_collection_restricted_field_gets_the_restricted_default(
+        self, field_class
+    ):
         field = field_class(vocabulary="rock-type", collection="core-samples")
         assert field.help_text == field_class.default_restricted_help_text
         assert field.help_text != field_class.default_help_text
@@ -388,8 +410,14 @@ class TestSharedRestrictedHelpText:
         second = field_class(vocabulary="rock-type", collection="all-samples")
         assert str(first.help_text) == str(second.help_text)
 
-    def test_a_consumers_own_help_text_wins_over_the_restricted_default(self, field_class):
-        field = field_class(vocabulary="rock-type", collection="core-samples", help_text="Pick a sample rock.")
+    def test_a_consumers_own_help_text_wins_over_the_restricted_default(
+        self, field_class
+    ):
+        field = field_class(
+            vocabulary="rock-type",
+            collection="core-samples",
+            help_text="Pick a sample rock.",
+        )
         assert field.help_text == "Pick a sample rock."
 
 
@@ -418,7 +446,9 @@ class TestSharedRestrictionRequiresOneVocabulary:
         field = field_class()
         assert field.vocabulary == ()
 
-    def test_no_restriction_naming_several_vocabularies_is_unaffected(self, field_class):
+    def test_no_restriction_naming_several_vocabularies_is_unaffected(
+        self, field_class
+    ):
         field = field_class(vocabulary=["rock-type", "mineral"])
         assert field.vocabulary == ("rock-type", "mineral")
 
@@ -431,11 +461,15 @@ class TestSharedRestrictionExclusivity:
 
     def test_collection_and_concepts_together_are_refused(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
-            field_class(vocabulary="rock-type", collection="core-samples", concepts=["granite"])
+            field_class(
+                vocabulary="rock-type", collection="core-samples", concepts=["granite"]
+            )
 
     def test_collection_and_branch_together_are_refused(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
-            field_class(vocabulary="rock-type", collection="core-samples", branch="igneous")
+            field_class(
+                vocabulary="rock-type", collection="core-samples", branch="igneous"
+            )
 
     def test_concepts_and_branch_together_are_refused(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
@@ -443,7 +477,12 @@ class TestSharedRestrictionExclusivity:
 
     def test_all_three_together_are_refused(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
-            field_class(vocabulary="rock-type", collection="core-samples", concepts=["granite"], branch="igneous")
+            field_class(
+                vocabulary="rock-type",
+                collection="core-samples",
+                concepts=["granite"],
+                branch="igneous",
+            )
 
 
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
@@ -495,7 +534,9 @@ class TestSharedRestrictionDeconstruct:
         assert "concepts" not in kwargs
         assert "branch" not in kwargs
 
-    def test_a_restricted_fields_deconstructed_kwargs_carry_no_limit_choices_to(self, field_class):
+    def test_a_restricted_fields_deconstructed_kwargs_carry_no_limit_choices_to(
+        self, field_class
+    ):
         """Guards the unconditional ``kwargs.pop("limit_choices_to", None)``
         that keeps T005's callable out of migration output — a later change
         to that pop should fail here, not in a generated migration."""
@@ -544,7 +585,9 @@ class TestSharedLimitChoicesToCallable:
         assert field.remote_field.limit_choices_to == {}
 
     @pytest.mark.django_db
-    def test_a_restriction_present_now_narrows_beyond_the_bare_vocabulary_q(self, field_class):
+    def test_a_restriction_present_now_narrows_beyond_the_bare_vocabulary_q(
+        self, field_class
+    ):
         """T006 (US-1) is the "later story" this method's own name once
         promised would teach the axis — it no longer resolves to only the
         vocabulary ``Q`` once ``collection`` is set. ``Q`` objects wrapping a
@@ -556,7 +599,9 @@ class TestSharedLimitChoicesToCallable:
         pre-existing test's assertion changed rather than being left to fail
         as the feature that already predicted it landed."""
         scheme = ConceptSchemeFactory(name="Rock Type")
-        collection, members = collection_with_members(scheme=scheme, labels=("Granite",))
+        collection, members = collection_with_members(
+            scheme=scheme, labels=("Granite",)
+        )
         outsider = ConceptFactory(scheme=scheme, label="Marble")
 
         field = field_class(vocabulary="rock-type", collection=collection.slug)
@@ -586,7 +631,9 @@ class TestCollectionRestrictionResolves:
 
     def test_resolves_to_exactly_the_collection_members(self, field_class):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        collection, members = collection_with_members(scheme=scheme, labels=("Granite", "Basalt"))
+        collection, members = collection_with_members(
+            scheme=scheme, labels=("Granite", "Basalt")
+        )
         outsider = ConceptFactory(scheme=scheme, label="Marble")
 
         field = field_class(vocabulary="rock-type", collection=collection.slug)
@@ -595,11 +642,17 @@ class TestCollectionRestrictionResolves:
         assert set(resolved) == set(members)
         assert outsider not in resolved
 
-    def test_a_same_named_collection_in_another_vocabulary_does_not_widen_the_field(self, field_class):
+    def test_a_same_named_collection_in_another_vocabulary_does_not_widen_the_field(
+        self, field_class
+    ):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
-        rock_collection, rock_members = collection_with_members(scheme=rock_scheme, labels=("Granite",))
+        rock_collection, rock_members = collection_with_members(
+            scheme=rock_scheme, labels=("Granite",)
+        )
         mineral_scheme = ConceptSchemeFactory(name="Mineral")
-        mineral_collection = CollectionFactory(scheme=mineral_scheme, name=rock_collection.name)
+        mineral_collection = CollectionFactory(
+            scheme=mineral_scheme, name=rock_collection.name
+        )
         assert mineral_collection.slug == rock_collection.slug
         mineral_concept = ConceptFactory(scheme=mineral_scheme, label="Quartz")
         mineral_collection.add(mineral_concept)
@@ -615,7 +668,9 @@ class TestCollectionRestrictionResolves:
         member of both the restricted collection and a second one must
         still resolve once."""
         scheme = ConceptSchemeFactory(name="Rock Type")
-        collection, members = collection_with_members(scheme=scheme, labels=("Granite",))
+        collection, members = collection_with_members(
+            scheme=scheme, labels=("Granite",)
+        )
         other_collection = CollectionFactory(scheme=scheme, name="Display Samples")
         other_collection.add(members[0])
 
@@ -634,11 +689,17 @@ class TestCollectionRestrictionResolvesLive:
     nothing to restart. This test is what stops a later "optimisation" that
     resolves the restriction once and holds onto it."""
 
-    def test_a_concept_added_to_the_collection_after_construction_appears_on_the_next_read(self, field_class):
+    def test_a_concept_added_to_the_collection_after_construction_appears_on_the_next_read(
+        self, field_class
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        collection, members = collection_with_members(scheme=scheme, labels=("Granite",))
+        collection, members = collection_with_members(
+            scheme=scheme, labels=("Granite",)
+        )
         field = field_class(vocabulary="rock-type", collection=collection.slug)
-        assert set(Concept.objects.complex_filter(field.get_limit_choices_to())) == set(members)
+        assert set(Concept.objects.complex_filter(field.get_limit_choices_to())) == set(
+            members
+        )
 
         newcomer = ConceptFactory(scheme=scheme, label="Basalt")
         collection.add(newcomer)
@@ -671,7 +732,9 @@ class TestConceptsRestrictionResolves:
         assert set(resolved) == {granite, basalt}
         assert outsider not in resolved
 
-    def test_a_same_slugged_concept_in_another_vocabulary_does_not_widen_the_field(self, field_class):
+    def test_a_same_slugged_concept_in_another_vocabulary_does_not_widen_the_field(
+        self, field_class
+    ):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
         granite = ConceptFactory(scheme=rock_scheme, label="Granite")
         ConceptFactory(scheme=rock_scheme, label="Marble")  # unlisted, same vocabulary
@@ -809,7 +872,9 @@ class TestBranchRestrictionResolves:
         assert set(resolved) == {root, child}
         assert outsider not in resolved
 
-    def test_a_same_slugged_root_in_another_vocabulary_does_not_widen_the_field(self, field_class):
+    def test_a_same_slugged_root_in_another_vocabulary_does_not_widen_the_field(
+        self, field_class
+    ):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
         rock_root = ConceptFactory(scheme=rock_scheme, label="Igneous")
         mineral_scheme = ConceptSchemeFactory(name="Mineral")
@@ -830,11 +895,15 @@ class TestBranchRestrictionResolvesLive:
     ``TestCollectionRestrictionResolvesLive`` proves for the collection axis:
     a concept added below the root at any depth appears on the next read."""
 
-    def test_a_concept_added_below_the_root_after_construction_appears_on_the_next_read(self, field_class):
+    def test_a_concept_added_below_the_root_after_construction_appears_on_the_next_read(
+        self, field_class
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         root = ConceptFactory(scheme=scheme, label="Igneous")
         field = field_class(vocabulary="rock-type", branch=root.slug)
-        assert set(Concept.objects.complex_filter(field.get_limit_choices_to())) == {root}
+        assert set(Concept.objects.complex_filter(field.get_limit_choices_to())) == {
+            root
+        }
 
         newcomer = ConceptFactory(scheme=scheme, label="Granite")
         newcomer.add_broader(root)
@@ -862,7 +931,9 @@ class TestConceptFieldConstruction:
     def test_list_normalises_with_duplicates_collapsed_and_order_not_significant(self):
         field = ConceptField(vocabulary=["rock-type", "mineral", "rock-type"])
         assert field.vocabulary == ("rock-type", "mineral")
-        assert field.get_limit_choices_to() == Q(scheme__slug__in=("rock-type", "mineral"))
+        assert field.get_limit_choices_to() == Q(
+            scheme__slug__in=("rock-type", "mineral")
+        )
 
     def test_omitted_vocabulary_normalises_to_empty_and_sets_no_restriction(self):
         """The shape #111 aligns with ``ConceptsField``: naming no vocabulary is
@@ -944,7 +1015,9 @@ class TestConceptFieldDeconstruct:
         _name, _path, _args, kwargs = field.deconstruct()
         assert kwargs["vocabulary"] == ("rock-type",)
 
-    @pytest.mark.parametrize("vocabulary", [None, "rock-type", ["rock-type", "mineral"]])
+    @pytest.mark.parametrize(
+        "vocabulary", [None, "rock-type", ["rock-type", "mineral"]]
+    )
     def test_round_trip_rebuilds_an_equivalent_field(self, vocabulary):
         """Deconstruct, rebuild from the emitted path and kwargs — exactly what
         ``Field.clone()`` and a replayed migration file both do — and the
@@ -1012,7 +1085,9 @@ class TestConceptsFieldConstruction:
         # A consumer-supplied through model would silently drop T003's delete
         # guarantee, the same reasoning that refuses on_delete on ConceptField.
         with pytest.raises(TypeError, match="through"):
-            ConceptsField(vocabulary="rock-type", through="controlled_vocabularies.Concept")
+            ConceptsField(
+                vocabulary="rock-type", through="controlled_vocabularies.Concept"
+            )
 
     def test_rejects_non_string_vocabulary_element(self):
         with pytest.raises(TypeError, match="ConceptsField"):
@@ -1108,7 +1183,10 @@ class TestConceptsFieldMembershipModel:
         primary = Survey._meta.get_field("primary_minerals")
         secondary = Survey._meta.get_field("secondary_minerals")
         assert primary.remote_field.through is not secondary.remote_field.through
-        assert primary.remote_field.through._meta.db_table != secondary.remote_field.through._meta.db_table
+        assert (
+            primary.remote_field.through._meta.db_table
+            != secondary.remote_field.through._meta.db_table
+        )
 
     def test_two_hidden_related_names_are_rewritten_distinctly(self):
         """Without the hidden ``related_name`` rewrite this task replicates
@@ -1143,7 +1221,9 @@ class TestConceptsFieldMembershipModel:
                 class Meta:
                     app_label = "testapp"
 
-        assert not any("was already registered" in str(warning.message) for warning in caught)
+        assert not any(
+            "was already registered" in str(warning.message) for warning in caught
+        )
 
 
 class TestConceptsFieldMigrations:
@@ -1221,7 +1301,9 @@ class TestConceptsFieldConsumingModels:
     def test_field_naming_two_vocabularies_restricts_to_their_union(self):
         field = FieldNote._meta.get_field("keywords")
         assert field.vocabulary == ("rock-type", "mineral")
-        assert field.get_limit_choices_to() == Q(scheme__slug__in=("rock-type", "mineral"))
+        assert field.get_limit_choices_to() == Q(
+            scheme__slug__in=("rock-type", "mineral")
+        )
 
     def test_field_naming_no_vocabulary_sets_no_restriction(self):
         field = Photograph._meta.get_field("keywords")
@@ -1250,7 +1332,9 @@ class TestConceptsFieldConsumingModels:
             (Photograph, "keywords"),
         ],
     )
-    def test_every_concepts_field_has_translatable_help_text_and_a_verbose_name(self, model, field_name):
+    def test_every_concepts_field_has_translatable_help_text_and_a_verbose_name(
+        self, model, field_name
+    ):
         """Article XII — ``help_text`` is mandatory and translatable; every
         declaration above also supplies an explicit ``verbose_name``."""
         field = model._meta.get_field(field_name)
@@ -1335,7 +1419,9 @@ class TestConceptsFieldWritePathVocabularyCheck:
     behaviour."""
 
     @pytest.mark.django_db
-    def test_add_of_a_concept_from_an_unnamed_vocabulary_is_refused_and_the_set_is_unchanged(self):
+    def test_add_of_a_concept_from_an_unnamed_vocabulary_is_refused_and_the_set_is_unchanged(
+        self,
+    ):
         other_scheme = ConceptSchemeFactory(name="Mineral")
         other_concept = ConceptFactory(scheme=other_scheme)
         deposit = DepositFactory()
@@ -1362,7 +1448,9 @@ class TestConceptsFieldWritePathVocabularyCheck:
         assert any("rock-type" in message for message in excinfo.value.messages)
 
     @pytest.mark.django_db
-    def test_set_carrying_a_mix_is_refused_whole_and_the_set_is_unchanged_afterwards(self):
+    def test_set_carrying_a_mix_is_refused_whole_and_the_set_is_unchanged_afterwards(
+        self,
+    ):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
         kept = ConceptFactory(scheme=rock_scheme)
         other_scheme = ConceptSchemeFactory(name="Mineral")
@@ -1388,7 +1476,9 @@ class TestConceptsFieldWritePathVocabularyCheck:
         assert set(deposit.rock_types.all()) == {first, second}
 
     @pytest.mark.django_db
-    def test_the_default_reverse_accessor_refuses_a_concept_from_an_unnamed_vocabulary(self):
+    def test_the_default_reverse_accessor_refuses_a_concept_from_an_unnamed_vocabulary(
+        self,
+    ):
         # Django gives every relation a live reverse accessor unless the
         # declaration hides it, so this path reaches the same through model
         # as deposit.rock_types.add() and has to be refused on the same
@@ -1404,7 +1494,9 @@ class TestConceptsFieldWritePathVocabularyCheck:
         assert list(deposit.rock_types.all()) == []
 
     @pytest.mark.django_db
-    def test_a_named_reverse_accessor_refuses_a_concept_from_an_unnamed_vocabulary(self):
+    def test_a_named_reverse_accessor_refuses_a_concept_from_an_unnamed_vocabulary(
+        self,
+    ):
         outcrop = OutcropFactory()
         other_concept = ConceptFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
 
@@ -1423,7 +1515,9 @@ class TestConceptsFieldWritePathVocabularyCheck:
 
         assert list(deposit.rock_types.all()) == [concept]
 
-    def test_a_field_naming_no_vocabulary_connects_no_receiver_for_its_through_model(self):
+    def test_a_field_naming_no_vocabulary_connects_no_receiver_for_its_through_model(
+        self,
+    ):
         through = Photograph._meta.get_field("keywords").remote_field.through
         assert not m2m_changed.has_listeners(sender=through)
 
@@ -1442,7 +1536,9 @@ class TestConceptsFieldCollectionRestrictionWritePath:
     @pytest.mark.django_db
     def test_forward_add_of_a_non_member_is_refused_and_the_set_is_unchanged(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite",))
+        _collection, members = collection_with_members(
+            scheme=scheme, name="Core Samples", labels=("Granite",)
+        )
         outsider = ConceptFactory(scheme=scheme, label="Marble")
         drill_core = DrillCoreFactory()
         drill_core.rock_types.add(members[0])
@@ -1479,7 +1575,9 @@ class TestConceptsFieldCollectionRestrictionWritePath:
     @pytest.mark.django_db
     def test_the_reverse_accessor_attaches_a_member(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite",))
+        _collection, members = collection_with_members(
+            scheme=scheme, name="Core Samples", labels=("Granite",)
+        )
         drill_core = DrillCoreFactory()
 
         members[0].drill_cores.add(drill_core)
@@ -1487,9 +1585,13 @@ class TestConceptsFieldCollectionRestrictionWritePath:
         assert list(drill_core.rock_types.all()) == [members[0]]
 
     @pytest.mark.django_db
-    def test_a_set_carrying_a_mix_is_refused_whole_and_the_set_is_unchanged_afterwards(self):
+    def test_a_set_carrying_a_mix_is_refused_whole_and_the_set_is_unchanged_afterwards(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite", "Basalt"))
+        _collection, members = collection_with_members(
+            scheme=scheme, name="Core Samples", labels=("Granite", "Basalt")
+        )
         outsider = ConceptFactory(scheme=scheme, label="Marble")
         drill_core = DrillCoreFactory()
         drill_core.rock_types.add(members[0])
@@ -1503,7 +1605,9 @@ class TestConceptsFieldCollectionRestrictionWritePath:
     @pytest.mark.django_db
     def test_several_members_all_attach(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite", "Basalt"))
+        _collection, members = collection_with_members(
+            scheme=scheme, name="Core Samples", labels=("Granite", "Basalt")
+        )
         drill_core = DrillCoreFactory()
 
         drill_core.rock_types.add(*members)
@@ -1521,7 +1625,9 @@ class TestConceptsFieldConceptsRestrictionWritePath:
     concepts-axis counterpart of ``TestConceptsFieldCollectionRestrictionWritePath``."""
 
     @pytest.mark.django_db
-    def test_forward_add_of_an_unlisted_concept_is_refused_and_the_set_is_unchanged(self):
+    def test_forward_add_of_an_unlisted_concept_is_refused_and_the_set_is_unchanged(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         granite = ConceptFactory(scheme=scheme, label="Granite")
         outsider = ConceptFactory(scheme=scheme, label="Marble")
@@ -1571,7 +1677,9 @@ class TestConceptsFieldConceptsRestrictionWritePath:
         assert list(chip_tray.rock_types.all()) == [granite]
 
     @pytest.mark.django_db
-    def test_a_set_carrying_a_mix_is_refused_whole_and_the_set_is_unchanged_afterwards(self):
+    def test_a_set_carrying_a_mix_is_refused_whole_and_the_set_is_unchanged_afterwards(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         granite = ConceptFactory(scheme=scheme, label="Granite")
         basalt = ConceptFactory(scheme=scheme, label="Basalt")
@@ -1607,7 +1715,9 @@ class TestConceptsFieldBranchRestrictionWritePath:
     branch-axis counterpart of ``TestConceptsFieldConceptsRestrictionWritePath``."""
 
     @pytest.mark.django_db
-    def test_forward_add_of_a_sibling_branch_concept_is_refused_and_the_set_is_unchanged(self):
+    def test_forward_add_of_a_sibling_branch_concept_is_refused_and_the_set_is_unchanged(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         root = ConceptFactory(scheme=scheme, label="Igneous")
         child = ConceptFactory(scheme=scheme, label="Granite")
@@ -1660,7 +1770,9 @@ class TestConceptsFieldBranchRestrictionWritePath:
         assert list(branch_tray.rock_types.all()) == [child]
 
     @pytest.mark.django_db
-    def test_a_set_carrying_a_mix_is_refused_whole_and_the_set_is_unchanged_afterwards(self):
+    def test_a_set_carrying_a_mix_is_refused_whole_and_the_set_is_unchanged_afterwards(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         root = ConceptFactory(scheme=scheme, label="Igneous")
         child = ConceptFactory(scheme=scheme, label="Granite")
@@ -1714,7 +1826,9 @@ class TestConceptsFieldSeveralVocabulariesWritePath:
         assert set(field_note.keywords.all()) == {rock_concept, mineral_concept}
 
     @pytest.mark.django_db
-    def test_a_concept_from_an_unnamed_third_vocabulary_is_refused_naming_both_expected_vocabularies(self):
+    def test_a_concept_from_an_unnamed_third_vocabulary_is_refused_naming_both_expected_vocabularies(
+        self,
+    ):
         other_scheme = ConceptSchemeFactory(name="Fossil")
         other_concept = ConceptFactory(scheme=other_scheme)
         field_note = FieldNoteFactory()
@@ -1743,7 +1857,9 @@ class TestConceptsFieldNoVocabularyWritePath:
     and is not repeated here."""
 
     @pytest.mark.django_db
-    def test_concepts_from_several_distinct_vocabularies_all_attach_and_none_is_refused(self):
+    def test_concepts_from_several_distinct_vocabularies_all_attach_and_none_is_refused(
+        self,
+    ):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
         mineral_scheme = ConceptSchemeFactory(name="Mineral")
         fossil_scheme = ConceptSchemeFactory(name="Fossil")
@@ -1754,7 +1870,11 @@ class TestConceptsFieldNoVocabularyWritePath:
 
         photograph.keywords.add(rock_concept, mineral_concept, fossil_concept)
 
-        assert set(photograph.keywords.all()) == {rock_concept, mineral_concept, fossil_concept}
+        assert set(photograph.keywords.all()) == {
+            rock_concept,
+            mineral_concept,
+            fossil_concept,
+        }
 
 
 class DepositForm(forms.ModelForm):
@@ -1793,7 +1913,9 @@ class TestConceptsFieldFormChoices:
         other_scheme = ConceptSchemeFactory(name="Mineral")
         other_concept = ConceptFactory(scheme=other_scheme)
 
-        form = DepositForm(data={"name": "Wrong vocabulary", "rock_types": [other_concept.pk]})
+        form = DepositForm(
+            data={"name": "Wrong vocabulary", "rock_types": [other_concept.pk]}
+        )
 
         assert not form.is_valid()
         assert "rock_types" in form.errors
@@ -1830,7 +1952,9 @@ class TestConceptsFieldSeveralVocabulariesFormChoices:
     others."""
 
     @pytest.mark.django_db
-    def test_form_field_offers_the_concepts_of_both_named_vocabularies_and_no_others(self):
+    def test_form_field_offers_the_concepts_of_both_named_vocabularies_and_no_others(
+        self,
+    ):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
         mineral_scheme = ConceptSchemeFactory(name="Mineral")
         other_scheme = ConceptSchemeFactory(name="Fossil")
@@ -1940,7 +2064,9 @@ class TestConceptsFieldDeleteGuard:
         assert not Concept.objects.filter(pk=concept.pk).exists()
 
     @pytest.mark.django_db
-    def test_deleting_the_consuming_record_removes_only_its_memberships_and_every_concept_survives(self):
+    def test_deleting_the_consuming_record_removes_only_its_memberships_and_every_concept_survives(
+        self,
+    ):
         """D5 — deleting a consuming record keeps its concepts. The owning
         foreign key is ``CASCADE``, so only the membership rows go."""
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -1958,7 +2084,9 @@ class TestConceptsFieldDeleteGuard:
         assert Concept.objects.filter(pk=second.pk).exists()
 
     @pytest.mark.django_db
-    def test_a_concept_detached_from_every_record_that_held_it_then_deletes_cleanly(self):
+    def test_a_concept_detached_from_every_record_that_held_it_then_deletes_cleanly(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
         deposit = DepositFactory()
@@ -2011,19 +2139,28 @@ class TestConceptsFieldLabelAndUriAccessors:
     without tripping T005's write-path vocabulary check."""
 
     @pytest.mark.django_db
-    def test_labels_accessor_returns_the_active_languages_label_for_each_attached_concept(self, multilingual_scheme):
+    def test_labels_accessor_returns_the_active_languages_label_for_each_attached_concept(
+        self, multilingual_scheme
+    ):
         concepts = list(multilingual_scheme.concepts.all())
-        multilingual_concept = next(c for c in concepts if c.labels.filter(language="de").exists())
+        multilingual_concept = next(
+            c for c in concepts if c.labels.filter(language="de").exists()
+        )
         other_concept = next(c for c in concepts if c.pk != multilingual_concept.pk)
         photograph = PhotographFactory()
         photograph.keywords.add(multilingual_concept, other_concept)
 
         with translation.override("de"):
-            expected = {multilingual_concept.display_label(), other_concept.display_label()}
+            expected = {
+                multilingual_concept.display_label(),
+                other_concept.display_label(),
+            }
             assert set(photograph.get_keywords_labels()) == expected
 
     @pytest.mark.django_db
-    def test_labels_accessor_falls_back_to_the_vocabulary_default(self, single_language_scheme):
+    def test_labels_accessor_falls_back_to_the_vocabulary_default(
+        self, single_language_scheme
+    ):
         concept = single_language_scheme.concepts.first()
         photograph = PhotographFactory()
         photograph.keywords.add(concept)
@@ -2032,12 +2169,16 @@ class TestConceptsFieldLabelAndUriAccessors:
             assert photograph.get_keywords_labels() == [concept.display_label()]
 
     @pytest.mark.django_db
-    def test_uris_accessor_returns_each_attached_concepts_own_uri_unchanged(self, multilingual_scheme):
+    def test_uris_accessor_returns_each_attached_concepts_own_uri_unchanged(
+        self, multilingual_scheme
+    ):
         concepts = list(multilingual_scheme.concepts.all())
         photograph = PhotographFactory()
         photograph.keywords.add(*concepts)
 
-        assert set(photograph.get_keywords_uris()) == {concept.uri for concept in concepts}
+        assert set(photograph.get_keywords_uris()) == {
+            concept.uri for concept in concepts
+        }
 
     @pytest.mark.django_db
     def test_both_accessors_return_an_empty_list_when_nothing_is_attached(self):
@@ -2046,7 +2187,9 @@ class TestConceptsFieldLabelAndUriAccessors:
         assert photograph.get_keywords_labels() == []
         assert photograph.get_keywords_uris() == []
 
-    def test_both_accessors_return_an_empty_list_on_an_unsaved_record_rather_than_raising(self):
+    def test_both_accessors_return_an_empty_list_on_an_unsaved_record_rather_than_raising(
+        self,
+    ):
         # Touching a many-to-many manager before the instance has a primary
         # key raises ValueError; both accessors promise an empty result
         # instead (FR-008, FR-009), the ConceptsField counterpart of
@@ -2069,7 +2212,9 @@ class TestConceptsFieldLabelAndUriAccessors:
 
         instance = OwnLabelsConceptsFieldModel()
 
-        assert instance.get_keywords_labels() == ["this model's own labels, not the field's"]
+        assert instance.get_keywords_labels() == [
+            "this model's own labels, not the field's"
+        ]
 
 
 class OutcropForm(forms.ModelForm):
@@ -2115,7 +2260,10 @@ class TestConceptsFieldRequiredSet:
             deposit.full_clean()
 
         assert "rock_types" in excinfo.value.message_dict
-        assert any("rock types" in message for message in excinfo.value.message_dict["rock_types"])
+        assert any(
+            "rock types" in message
+            for message in excinfo.value.message_dict["rock_types"]
+        )
 
     @pytest.mark.django_db
     def test_two_required_fields_both_empty_report_both(self):
@@ -2124,10 +2272,15 @@ class TestConceptsFieldRequiredSet:
         with pytest.raises(ValidationError) as excinfo:
             survey.full_clean()
 
-        assert set(excinfo.value.message_dict) >= {"primary_minerals", "secondary_minerals"}
+        assert set(excinfo.value.message_dict) >= {
+            "primary_minerals",
+            "secondary_minerals",
+        }
 
     @pytest.mark.django_db
-    def test_two_required_fields_the_first_empty_the_second_populated_reports_only_the_first(self):
+    def test_two_required_fields_the_first_empty_the_second_populated_reports_only_the_first(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
         concept = ConceptFactory(scheme=scheme)
         survey = SurveyFactory()
@@ -2140,7 +2293,9 @@ class TestConceptsFieldRequiredSet:
         assert "secondary_minerals" not in excinfo.value.message_dict
 
     @pytest.mark.django_db
-    def test_two_required_fields_the_second_empty_the_first_populated_reports_only_the_second(self):
+    def test_two_required_fields_the_second_empty_the_first_populated_reports_only_the_second(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
         concept = ConceptFactory(scheme=scheme)
         survey = SurveyFactory()
@@ -2186,7 +2341,9 @@ class TestConceptsFieldRequiredSet:
         assert form.is_valid(), form.errors
 
     @pytest.mark.django_db
-    def test_a_saved_records_valid_submission_is_accepted_though_its_relation_is_still_empty(self):
+    def test_a_saved_records_valid_submission_is_accepted_though_its_relation_is_still_empty(
+        self,
+    ):
         # #124: ModelForm._post_clean() calls instance.full_clean() before
         # save_m2m() attaches anything, so a saved record's relation is still
         # empty in the database at the moment this package's installed check
@@ -2197,7 +2354,9 @@ class TestConceptsFieldRequiredSet:
         deposit = DepositFactory()
         assert not deposit.rock_types.exists()
 
-        form = DepositForm(data={"name": deposit.name, "rock_types": [concept.pk]}, instance=deposit)
+        form = DepositForm(
+            data={"name": deposit.name, "rock_types": [concept.pk]}, instance=deposit
+        )
 
         assert form.is_valid(), form.errors
 
@@ -2207,7 +2366,9 @@ class TestConceptsFieldRequiredSet:
         # model-level check defers to it during a ModelForm's own clean.
         deposit = DepositFactory()
 
-        form = DepositForm(data={"name": deposit.name, "rock_types": []}, instance=deposit)
+        form = DepositForm(
+            data={"name": deposit.name, "rock_types": []}, instance=deposit
+        )
 
         assert not form.is_valid()
         assert "rock_types" in form.errors
@@ -2218,13 +2379,19 @@ class TestConceptsFieldRequiredSet:
         # subclass is already covered by the one it inherits. Installing a
         # second around it would report every empty required field twice.
         class Parent(models.Model):
-            firsts = ConceptsField(vocabulary="rock-type", verbose_name="firsts", help_text="the first set")
+            firsts = ConceptsField(
+                vocabulary="rock-type", verbose_name="firsts", help_text="the first set"
+            )
 
             class Meta:
                 app_label = "testapp"
 
         class Child(Parent):
-            seconds = ConceptsField(vocabulary="rock-type", verbose_name="seconds", help_text="the second set")
+            seconds = ConceptsField(
+                vocabulary="rock-type",
+                verbose_name="seconds",
+                help_text="the second set",
+            )
 
             class Meta:
                 app_label = "testapp"
@@ -2232,7 +2399,11 @@ class TestConceptsFieldRequiredSet:
         assert Parent.__dict__["full_clean"]._concepts_field_required_set_check
         assert "full_clean" not in Child.__dict__
         # And the inherited wrapper does cover the subclass's own field.
-        assert {field.name for field in Child._meta.get_fields() if isinstance(field, ConceptsField)} == {
+        assert {
+            field.name
+            for field in Child._meta.get_fields()
+            if isinstance(field, ConceptsField)
+        } == {
             "firsts",
             "seconds",
         }
@@ -2318,14 +2489,18 @@ class TestConceptFieldFactories:
     def test_artifact_keeps_its_own_get_mineral_label(self):
         """The pre-existing definition T011's collision guard must leave alone."""
         artifact = ArtifactFactory()
-        assert artifact.get_mineral_label() == "this artifact's own label, not the field's"
+        assert (
+            artifact.get_mineral_label() == "this artifact's own label, not the field's"
+        )
 
 
 class TestConceptVocabularyFixtures:
     """The scheme/concept fixtures ``conftest.py`` now carries for #87, #88, #89."""
 
     @pytest.mark.django_db
-    def test_multilingual_scheme_has_one_concept_with_a_second_language_label(self, multilingual_scheme):
+    def test_multilingual_scheme_has_one_concept_with_a_second_language_label(
+        self, multilingual_scheme
+    ):
         assert multilingual_scheme.concepts.count() == 2
         labelled = [c for c in multilingual_scheme.concepts.all() if c.labels.exists()]
         assert len(labelled) == 1
@@ -2337,7 +2512,9 @@ class TestConceptVocabularyFixtures:
         assert not any(c.labels.exists() for c in single_language_scheme.concepts.all())
 
     @pytest.mark.django_db
-    def test_the_two_schemes_are_distinct(self, multilingual_scheme, single_language_scheme):
+    def test_the_two_schemes_are_distinct(
+        self, multilingual_scheme, single_language_scheme
+    ):
         assert multilingual_scheme.pk != single_language_scheme.pk
 
 
@@ -2447,7 +2624,9 @@ class TestConceptFieldValidation:
         # reading .messages raises KeyError at form-render time.
         field = Specimen._meta.get_field("rock_type")
         original = field.error_messages["invalid"]
-        field.error_messages["invalid"] = "%(model)s pk=%(pk)s field=%(field)s in %(vocabulary)s"
+        field.error_messages["invalid"] = (
+            "%(model)s pk=%(pk)s field=%(field)s in %(vocabulary)s"
+        )
         try:
             other_concept = ConceptFactory(scheme=ConceptSchemeFactory(name="Mineral"))
             specimen = Specimen(name="Wrong vocabulary", rock_type=other_concept)
@@ -2474,7 +2653,9 @@ class TestConceptFieldCollectionRestrictionValidation:
     @pytest.mark.django_db
     def test_a_collection_member_validates(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite",))
+        _collection, members = collection_with_members(
+            scheme=scheme, name="Core Samples", labels=("Granite",)
+        )
         core_sample = CoreSample(name="Sample A", rock_type=members[0])
 
         core_sample.full_clean()
@@ -2517,10 +2698,14 @@ class TestConceptFieldCollectionRestrictionRefusalMessage:
     def test_a_consumers_own_error_messages_override_still_works(self):
         field = CoreSample._meta.get_field("rock_type")
         original = field.error_messages["invalid_restricted"]
-        field.error_messages["invalid_restricted"] = "%(model)s pk=%(pk)s field=%(field)s in %(restriction)s"
+        field.error_messages["invalid_restricted"] = (
+            "%(model)s pk=%(pk)s field=%(field)s in %(restriction)s"
+        )
         try:
             scheme = ConceptSchemeFactory(name="Rock Type")
-            collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite",))
+            collection_with_members(
+                scheme=scheme, name="Core Samples", labels=("Granite",)
+            )
             outsider = ConceptFactory(scheme=scheme, label="Marble")
             core_sample = CoreSample(name="Sample C", rock_type=outsider)
 
@@ -2579,13 +2764,18 @@ class TestConceptFieldConceptsRestrictionRefusalMessage:
         with pytest.raises(ValidationError) as excinfo:
             chip_sample.full_clean()
 
-        assert any("granite" in message and "basalt" in message for message in excinfo.value.messages)
+        assert any(
+            "granite" in message and "basalt" in message
+            for message in excinfo.value.messages
+        )
 
     @pytest.mark.django_db
     def test_a_consumers_own_error_messages_override_still_works(self):
         field = ChipSample._meta.get_field("rock_type")
         original = field.error_messages["invalid_restricted_concepts"]
-        field.error_messages["invalid_restricted_concepts"] = "%(model)s pk=%(pk)s field=%(field)s in %(restriction)s"
+        field.error_messages["invalid_restricted_concepts"] = (
+            "%(model)s pk=%(pk)s field=%(field)s in %(restriction)s"
+        )
         try:
             scheme = ConceptSchemeFactory(name="Rock Type")
             outsider = ConceptFactory(scheme=scheme, label="Marble")
@@ -2681,7 +2871,9 @@ class TestConceptFieldBranchRestrictionRefusalMessage:
     def test_a_consumers_own_error_messages_override_still_works(self):
         field = BranchSample._meta.get_field("rock_type")
         original = field.error_messages["invalid_restricted_branch"]
-        field.error_messages["invalid_restricted_branch"] = "%(model)s pk=%(pk)s field=%(field)s in %(restriction)s"
+        field.error_messages["invalid_restricted_branch"] = (
+            "%(model)s pk=%(pk)s field=%(field)s in %(restriction)s"
+        )
         try:
             scheme = ConceptSchemeFactory(name="Rock Type")
             ConceptFactory(scheme=scheme, label="Igneous")
@@ -2729,7 +2921,9 @@ class TestConceptFieldFormChoices:
         other_scheme = ConceptSchemeFactory(name="Mineral")
         other_concept = ConceptFactory(scheme=other_scheme)
 
-        form = SpecimenForm(data={"name": "Wrong vocabulary", "rock_type": other_concept.pk})
+        form = SpecimenForm(
+            data={"name": "Wrong vocabulary", "rock_type": other_concept.pk}
+        )
 
         assert not form.is_valid()
         assert "rock_type" in form.errors
@@ -2816,7 +3010,9 @@ class TestConceptFieldLabelAndUriAccessors:
     def test_label_accessor_returns_the_active_languages_preferred_label(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme, label="Basalt")
-        concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Basalt (de)")
+        concept.add_label(
+            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Basalt (de)"
+        )
         specimen = SpecimenFactory(rock_type=concept)
 
         with translation.override("de"):
@@ -2859,7 +3055,9 @@ class TestConceptFieldLabelAndUriAccessors:
     def test_a_models_own_definition_survives_the_contribution_guard(self):
         artifact = ArtifactFactory()
 
-        assert artifact.get_mineral_label() == "this artifact's own label, not the field's"
+        assert (
+            artifact.get_mineral_label() == "this artifact's own label, not the field's"
+        )
 
 
 class BoreholeForm(forms.ModelForm):
@@ -2950,7 +3148,9 @@ class TestConceptFieldNoVocabulary:
         assert second in choices
 
     @pytest.mark.django_db
-    def test_a_missing_concept_is_still_refused_without_naming_an_empty_vocabulary(self):
+    def test_a_missing_concept_is_still_refused_without_naming_an_empty_vocabulary(
+        self,
+    ):
         """``ForeignKey.validate()`` still refuses a primary key no concept
         carries. Reading ``.messages`` is the assertion that matters: the
         vocabulary-naming message would raise ``KeyError`` here, and a message
@@ -3011,9 +3211,15 @@ class TestRestrictionErrorMessagesAreTranslatable:
 
     @pytest.mark.parametrize(
         "message_id",
-        ["invalid_restricted", "invalid_restricted_concepts", "invalid_restricted_branch"],
+        [
+            "invalid_restricted",
+            "invalid_restricted_concepts",
+            "invalid_restricted_branch",
+        ],
     )
-    def test_the_message_is_a_lazy_proxy_with_a_named_restriction_placeholder(self, message_id):
+    def test_the_message_is_a_lazy_proxy_with_a_named_restriction_placeholder(
+        self, message_id
+    ):
         field = ConceptField(vocabulary="rock-type")
         message = field.error_messages[message_id]
         assert isinstance(message, Promise)
@@ -3094,7 +3300,10 @@ def _translation_call_string_literals(func) -> list[str]:
 
     class _Visitor(ast.NodeVisitor):
         def visit_Call(self, node: ast.Call) -> None:
-            if isinstance(node.func, ast.Name) and node.func.id in {"_", "gettext_lazy"}:
+            if isinstance(node.func, ast.Name) and node.func.id in {
+                "_",
+                "gettext_lazy",
+            }:
                 for arg in node.args:
                     if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                         literals.append(arg.value)
@@ -3113,7 +3322,9 @@ class TestW005MessagesAreStaticWithNamedPlaceholders:
     """
 
     def test_every_message_and_hint_is_a_translation_call(self):
-        literals = _translation_call_string_literals(checks_module.check_concept_field_restriction_targets)
+        literals = _translation_call_string_literals(
+            checks_module.check_concept_field_restriction_targets
+        )
 
         expected_messages = {
             "%(model)s.%(field)s names collection '%(target)s', which does not exist in the "
@@ -3131,14 +3342,18 @@ class TestW005MessagesAreStaticWithNamedPlaceholders:
         assert expected_hints <= set(literals)
 
     def test_none_of_them_carries_a_positional_placeholder(self):
-        literals = _translation_call_string_literals(checks_module.check_concept_field_restriction_targets)
+        literals = _translation_call_string_literals(
+            checks_module.check_concept_field_restriction_targets
+        )
         assert literals, "expected the W005 messages dict to be found at all"
         for literal in literals:
             assert "%s" not in literal
             assert "%d" not in literal
 
     def test_each_message_carries_the_four_named_placeholders(self):
-        literals = _translation_call_string_literals(checks_module.check_concept_field_restriction_targets)
+        literals = _translation_call_string_literals(
+            checks_module.check_concept_field_restriction_targets
+        )
         messages = [literal for literal in literals if "%(target)s" in literal]
         assert len(messages) == 3
         for message in messages:
@@ -3164,7 +3379,9 @@ class TestDeclarationRuleTypeErrorsStayUntranslated:
     """
 
     @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
-    def test_a_restriction_naming_no_vocabulary_raises_a_plain_string(self, field_class):
+    def test_a_restriction_naming_no_vocabulary_raises_a_plain_string(
+        self, field_class
+    ):
         with pytest.raises(TypeError) as excinfo:
             field_class(branch="igneous")
         assert not isinstance(excinfo.value.args[0], Promise)
@@ -3173,7 +3390,9 @@ class TestDeclarationRuleTypeErrorsStayUntranslated:
     @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
     def test_two_restrictions_together_raises_a_plain_string(self, field_class):
         with pytest.raises(TypeError) as excinfo:
-            field_class(vocabulary="rock-type", collection="core-samples", branch="igneous")
+            field_class(
+                vocabulary="rock-type", collection="core-samples", branch="igneous"
+            )
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str
 

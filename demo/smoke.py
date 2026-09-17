@@ -88,7 +88,9 @@ GERMAN_SCOPE_NOTE = "Erhoben durch unmittelbare Beobachtung oder Messung am Stud
 #: AUTHORED_CONCEPT's English-only definition — carries no German value of its own, so
 #: reading the same page in German falls back to this rather than showing nothing
 #: (FR-005, the other half of the fallback GERMAN_SCOPE_NOTE's own presence proves).
-ENGLISH_FALLBACK_DEFINITION = "Data collected through direct observation or measurement at a study site."
+ENGLISH_FALLBACK_DEFINITION = (
+    "Data collected through direct observation or measurement at a study site."
+)
 
 
 class SmokeCheckFailed(Exception):
@@ -104,11 +106,24 @@ def check_list(list_url, status, body):
     (FR-016, User Story 3 scenario 2)."""
     if status != 200:
         fail(list_url, status, "the vocabulary list did not serve", body)
-    for name, count in ((IMPORTED_NAME, IMPORTED_CONCEPT_COUNT), (AUTHORED_NAME, AUTHORED_CONCEPT_COUNT)):
+    for name, count in (
+        (IMPORTED_NAME, IMPORTED_CONCEPT_COUNT),
+        (AUTHORED_NAME, AUTHORED_CONCEPT_COUNT),
+    ):
         if name not in body:
-            fail(list_url, status, f"the seeded vocabulary {name!r} is not on the list — the seed did not load", body)
+            fail(
+                list_url,
+                status,
+                f"the seeded vocabulary {name!r} is not on the list — the seed did not load",
+                body,
+            )
         if f"{count} concept" not in body:
-            fail(list_url, status, f"{name!r}'s concept count ({count}) is not on the page", body)
+            fail(
+                list_url,
+                status,
+                f"{name!r}'s concept count ({count}) is not on the page",
+                body,
+            )
 
 
 def check_search(search_url, status, body):
@@ -117,7 +132,12 @@ def check_search(search_url, status, body):
     if status != 200:
         fail(search_url, status, "a search did not serve", body)
     if IMPORTED_NAME not in body:
-        fail(search_url, status, f"a search for {SEARCH_TERM!r} does not narrow to {IMPORTED_NAME!r}", body)
+        fail(
+            search_url,
+            status,
+            f"a search for {SEARCH_TERM!r} does not narrow to {IMPORTED_NAME!r}",
+            body,
+        )
     if AUTHORED_NAME in body:
         fail(
             search_url,
@@ -167,7 +187,9 @@ def check_authored_vocabulary_page(vocabulary_url, status, body):
     """The authored vocabulary's own page lists the concept the walk follows next
     (015-read-single-record T024)."""
     if status != 200:
-        fail(vocabulary_url, status, "the authored vocabulary's page did not serve", body)
+        fail(
+            vocabulary_url, status, "the authored vocabulary's page did not serve", body
+        )
     if AUTHORED_CONCEPT not in body:
         fail(
             vocabulary_url,
@@ -206,7 +228,12 @@ def check_concept_page_in_a_second_language(concept_url, status, body):
     if status != 200:
         fail(concept_url, status, "the concept's page did not serve in German", body)
     if GERMAN_SCOPE_NOTE not in body:
-        fail(concept_url, status, "the German-only note is not shown when the page is read in German", body)
+        fail(
+            concept_url,
+            status,
+            "the German-only note is not shown when the page is read in German",
+            body,
+        )
     if ENGLISH_FALLBACK_DEFINITION not in body:
         fail(
             concept_url,
@@ -241,9 +268,16 @@ def extract_vocabulary_url(list_body, name):
     no test-only packages installed (module docstring), so it reads the same served markup a
     browser would rather than depending on one more thing that could itself be missing.
     """
-    match = re.search(rf'<a\s+href="([^"]+)"[^>]*>\s*{re.escape(name)}\s*</a>', list_body)
+    match = re.search(
+        rf'<a\s+href="([^"]+)"[^>]*>\s*{re.escape(name)}\s*</a>', list_body
+    )
     if match is None:
-        fail("(vocabulary list)", 200, f"no link naming {name!r} found on the rendered list", list_body)
+        fail(
+            "(vocabulary list)",
+            200,
+            f"no link naming {name!r} found on the rendered list",
+            list_body,
+        )
     return match.group(1)
 
 
@@ -300,7 +334,9 @@ def walk(base_url):
     status, concept_body_de = get(concept_url, headers={"Accept-Language": "de"})
     check_concept_page_in_a_second_language(concept_url, status, concept_body_de)
 
-    collection_url = base_url + extract_vocabulary_url(authored_body, AUTHORED_COLLECTION)
+    collection_url = base_url + extract_vocabulary_url(
+        authored_body, AUTHORED_COLLECTION
+    )
     status, collection_body = get(collection_url)
     check_collection_page(collection_url, status, collection_body)
 

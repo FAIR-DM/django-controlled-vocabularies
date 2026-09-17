@@ -27,7 +27,10 @@ from django.urls import NoReverseMatch
 from django.utils.html import escape
 from django.utils.translation import gettext_lazy as _
 from django_tomselect.app_settings import AllowedCSSFrameworks, TomSelectConfig
-from django_tomselect.forms import TomSelectModelChoiceField, TomSelectModelMultipleChoiceField
+from django_tomselect.forms import (
+    TomSelectModelChoiceField,
+    TomSelectModelMultipleChoiceField,
+)
 from django_tomselect.widgets import TomSelectModelMultipleWidget, TomSelectModelWidget
 
 from .admin import related_field_widget_wrapper_class
@@ -107,7 +110,9 @@ class ConceptWidgetReferenceMixin:
         if self.model_field is None:
             return ""
         meta = self.model_field.model._meta
-        return urlencode({"field": f"{meta.app_label}.{meta.model_name}.{self.model_field.name}"})
+        return urlencode(
+            {"field": f"{meta.app_label}.{meta.model_name}.{self.model_field.name}"}
+        )
 
 
 class ConceptWidgetRouteMixin:
@@ -287,7 +292,9 @@ class ConceptChoiceField(DeclinesAdminRelatedWrapperMixin, TomSelectModelChoiceF
         self.widget.model_field = model_field
 
 
-class ConceptsChoiceField(DeclinesAdminRelatedWrapperMixin, TomSelectModelMultipleChoiceField):  # type: ignore[misc]
+class ConceptsChoiceField(  # type: ignore[misc]
+    DeclinesAdminRelatedWrapperMixin, TomSelectModelMultipleChoiceField
+):
     """The form field :class:`~controlled_vocabularies.fields.ConceptsField`
     renders as, through ``ConceptFieldMixin.formfield()``. See
     :class:`ConceptChoiceField` for ``model_field``.

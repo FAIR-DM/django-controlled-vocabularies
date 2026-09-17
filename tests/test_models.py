@@ -45,7 +45,9 @@ class TestConceptScheme:
 
     @pytest.mark.django_db
     def test_create_accepts_optional_description(self):
-        scheme = ConceptScheme.objects.create(name="Geothermics", description="Study of Earth's heat.")
+        scheme = ConceptScheme.objects.create(
+            name="Geothermics", description="Study of Earth's heat."
+        )
         fetched = ConceptScheme.objects.get(pk=scheme.pk)
         assert fetched.description == "Study of Earth's heat."
 
@@ -186,7 +188,10 @@ class TestConcept:
         concept = Concept.objects.create(scheme=scheme, label="Heat Flow")
         concept.label = "Surface Heat Flow"
         concept.save()
-        assert concept.uri == "https://example.org/vocabularies/geothermics/surface-heat-flow"
+        assert (
+            concept.uri
+            == "https://example.org/vocabularies/geothermics/surface-heat-flow"
+        )
 
     @pytest.mark.django_db
     def test_str_is_the_label(self, scheme):
@@ -280,7 +285,10 @@ class TestConceptIdentity:
         scheme.name = "Geothermal Science"
         scheme.save()
         concept.refresh_from_db()
-        assert concept.uri == "https://example.org/vocabularies/geothermal-science/heat-flow"
+        assert (
+            concept.uri
+            == "https://example.org/vocabularies/geothermal-science/heat-flow"
+        )
         assert Concept.objects.get_by_uri(concept.uri) == concept
 
     @pytest.mark.django_db
@@ -289,14 +297,19 @@ class TestConceptIdentity:
         concept = Concept.objects.create(scheme=scheme, label="Heat Flow")
         concept.label = "Surface Heat Flow"
         concept.save()
-        assert concept.uri == "https://example.org/vocabularies/geothermics/surface-heat-flow"
+        assert (
+            concept.uri
+            == "https://example.org/vocabularies/geothermics/surface-heat-flow"
+        )
         assert Concept.objects.get_by_uri(concept.uri) == concept
 
     @pytest.mark.django_db
     def test_get_by_uri_unknown_uri_raises_does_not_exist(self, scheme):
         Concept.objects.create(scheme=scheme, label="Heat Flow")
         with pytest.raises(Concept.DoesNotExist):
-            Concept.objects.get_by_uri(f"{conf.get_base_uri()}/geothermics/no-such-concept")
+            Concept.objects.get_by_uri(
+                f"{conf.get_base_uri()}/geothermics/no-such-concept"
+            )
 
     @pytest.mark.django_db
     def test_get_by_uri_requires_the_configured_base(self, scheme):
@@ -317,7 +330,9 @@ class TestStaticUri:
     @pytest.mark.django_db
     def test_static_uri_reads_back_verbatim_from_uri(self, scheme):
         concept = Concept.objects.create(
-            scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/rock/granite"
+            scheme=scheme,
+            label="Granite",
+            static_uri="http://vocabs.example.org/rock/granite",
         )
         assert concept.uri == "http://vocabs.example.org/rock/granite"
         assert concept.has_static_uri is True
@@ -325,7 +340,9 @@ class TestStaticUri:
     @pytest.mark.django_db
     def test_static_uri_survives_a_rename(self, scheme):
         concept = Concept.objects.create(
-            scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/rock/granite"
+            scheme=scheme,
+            label="Granite",
+            static_uri="http://vocabs.example.org/rock/granite",
         )
         concept.label = "Granite (coarse-grained)"
         concept.save()
@@ -334,14 +351,20 @@ class TestStaticUri:
     @pytest.mark.django_db
     def test_static_uri_survives_a_base_address_change(self, scheme, settings):
         concept = Concept.objects.create(
-            scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/rock/granite"
+            scheme=scheme,
+            label="Granite",
+            static_uri="http://vocabs.example.org/rock/granite",
         )
-        settings.CONTROLLED_VOCABULARIES_BASE_URI = "https://elsewhere.example.org/vocab"
+        settings.CONTROLLED_VOCABULARIES_BASE_URI = (
+            "https://elsewhere.example.org/vocab"
+        )
         assert concept.uri == "http://vocabs.example.org/rock/granite"
 
     @pytest.mark.parametrize("model", [ConceptScheme, Concept, Collection])
     @pytest.mark.django_db
-    def test_static_uri_case_round_trips_byte_identical_through_save_and_reload(self, model, scheme):
+    def test_static_uri_case_round_trips_byte_identical_through_save_and_reload(
+        self, model, scheme
+    ):
         """T036. US-1 scenario 5 / FR-002: an arrived identifier is "not...
         re-cased". The code never touches case, so this was a coverage gap
         rather than a defect — locks in that a mixed-case identifier survives
@@ -355,9 +378,13 @@ class TestStaticUri:
 
     @pytest.mark.django_db
     def test_scheme_and_collection_keep_their_own_static_uri(self):
-        scheme = ConceptScheme.objects.create(name="Rocks", static_uri="http://vocabs.example.org/rocks")
+        scheme = ConceptScheme.objects.create(
+            name="Rocks", static_uri="http://vocabs.example.org/rocks"
+        )
         collection = Collection.objects.create(
-            scheme=scheme, name="Igneous", static_uri="http://vocabs.example.org/rocks/igneous"
+            scheme=scheme,
+            name="Igneous",
+            static_uri="http://vocabs.example.org/rocks/igneous",
         )
         assert scheme.uri == "http://vocabs.example.org/rocks"
         assert scheme.has_static_uri is True
@@ -366,9 +393,13 @@ class TestStaticUri:
 
     @pytest.mark.django_db
     def test_concepts_static_uri_is_not_derived_from_its_schemes(self):
-        scheme = ConceptScheme.objects.create(name="Rocks", static_uri="http://vocabs.example.org/rocks")
+        scheme = ConceptScheme.objects.create(
+            name="Rocks", static_uri="http://vocabs.example.org/rocks"
+        )
         concept = Concept.objects.create(
-            scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/rock/granite"
+            scheme=scheme,
+            label="Granite",
+            static_uri="http://vocabs.example.org/rock/granite",
         )
         assert concept.uri == "http://vocabs.example.org/rock/granite"
         assert concept.uri != scheme.uri
@@ -408,10 +439,14 @@ class TestStaticUri:
         with pytest.raises(ValidationError) as excinfo:
             validate_static_uri(hostile)
         message = excinfo.value.messages[0]
-        assert len(message) < 200, f"error message is {len(message)} chars — echoes the raw value untruncated"
+        assert len(message) < 200, (
+            f"error message is {len(message)} chars — echoes the raw value untruncated"
+        )
         assert str(len(hostile)) in message, "the true length must still be reported"
 
-    def test_length_is_checked_before_parsing_so_a_malformed_overlong_value_reports_length(self):
+    def test_length_is_checked_before_parsing_so_a_malformed_overlong_value_reports_length(
+        self,
+    ):
         """T032. The length check now runs first, so a value that is both
         malformed (no scheme) and overlong is refused for its length, not
         echoed untruncated in the not-absolute message."""
@@ -423,7 +458,9 @@ class TestStaticUri:
     def test_accepts_urn_identifier(self):
         validate_static_uri("urn:uuid:9f6c1e2a-1234-4a12-9abc-1234567890ab")
 
-    def test_a_value_urlsplit_cannot_parse_raises_validation_error_not_value_error(self):
+    def test_a_value_urlsplit_cannot_parse_raises_validation_error_not_value_error(
+        self,
+    ):
         """T031. ``urllib.parse.urlsplit`` raises a bare ``ValueError`` — not a
         ``ValidationError`` — for some malformed input, e.g. a netloc with
         characters invalid under NFKC normalization. Left uncaught, one crafted
@@ -438,28 +475,46 @@ class TestStaticUri:
             validate_static_uri("http://[fe80::1")
 
     @pytest.mark.django_db
-    def test_concept_save_with_an_unparseable_static_uri_raises_validation_error(self, scheme):
+    def test_concept_save_with_an_unparseable_static_uri_raises_validation_error(
+        self, scheme
+    ):
         with pytest.raises(ValidationError):
-            Concept(scheme=scheme, label="Red", static_uri="http://exa℀mple.com/x").save()
+            Concept(
+                scheme=scheme, label="Red", static_uri="http://exa℀mple.com/x"
+            ).save()
 
     @pytest.mark.django_db
-    def test_concept_full_clean_with_an_unparseable_static_uri_raises_validation_error(self, scheme):
+    def test_concept_full_clean_with_an_unparseable_static_uri_raises_validation_error(
+        self, scheme
+    ):
         with pytest.raises(ValidationError):
-            Concept(scheme=scheme, label="Red", static_uri="http://[fe80::1").full_clean()
+            Concept(
+                scheme=scheme, label="Red", static_uri="http://[fe80::1"
+            ).full_clean()
 
     @pytest.mark.django_db
     def test_bare_create_with_bad_static_uri_raises_and_does_not_store(self, scheme):
         with pytest.raises(ValidationError):
-            Concept.objects.create(scheme=scheme, label="Granite", static_uri="not-absolute")
+            Concept.objects.create(
+                scheme=scheme, label="Granite", static_uri="not-absolute"
+            )
         assert not Concept.objects.filter(label="Granite").exists()
 
     @pytest.mark.django_db
-    def test_case_folding_for_cross_model_uniqueness_does_not_fold_the_path(self, scheme):
+    def test_case_folding_for_cross_model_uniqueness_does_not_fold_the_path(
+        self, scheme
+    ):
         """The path is case-sensitive (RFC 3986 §3.3): a same-scheme,
         same-host pair whose paths differ only in case are different
         identifiers and may each be held by a different model."""
-        Concept.objects.create(scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/Shared")
-        Collection.objects.create(scheme=scheme, name="Igneous", static_uri="http://vocabs.example.org/shared")
+        Concept.objects.create(
+            scheme=scheme,
+            label="Granite",
+            static_uri="http://vocabs.example.org/Shared",
+        )
+        Collection.objects.create(
+            scheme=scheme, name="Igneous", static_uri="http://vocabs.example.org/shared"
+        )
 
 
 class TestStaticUriSchemeAllowlist:
@@ -478,7 +533,9 @@ class TestStaticUriSchemeAllowlist:
     explicit denylist stays as a second gate even inside an overridden
     allowlist."""
 
-    @pytest.mark.parametrize("scheme", ["http", "https", "urn", "doi", "info", "ark", "tag", "hdl", "oai"])
+    @pytest.mark.parametrize(
+        "scheme", ["http", "https", "urn", "doi", "info", "ark", "tag", "hdl", "oai"]
+    )
     def test_the_default_schemes_are_accepted(self, scheme):
         validate_static_uri(f"{scheme}:something-or-other/x")
 
@@ -496,13 +553,23 @@ class TestStaticUriSchemeAllowlist:
             validate_static_uri(value)
 
     def test_the_setting_override_is_honoured(self, settings):
-        settings.CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES = ["http", "https", "myscheme"]
+        settings.CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES = [
+            "http",
+            "https",
+            "myscheme",
+        ]
         validate_static_uri("myscheme:something")
         with pytest.raises(ValidationError):
             validate_static_uri("urn:uuid:9f6c1e2a-1234-4a12-9abc-1234567890ab")
 
-    def test_the_denylist_still_refuses_a_scheme_within_an_overridden_allowlist(self, settings):
-        settings.CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES = ["http", "https", "javascript"]
+    def test_the_denylist_still_refuses_a_scheme_within_an_overridden_allowlist(
+        self, settings
+    ):
+        settings.CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES = [
+            "http",
+            "https",
+            "javascript",
+        ]
         with pytest.raises(ValidationError):
             validate_static_uri("javascript:alert(1)")
 
@@ -510,10 +577,16 @@ class TestStaticUriSchemeAllowlist:
 def _create_with_static_uri(model: type[Model], scheme: ConceptScheme, uri: str):
     """Create a saved record of ``model`` carrying ``uri`` as its ``static_uri``."""
     if model is ConceptScheme:
-        return ConceptScheme.objects.create(name=f"External scheme {uri}", static_uri=uri)
+        return ConceptScheme.objects.create(
+            name=f"External scheme {uri}", static_uri=uri
+        )
     if model is Concept:
-        return Concept.objects.create(scheme=scheme, label=f"External concept {uri}", static_uri=uri)
-    return Collection.objects.create(scheme=scheme, name=f"External collection {uri}", static_uri=uri)
+        return Concept.objects.create(
+            scheme=scheme, label=f"External concept {uri}", static_uri=uri
+        )
+    return Collection.objects.create(
+        scheme=scheme, name=f"External collection {uri}", static_uri=uri
+    )
 
 
 def _create_without_static_uri(model: type[Model], scheme: ConceptScheme):
@@ -534,7 +607,9 @@ class TestStaticUriUpdateFieldsExclusion:
     incorrectly blocking an otherwise unrelated save."""
 
     @pytest.mark.django_db
-    def test_an_invalid_value_in_an_excluded_column_does_not_block_the_save(self, scheme):
+    def test_an_invalid_value_in_an_excluded_column_does_not_block_the_save(
+        self, scheme
+    ):
         concept = Concept.objects.create(scheme=scheme, label="Local")
         concept.static_uri = "not-absolute"
         concept.save(update_fields=["label"])
@@ -542,8 +617,12 @@ class TestStaticUriUpdateFieldsExclusion:
         assert concept.static_uri is None
 
     @pytest.mark.django_db
-    def test_a_would_be_rewrite_conflict_in_an_excluded_column_does_not_block_the_save(self, scheme):
-        concept = Concept.objects.create(scheme=scheme, label="Local", static_uri="http://ex.org/fixed")
+    def test_a_would_be_rewrite_conflict_in_an_excluded_column_does_not_block_the_save(
+        self, scheme
+    ):
+        concept = Concept.objects.create(
+            scheme=scheme, label="Local", static_uri="http://ex.org/fixed"
+        )
         reloaded = Concept.objects.get(pk=concept.pk)
         reloaded.static_uri = "http://ex.org/rewritten"
         reloaded.save(update_fields=["label"])
@@ -551,7 +630,9 @@ class TestStaticUriUpdateFieldsExclusion:
         assert reloaded.static_uri == "http://ex.org/fixed"
 
     @pytest.mark.django_db
-    def test_assigning_and_saving_excluding_the_column_leaves_the_record_provisional_and_still_storable(self, scheme):
+    def test_assigning_and_saving_excluding_the_column_leaves_the_record_provisional_and_still_storable(
+        self, scheme
+    ):
         concept = Concept.objects.create(scheme=scheme, label="Local")
         concept.static_uri = "http://ex.org/never-written"
         concept.save(update_fields=["label"])
@@ -575,9 +656,14 @@ class TestGetByUri:
     @pytest.mark.django_db
     def test_concept_resolves_by_external_static_uri(self, scheme):
         concept = Concept.objects.create(
-            scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/rock/granite"
+            scheme=scheme,
+            label="Granite",
+            static_uri="http://vocabs.example.org/rock/granite",
         )
-        assert Concept.objects.get_by_uri("http://vocabs.example.org/rock/granite") == concept
+        assert (
+            Concept.objects.get_by_uri("http://vocabs.example.org/rock/granite")
+            == concept
+        )
 
     @pytest.mark.django_db
     def test_concept_resolves_by_its_own_local_identifier(self, scheme):
@@ -592,12 +678,18 @@ class TestGetByUri:
         with pytest.raises(Concept.DoesNotExist):
             Concept.objects.get_by_uri("http://vocabs.example.org/nothing")
         with pytest.raises(Concept.DoesNotExist):
-            Concept.objects.get_by_uri(f"{conf.get_base_uri()}/{scheme.slug}/no-such-concept")
+            Concept.objects.get_by_uri(
+                f"{conf.get_base_uri()}/{scheme.slug}/no-such-concept"
+            )
 
     @pytest.mark.django_db
-    def test_imported_and_local_concept_do_not_answer_to_each_others_identifier(self, scheme):
+    def test_imported_and_local_concept_do_not_answer_to_each_others_identifier(
+        self, scheme
+    ):
         imported = Concept.objects.create(
-            scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/rock/granite"
+            scheme=scheme,
+            label="Granite",
+            static_uri="http://vocabs.example.org/rock/granite",
         )
         local = Concept.objects.create(scheme=scheme, label="Basalt")
         # Each is found by its own identifier — the imported concept's external
@@ -610,8 +702,13 @@ class TestGetByUri:
 
     @pytest.mark.django_db
     def test_scheme_resolves_by_external_static_uri(self):
-        scheme = ConceptScheme.objects.create(name="Rocks", static_uri="http://vocabs.example.org/rocks")
-        assert ConceptScheme.objects.get_by_uri("http://vocabs.example.org/rocks") == scheme
+        scheme = ConceptScheme.objects.create(
+            name="Rocks", static_uri="http://vocabs.example.org/rocks"
+        )
+        assert (
+            ConceptScheme.objects.get_by_uri("http://vocabs.example.org/rocks")
+            == scheme
+        )
 
     @pytest.mark.django_db
     def test_scheme_resolves_by_its_own_local_identifier(self):
@@ -642,9 +739,14 @@ class TestGetByUri:
     @pytest.mark.django_db
     def test_collection_resolves_by_external_static_uri(self, scheme):
         collection = Collection.objects.create(
-            scheme=scheme, name="Igneous", static_uri="http://vocabs.example.org/rocks/igneous"
+            scheme=scheme,
+            name="Igneous",
+            static_uri="http://vocabs.example.org/rocks/igneous",
         )
-        assert Collection.objects.get_by_uri("http://vocabs.example.org/rocks/igneous") == collection
+        assert (
+            Collection.objects.get_by_uri("http://vocabs.example.org/rocks/igneous")
+            == collection
+        )
 
     @pytest.mark.django_db
     def test_collection_resolves_by_its_own_local_identifier(self, scheme):
@@ -683,44 +785,58 @@ class TestGetByUriRejectsAbsentIdentifiers:
     raises the model's ``DoesNotExist`` up front, on all three managers."""
 
     @pytest.mark.django_db
-    def test_concept_get_by_uri_none_does_not_return_an_unrelated_provisional_record(self, scheme):
+    def test_concept_get_by_uri_none_does_not_return_an_unrelated_provisional_record(
+        self, scheme
+    ):
         Concept.objects.create(scheme=scheme, label="Heat Flow")
         with pytest.raises(Concept.DoesNotExist):
             Concept.objects.get_by_uri(None)
 
     @pytest.mark.django_db
-    def test_concept_get_by_uri_none_does_not_raise_multiple_objects_returned(self, scheme):
+    def test_concept_get_by_uri_none_does_not_raise_multiple_objects_returned(
+        self, scheme
+    ):
         Concept.objects.create(scheme=scheme, label="Heat Flow")
         Concept.objects.create(scheme=scheme, label="Basalt")
         with pytest.raises(Concept.DoesNotExist):
             Concept.objects.get_by_uri(None)
 
     @pytest.mark.django_db
-    def test_concept_get_by_uri_empty_string_does_not_return_an_unrelated_provisional_record(self, scheme):
+    def test_concept_get_by_uri_empty_string_does_not_return_an_unrelated_provisional_record(
+        self, scheme
+    ):
         Concept.objects.create(scheme=scheme, label="Heat Flow")
         with pytest.raises(Concept.DoesNotExist):
             Concept.objects.get_by_uri("")
 
     @pytest.mark.django_db
-    def test_scheme_get_by_uri_none_does_not_return_an_unrelated_provisional_record(self):
+    def test_scheme_get_by_uri_none_does_not_return_an_unrelated_provisional_record(
+        self,
+    ):
         ConceptScheme.objects.create(name="Geothermics")
         with pytest.raises(ConceptScheme.DoesNotExist):
             ConceptScheme.objects.get_by_uri(None)
 
     @pytest.mark.django_db
-    def test_scheme_get_by_uri_empty_string_does_not_return_an_unrelated_provisional_record(self):
+    def test_scheme_get_by_uri_empty_string_does_not_return_an_unrelated_provisional_record(
+        self,
+    ):
         ConceptScheme.objects.create(name="Geothermics")
         with pytest.raises(ConceptScheme.DoesNotExist):
             ConceptScheme.objects.get_by_uri("")
 
     @pytest.mark.django_db
-    def test_collection_get_by_uri_none_does_not_return_an_unrelated_provisional_record(self, scheme):
+    def test_collection_get_by_uri_none_does_not_return_an_unrelated_provisional_record(
+        self, scheme
+    ):
         Collection.objects.create(scheme=scheme, name="Igneous")
         with pytest.raises(Collection.DoesNotExist):
             Collection.objects.get_by_uri(None)
 
     @pytest.mark.django_db
-    def test_collection_get_by_uri_empty_string_does_not_return_an_unrelated_provisional_record(self, scheme):
+    def test_collection_get_by_uri_empty_string_does_not_return_an_unrelated_provisional_record(
+        self, scheme
+    ):
         Collection.objects.create(scheme=scheme, name="Igneous")
         with pytest.raises(Collection.DoesNotExist):
             Collection.objects.get_by_uri("")
@@ -750,7 +866,9 @@ class TestProvisionalUri:
     @pytest.mark.django_db
     def test_scheme_provisional_uri_follows_a_base_address_change(self, settings):
         scheme = ConceptScheme.objects.create(name="Geothermics")
-        settings.CONTROLLED_VOCABULARIES_BASE_URI = "https://elsewhere.example.org/vocab"
+        settings.CONTROLLED_VOCABULARIES_BASE_URI = (
+            "https://elsewhere.example.org/vocab"
+        )
         assert scheme.uri == "https://elsewhere.example.org/vocab/geothermics"
 
     @pytest.mark.django_db
@@ -768,30 +886,50 @@ class TestProvisionalUri:
         assert concept.uri == f"{conf.get_base_uri()}/{scheme.slug}/surface-heat-flow"
 
     @pytest.mark.django_db
-    def test_concept_provisional_uri_follows_a_base_address_change(self, scheme, settings):
+    def test_concept_provisional_uri_follows_a_base_address_change(
+        self, scheme, settings
+    ):
         concept = Concept.objects.create(scheme=scheme, label="Heat Flow")
-        settings.CONTROLLED_VOCABULARIES_BASE_URI = "https://elsewhere.example.org/vocab"
-        assert concept.uri == f"https://elsewhere.example.org/vocab/{scheme.slug}/{concept.slug}"
+        settings.CONTROLLED_VOCABULARIES_BASE_URI = (
+            "https://elsewhere.example.org/vocab"
+        )
+        assert (
+            concept.uri
+            == f"https://elsewhere.example.org/vocab/{scheme.slug}/{concept.slug}"
+        )
 
     @pytest.mark.django_db
     def test_collection_with_no_static_uri_reports_the_composed_value(self, scheme):
         collection = Collection.objects.create(scheme=scheme, name="Igneous")
         assert collection.static_uri is None
         assert collection.has_static_uri is False
-        assert collection.uri == f"{conf.get_base_uri()}/{scheme.slug}/collection/{collection.slug}"
+        assert (
+            collection.uri
+            == f"{conf.get_base_uri()}/{scheme.slug}/collection/{collection.slug}"
+        )
 
     @pytest.mark.django_db
     def test_collection_provisional_uri_follows_a_rename(self, scheme):
         collection = Collection.objects.create(scheme=scheme, name="Igneous")
         collection.name = "Igneous Rocks"
         collection.save()
-        assert collection.uri == f"{conf.get_base_uri()}/{scheme.slug}/collection/igneous-rocks"
+        assert (
+            collection.uri
+            == f"{conf.get_base_uri()}/{scheme.slug}/collection/igneous-rocks"
+        )
 
     @pytest.mark.django_db
-    def test_collection_provisional_uri_follows_a_base_address_change(self, scheme, settings):
+    def test_collection_provisional_uri_follows_a_base_address_change(
+        self, scheme, settings
+    ):
         collection = Collection.objects.create(scheme=scheme, name="Igneous")
-        settings.CONTROLLED_VOCABULARIES_BASE_URI = "https://elsewhere.example.org/vocab"
-        assert collection.uri == f"https://elsewhere.example.org/vocab/{scheme.slug}/collection/{collection.slug}"
+        settings.CONTROLLED_VOCABULARIES_BASE_URI = (
+            "https://elsewhere.example.org/vocab"
+        )
+        assert (
+            collection.uri
+            == f"https://elsewhere.example.org/vocab/{scheme.slug}/collection/{collection.slug}"
+        )
 
 
 class TestPreExistingRecordsUpgrade:
@@ -808,17 +946,26 @@ class TestPreExistingRecordsUpgrade:
         assert ConceptScheme.objects.get_by_uri(scheme.uri) == scheme
 
     @pytest.mark.django_db
-    def test_pre_existing_concept_reports_its_previous_identifier_and_resolves(self, scheme):
+    def test_pre_existing_concept_reports_its_previous_identifier_and_resolves(
+        self, scheme
+    ):
         concept = Concept.objects.create(scheme=scheme, label="Heat Flow")
         assert concept.static_uri is None
-        assert concept.uri == f"https://example.org/vocabularies/{scheme.slug}/heat-flow"
+        assert (
+            concept.uri == f"https://example.org/vocabularies/{scheme.slug}/heat-flow"
+        )
         assert Concept.objects.get_by_uri(concept.uri) == concept
 
     @pytest.mark.django_db
-    def test_pre_existing_collection_reports_its_previous_identifier_and_resolves(self, scheme):
+    def test_pre_existing_collection_reports_its_previous_identifier_and_resolves(
+        self, scheme
+    ):
         collection = Collection.objects.create(scheme=scheme, name="Igneous")
         assert collection.static_uri is None
-        assert collection.uri == f"https://example.org/vocabularies/{scheme.slug}/collection/igneous"
+        assert (
+            collection.uri
+            == f"https://example.org/vocabularies/{scheme.slug}/collection/igneous"
+        )
         assert Collection.objects.get_by_uri(collection.uri) == collection
 
 
@@ -831,23 +978,46 @@ class TestStaticUriDatabaseUniqueness:
 
     @pytest.mark.django_db
     def test_two_schemes_with_the_same_static_uri_hit_the_database_constraint(self):
-        ConceptScheme.objects.create(name="Rocks", static_uri="http://vocabs.example.org/dup")
+        ConceptScheme.objects.create(
+            name="Rocks", static_uri="http://vocabs.example.org/dup"
+        )
         with pytest.raises(IntegrityError), transaction.atomic():
             ConceptScheme.objects.bulk_create(
-                [ConceptScheme(name="Other rocks", slug="other-rocks", static_uri="http://vocabs.example.org/dup")]
+                [
+                    ConceptScheme(
+                        name="Other rocks",
+                        slug="other-rocks",
+                        static_uri="http://vocabs.example.org/dup",
+                    )
+                ]
             )
 
     @pytest.mark.django_db
-    def test_two_concepts_with_the_same_static_uri_hit_the_database_constraint(self, scheme):
-        Concept.objects.create(scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/dup")
+    def test_two_concepts_with_the_same_static_uri_hit_the_database_constraint(
+        self, scheme
+    ):
+        Concept.objects.create(
+            scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/dup"
+        )
         with pytest.raises(IntegrityError), transaction.atomic():
             Concept.objects.bulk_create(
-                [Concept(scheme=scheme, label="Basalt", slug="basalt", static_uri="http://vocabs.example.org/dup")]
+                [
+                    Concept(
+                        scheme=scheme,
+                        label="Basalt",
+                        slug="basalt",
+                        static_uri="http://vocabs.example.org/dup",
+                    )
+                ]
             )
 
     @pytest.mark.django_db
-    def test_two_collections_with_the_same_static_uri_hit_the_database_constraint(self, scheme):
-        Collection.objects.create(scheme=scheme, name="Igneous", static_uri="http://vocabs.example.org/dup")
+    def test_two_collections_with_the_same_static_uri_hit_the_database_constraint(
+        self, scheme
+    ):
+        Collection.objects.create(
+            scheme=scheme, name="Igneous", static_uri="http://vocabs.example.org/dup"
+        )
         with pytest.raises(IntegrityError), transaction.atomic():
             Collection.objects.bulk_create(
                 [
@@ -886,27 +1056,38 @@ class TestLocalUrl:
     def test_local_unpublished_concepts_local_url_equals_its_uri(self, scheme):
         concept = Concept.objects.create(scheme=scheme, label="Heat Flow")
         assert concept.local_url == concept.uri
-        assert concept.local_url == f"{conf.get_base_uri()}/{scheme.slug}/{concept.slug}"
+        assert (
+            concept.local_url == f"{conf.get_base_uri()}/{scheme.slug}/{concept.slug}"
+        )
 
     @pytest.mark.django_db
     def test_local_unpublished_collections_local_url_equals_its_uri(self, scheme):
         collection = Collection.objects.create(scheme=scheme, name="Igneous")
         assert collection.local_url == collection.uri
-        assert collection.local_url == f"{conf.get_base_uri()}/{scheme.slug}/collection/{collection.slug}"
+        assert (
+            collection.local_url
+            == f"{conf.get_base_uri()}/{scheme.slug}/collection/{collection.slug}"
+        )
 
     @pytest.mark.django_db
     def test_imported_concepts_local_url_differs_from_its_static_uri(self, scheme):
         concept = Concept.objects.create(
-            scheme=scheme, label="Granite", static_uri="http://vocabs.example.org/rock/granite"
+            scheme=scheme,
+            label="Granite",
+            static_uri="http://vocabs.example.org/rock/granite",
         )
         assert concept.uri == "http://vocabs.example.org/rock/granite"
-        assert concept.local_url == f"{conf.get_base_uri()}/{scheme.slug}/{concept.slug}"
+        assert (
+            concept.local_url == f"{conf.get_base_uri()}/{scheme.slug}/{concept.slug}"
+        )
         assert concept.local_url != concept.uri
         assert concept.local_url.startswith(conf.get_base_uri())
 
     @pytest.mark.django_db
     def test_imported_schemes_local_url_differs_from_its_static_uri(self):
-        scheme = ConceptScheme.objects.create(name="Rocks", static_uri="http://vocabs.example.org/rocks")
+        scheme = ConceptScheme.objects.create(
+            name="Rocks", static_uri="http://vocabs.example.org/rocks"
+        )
         assert scheme.uri == "http://vocabs.example.org/rocks"
         assert scheme.local_url == f"{conf.get_base_uri()}/{scheme.slug}"
         assert scheme.local_url != scheme.uri
@@ -915,10 +1096,15 @@ class TestLocalUrl:
     @pytest.mark.django_db
     def test_imported_collections_local_url_differs_from_its_static_uri(self, scheme):
         collection = Collection.objects.create(
-            scheme=scheme, name="Igneous", static_uri="http://vocabs.example.org/rocks/igneous"
+            scheme=scheme,
+            name="Igneous",
+            static_uri="http://vocabs.example.org/rocks/igneous",
         )
         assert collection.uri == "http://vocabs.example.org/rocks/igneous"
-        assert collection.local_url == f"{conf.get_base_uri()}/{scheme.slug}/collection/{collection.slug}"
+        assert (
+            collection.local_url
+            == f"{conf.get_base_uri()}/{scheme.slug}/collection/{collection.slug}"
+        )
         assert collection.local_url != collection.uri
         assert collection.local_url.startswith(conf.get_base_uri())
 
@@ -935,29 +1121,45 @@ class TestLocalUrl:
         concept = Concept.objects.create(scheme=scheme, label="Heat Flow")
         concept.label = "Surface Heat Flow"
         concept.save()
-        assert concept.local_url == f"{conf.get_base_uri()}/{scheme.slug}/surface-heat-flow"
+        assert (
+            concept.local_url
+            == f"{conf.get_base_uri()}/{scheme.slug}/surface-heat-flow"
+        )
 
     @pytest.mark.django_db
-    def test_local_concept_of_an_externally_fixed_scheme_composes_under_this_sites_address(self):
+    def test_local_concept_of_an_externally_fixed_scheme_composes_under_this_sites_address(
+        self,
+    ):
         """spec.md Edge Cases §4 (raised in the US-1 report). A concept authored
         locally inside a vocabulary whose own identifier is externally fixed
         must compose its provisional identifier under *this site's* address,
         not the publisher's — composing from ``self.scheme.uri`` instead of
         ``self.scheme.local_url`` would put it on the publisher's domain."""
-        scheme = ConceptScheme.objects.create(name="Rocks", static_uri="http://vocabs.example.org/rocks")
+        scheme = ConceptScheme.objects.create(
+            name="Rocks", static_uri="http://vocabs.example.org/rocks"
+        )
         concept = Concept.objects.create(scheme=scheme, label="Granite")
         assert concept.static_uri is None
-        assert concept.local_url == f"{conf.get_base_uri()}/{scheme.slug}/{concept.slug}"
+        assert (
+            concept.local_url == f"{conf.get_base_uri()}/{scheme.slug}/{concept.slug}"
+        )
         assert concept.uri == concept.local_url
         assert not concept.uri.startswith("http://vocabs.example.org")
 
     @pytest.mark.django_db
-    def test_local_collection_of_an_externally_fixed_scheme_composes_under_this_sites_address(self):
+    def test_local_collection_of_an_externally_fixed_scheme_composes_under_this_sites_address(
+        self,
+    ):
         """The same hole as above, for a collection (spec.md Edge Cases §4)."""
-        scheme = ConceptScheme.objects.create(name="Rocks", static_uri="http://vocabs.example.org/rocks")
+        scheme = ConceptScheme.objects.create(
+            name="Rocks", static_uri="http://vocabs.example.org/rocks"
+        )
         collection = Collection.objects.create(scheme=scheme, name="Igneous")
         assert collection.static_uri is None
-        assert collection.local_url == f"{conf.get_base_uri()}/{scheme.slug}/collection/{collection.slug}"
+        assert (
+            collection.local_url
+            == f"{conf.get_base_uri()}/{scheme.slug}/collection/{collection.slug}"
+        )
         assert collection.uri == collection.local_url
         assert not collection.uri.startswith("http://vocabs.example.org")
 
@@ -968,7 +1170,9 @@ def _editable_fields(model: type[Model]):
     return [
         field
         for field in model._meta.get_fields()
-        if getattr(field, "concrete", False) and getattr(field, "editable", False) and not field.auto_created
+        if getattr(field, "concrete", False)
+        and getattr(field, "editable", False)
+        and not field.auto_created
     ]
 
 
@@ -1019,14 +1223,18 @@ class TestValidationMessages:
         with pytest.raises(ValidationError) as excinfo:
             ConceptScheme.objects.create(name="   ")
         err = _inner_error(excinfo.value, "name")
-        assert isinstance(err.message, Promise), "empty-name message is not lazily translatable"
+        assert isinstance(err.message, Promise), (
+            "empty-name message is not lazily translatable"
+        )
 
     @pytest.mark.django_db
     def test_empty_label_message_is_translatable(self, scheme):
         with pytest.raises(ValidationError) as excinfo:
             Concept.objects.create(scheme=scheme, label="   ")
         err = _inner_error(excinfo.value, "label")
-        assert isinstance(err.message, Promise), "empty-label message is not lazily translatable"
+        assert isinstance(err.message, Promise), (
+            "empty-label message is not lazily translatable"
+        )
 
     @pytest.mark.django_db
     def test_scheme_slug_collision_message_uses_named_placeholder(self):
@@ -1036,8 +1244,12 @@ class TestValidationMessages:
         err = _inner_error(excinfo.value, "slug")
         # The translatable msgid is lazy and carries a *named* placeholder — the slug
         # value is supplied via params, never baked into the translatable string.
-        assert isinstance(err.message, Promise), "collision message is not lazily translatable"
-        assert "%(slug)s" in str(err.message), "collision msgid lacks a named %(slug)s placeholder"
+        assert isinstance(err.message, Promise), (
+            "collision message is not lazily translatable"
+        )
+        assert "%(slug)s" in str(err.message), (
+            "collision msgid lacks a named %(slug)s placeholder"
+        )
         assert err.params == {"slug": "geothermics"}
         # ...and it still renders with the real value substituted in.
         assert "geothermics" in excinfo.value.messages[0]
@@ -1048,8 +1260,12 @@ class TestValidationMessages:
         with pytest.raises(ValidationError) as excinfo:
             Concept.objects.create(scheme=scheme, label="HEAT FLOW")
         err = _inner_error(excinfo.value, "slug")
-        assert isinstance(err.message, Promise), "collision message is not lazily translatable"
-        assert "%(slug)s" in str(err.message), "collision msgid lacks a named %(slug)s placeholder"
+        assert isinstance(err.message, Promise), (
+            "collision message is not lazily translatable"
+        )
+        assert "%(slug)s" in str(err.message), (
+            "collision msgid lacks a named %(slug)s placeholder"
+        )
         assert err.params == {"slug": "heat-flow"}
         assert "heat-flow" in excinfo.value.messages[0]
 
@@ -1070,7 +1286,8 @@ class TestIndexing:
             (
                 c
                 for c in Concept._meta.constraints
-                if isinstance(c, UniqueConstraint) and c.name == "unique_concept_slug_per_scheme"
+                if isinstance(c, UniqueConstraint)
+                and c.name == "unique_concept_slug_per_scheme"
             ),
             None,
         )
@@ -1100,7 +1317,9 @@ class TestConceptPreferredLabels:
         # The default-language preferred label lives on Concept.label; other
         # languages are ConceptLabel PREFERRED rows. Both read back via preferred_label.
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-        concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss")
+        concept.add_label(
+            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss"
+        )
         assert concept.preferred_label("en") == "Heat flow"
         assert concept.preferred_label("de") == "Wärmefluss"
         # language=None means the scheme's effective default language.
@@ -1114,17 +1333,25 @@ class TestConceptPreferredLabels:
     @pytest.mark.django_db
     def test_slug_derives_from_default_language_label(self, scheme):
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-        concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss")
+        concept.add_label(
+            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss"
+        )
         # Identity anchors to the default-language (English) label, not the German one.
         assert concept.slug == "heat-flow"
 
     @pytest.mark.django_db
     def test_second_preferred_label_in_a_language_is_refused(self, scheme):
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-        concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss")
+        concept.add_label(
+            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss"
+        )
         with pytest.raises(ValidationError):
             # At most one preferred label per language (FR-001).
-            concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Terrestrischer Wärmefluss")
+            concept.add_label(
+                language="de",
+                kind=ConceptLabel.Kind.PREFERRED,
+                text="Terrestrischer Wärmefluss",
+            )
 
     @pytest.mark.django_db
     def test_concept_without_default_language_label_is_refused(self, scheme):
@@ -1138,7 +1365,9 @@ class TestConceptPreferredLabels:
         with pytest.raises(ValidationError):
             # The default language's preferred label belongs on Concept.label, not
             # as a separate ConceptLabel row.
-            concept.add_label(language="en", kind=ConceptLabel.Kind.PREFERRED, text="Heat flow")
+            concept.add_label(
+                language="en", kind=ConceptLabel.Kind.PREFERRED, text="Heat flow"
+            )
 
     @pytest.mark.django_db
     def test_uri_and_slug_unchanged_by_non_default_label_lifecycle(self, scheme):
@@ -1148,7 +1377,9 @@ class TestConceptPreferredLabels:
         original_slug = concept.slug
         original_uri = concept.uri
 
-        german = concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss")
+        german = concept.add_label(
+            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss"
+        )
         concept.refresh_from_db()
         assert concept.slug == original_slug
         assert concept.uri == original_uri
@@ -1178,13 +1409,17 @@ class TestConceptDisplayLabel:
     @pytest.mark.django_db
     def test_returns_the_active_languages_preferred_label(self, scheme):
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-        concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss")
+        concept.add_label(
+            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss"
+        )
 
         with translation.override("de"):
             assert concept.display_label() == "Wärmefluss"
 
     @pytest.mark.django_db
-    def test_falls_back_to_the_default_language_when_the_active_one_has_no_label(self, scheme):
+    def test_falls_back_to_the_default_language_when_the_active_one_has_no_label(
+        self, scheme
+    ):
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
 
         with translation.override("fr"):
@@ -1210,10 +1445,25 @@ class TestConceptAlternativeAndHiddenLabels:
         # Two English alternatives plus a German one: alt_labels("en") returns the two
         # English texts and nothing else (many-per-language, filtered by language).
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-        concept.add_label(language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="Terrestrial heat flow")
-        concept.add_label(language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="Geothermal heat flow")
-        concept.add_label(language="de", kind=ConceptLabel.Kind.ALTERNATIVE, text="Terrestrischer Wärmefluss")
-        assert sorted(concept.alt_labels("en")) == ["Geothermal heat flow", "Terrestrial heat flow"]
+        concept.add_label(
+            language="en",
+            kind=ConceptLabel.Kind.ALTERNATIVE,
+            text="Terrestrial heat flow",
+        )
+        concept.add_label(
+            language="en",
+            kind=ConceptLabel.Kind.ALTERNATIVE,
+            text="Geothermal heat flow",
+        )
+        concept.add_label(
+            language="de",
+            kind=ConceptLabel.Kind.ALTERNATIVE,
+            text="Terrestrischer Wärmefluss",
+        )
+        assert sorted(concept.alt_labels("en")) == [
+            "Geothermal heat flow",
+            "Terrestrial heat flow",
+        ]
         assert concept.alt_labels("de") == ["Terrestrischer Wärmefluss"]
 
     @pytest.mark.django_db
@@ -1227,8 +1477,14 @@ class TestConceptAlternativeAndHiddenLabels:
         # alternatives — one kind never leaks into the other's reader (FR-005/FR-007).
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
         concept.add_label(language="en", kind=ConceptLabel.Kind.HIDDEN, text="heatflow")
-        concept.add_label(language="en", kind=ConceptLabel.Kind.HIDDEN, text="heet flow")
-        concept.add_label(language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="Terrestrial heat flow")
+        concept.add_label(
+            language="en", kind=ConceptLabel.Kind.HIDDEN, text="heet flow"
+        )
+        concept.add_label(
+            language="en",
+            kind=ConceptLabel.Kind.ALTERNATIVE,
+            text="Terrestrial heat flow",
+        )
         assert sorted(concept.hidden_labels("en")) == ["heatflow", "heet flow"]
         assert concept.hidden_labels("de") == []
         # The two readers do not bleed into each other.
@@ -1242,8 +1498,14 @@ class TestConceptAlternativeAndHiddenLabels:
         original_slug = concept.slug
         original_uri = concept.uri
 
-        alt = concept.add_label(language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="Terrestrial heat flow")
-        hidden = concept.add_label(language="de", kind=ConceptLabel.Kind.HIDDEN, text="waermefluss")
+        alt = concept.add_label(
+            language="en",
+            kind=ConceptLabel.Kind.ALTERNATIVE,
+            text="Terrestrial heat flow",
+        )
+        hidden = concept.add_label(
+            language="de", kind=ConceptLabel.Kind.HIDDEN, text="waermefluss"
+        )
         concept.refresh_from_db()
         assert concept.slug == original_slug
         assert concept.uri == original_uri
@@ -1285,8 +1547,12 @@ class TestConceptDefinitionsAndNotes:
         # The definition is a ConceptNote of kind "definition"; definition(lang) reads
         # back the value for that language (FR-006/FR-007).
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-        concept.add_note(language="en", kind="definition", value="Heat energy moving through rock.")
-        concept.add_note(language="de", kind="definition", value="Wärme, die durch Gestein strömt.")
+        concept.add_note(
+            language="en", kind="definition", value="Heat energy moving through rock."
+        )
+        concept.add_note(
+            language="de", kind="definition", value="Wärme, die durch Gestein strömt."
+        )
         assert concept.definition("en") == "Heat energy moving through rock."
         assert concept.definition("de") == "Wärme, die durch Gestein strömt."
 
@@ -1328,8 +1594,12 @@ class TestConceptDefinitionsAndNotes:
     def test_repeated_notes_of_a_kind_allowed(self, scheme):
         # SKOS permits repeated notes of a kind per language; no uniqueness refuses them.
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-        concept.add_note(language="en", kind="example", value="Continental crust ~65 mW/m².")
-        concept.add_note(language="en", kind="example", value="Oceanic crust ~100 mW/m².")
+        concept.add_note(
+            language="en", kind="example", value="Continental crust ~65 mW/m²."
+        )
+        concept.add_note(
+            language="en", kind="example", value="Oceanic crust ~100 mW/m²."
+        )
         assert sorted(concept.notes("en", kind="example")) == [
             "Continental crust ~65 mW/m².",
             "Oceanic crust ~100 mW/m².",
@@ -1343,7 +1613,9 @@ class TestConceptDefinitionsAndNotes:
         original_slug = concept.slug
         original_uri = concept.uri
 
-        note = concept.add_note(language="en", kind="definition", value="Heat energy moving through rock.")
+        note = concept.add_note(
+            language="en", kind="definition", value="Heat energy moving through rock."
+        )
         concept.refresh_from_db()
         assert concept.slug == original_slug
         assert concept.uri == original_uri
@@ -1387,7 +1659,9 @@ class TestConceptSchemePerVocabularyDefaultLanguage:
         # English preferred label and the slug derives from it; a German preferred label
         # is an additive ConceptLabel row that never moves identity.
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-        concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss")
+        concept.add_label(
+            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss"
+        )
         assert concept.slug == "heat-flow"
         assert concept.preferred_label("en") == "Heat flow"
         assert concept.preferred_label("de") == "Wärmefluss"
@@ -1402,7 +1676,9 @@ class TestConceptSchemePerVocabularyDefaultLanguage:
         assert scheme.effective_default_language == "de"
 
         concept = Concept.objects.create(scheme=scheme, label="Wärmefluss")
-        concept.add_label(language="en", kind=ConceptLabel.Kind.PREFERRED, text="Heat flow")
+        concept.add_label(
+            language="en", kind=ConceptLabel.Kind.PREFERRED, text="Heat flow"
+        )
         assert concept.slug == "wärmefluss"
         assert concept.uri == f"{scheme.uri}/wärmefluss"
         assert concept.preferred_label("de") == "Wärmefluss"
@@ -1412,7 +1688,9 @@ class TestConceptSchemePerVocabularyDefaultLanguage:
     def test_effective_default_language_returns_override_or_app_default(self, db):
         # Reading the effective default language reports the explicit override when set,
         # and the application default otherwise (US-4 acceptance scenario 3, FR-011).
-        overridden = ConceptScheme.objects.create(name="Geothermik", default_language="de")
+        overridden = ConceptScheme.objects.create(
+            name="Geothermik", default_language="de"
+        )
         assert overridden.default_language == "de"
         assert overridden.effective_default_language == "de"
 
@@ -1436,7 +1714,9 @@ class TestConceptSchemePerVocabularyDefaultLanguage:
         # Once a concept exists, its identity anchor (Concept.label) is the preferred
         # label in the vocabulary's effective default language. Changing the default
         # language afterwards would silently reinterpret every anchor, so it is refused.
-        scheme = ConceptScheme.objects.create(name="Geothermics")  # effective default = en
+        scheme = ConceptScheme.objects.create(
+            name="Geothermics"
+        )  # effective default = en
         Concept.objects.create(scheme=scheme, label="Heat flow")
         scheme.default_language = "de"
         with pytest.raises(ValidationError):
@@ -1533,10 +1813,15 @@ class TestReviewHardening:
         # The default-language-preferred rule is backstopped at save(), so even
         # .objects.create() (which bypasses full_clean) cannot plant a second identity
         # anchor alongside Concept.label.
-        concept = Concept.objects.create(scheme=scheme, label="Heat flow")  # 'en' anchor
+        concept = Concept.objects.create(
+            scheme=scheme, label="Heat flow"
+        )  # 'en' anchor
         with pytest.raises(ValidationError):
             ConceptLabel.objects.create(
-                concept=concept, language="en", kind=ConceptLabel.Kind.PREFERRED, text="Heat flow (dup)"
+                concept=concept,
+                language="en",
+                kind=ConceptLabel.Kind.PREFERRED,
+                text="Heat flow (dup)",
             )
 
     @pytest.mark.django_db
@@ -1545,7 +1830,9 @@ class TestReviewHardening:
         # maintainer's LANGUAGES); an unconfigured language is still refused at runtime.
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
         with pytest.raises(ValidationError):
-            concept.add_label(language="xx", kind=ConceptLabel.Kind.ALTERNATIVE, text="nope")
+            concept.add_label(
+                language="xx", kind=ConceptLabel.Kind.ALTERNATIVE, text="nope"
+            )
         with pytest.raises(ValidationError):
             concept.add_note(language="xx", kind=ConceptNote.Kind.NOTE, value="nope")
 
@@ -1555,20 +1842,32 @@ class TestReviewHardening:
             ConceptScheme.objects.create(name="Bad", default_language="xx")
 
     @pytest.mark.django_db
-    def test_read_helpers_stay_cheap_under_prefetch_related(self, django_assert_num_queries, scheme):
+    def test_read_helpers_stay_cheap_under_prefetch_related(
+        self, django_assert_num_queries, scheme
+    ):
         # The read helpers iterate the cached related set, so prefetch_related collapses
         # the FR-007 read-by-language path to zero extra queries per concept (a .filter()
         # would bypass the cache and re-hit the DB per call).
         concept = Concept.objects.create(scheme=scheme, label="Heat flow")
-        concept.add_label(language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss")
-        concept.add_label(language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="terrestrial heat flow")
-        concept.add_note(language="de", kind=ConceptNote.Kind.DEFINITION, value="Wärmestromdichte.")
+        concept.add_label(
+            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Wärmefluss"
+        )
+        concept.add_label(
+            language="en",
+            kind=ConceptLabel.Kind.ALTERNATIVE,
+            text="terrestrial heat flow",
+        )
+        concept.add_note(
+            language="de", kind=ConceptNote.Kind.DEFINITION, value="Wärmestromdichte."
+        )
 
         # A bulk caller select_relates the scheme (preferred_label consults its effective
         # default language) and prefetches the label/note sets; the helpers then add no
         # queries of their own.
         prefetched = (
-            Concept.objects.select_related("scheme").prefetch_related("labels", "concept_notes").get(pk=concept.pk)
+            Concept.objects.select_related("scheme")
+            .prefetch_related("labels", "concept_notes")
+            .get(pk=concept.pk)
         )
         with django_assert_num_queries(0):
             assert prefetched.preferred_label("de") == "Wärmefluss"
@@ -1706,7 +2005,10 @@ class TestRelated:
         # the same association asserted in the mirror order is the one that exists
         with pytest.raises(ValidationError):
             quartz.add_related(granite)
-        assert ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count() == 1
+        assert (
+            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count()
+            == 1
+        )
         assert list(granite.related()) == [quartz]
 
     @pytest.mark.django_db
@@ -1981,7 +2283,9 @@ class TestCollectionOverridableSlug:
 
     @pytest.mark.django_db
     def test_explicit_slug_colliding_within_scheme_is_refused(self, scheme):
-        Collection.objects.create(scheme=scheme, name="Igneous Rocks")  # slug "igneous-rocks"
+        Collection.objects.create(
+            scheme=scheme, name="Igneous Rocks"
+        )  # slug "igneous-rocks"
         other = Collection.objects.create(scheme=scheme, name="Sedimentary Rocks")
         with pytest.raises(ValidationError):
             other.set_slug("igneous-rocks")
@@ -2004,7 +2308,9 @@ class TestCollectionOverridableSlug:
         collection = Collection.objects.create(scheme=scheme, name="Igneous Rocks")
         with pytest.raises(ValidationError) as empty_exc:
             collection.set_slug("")
-        assert empty_exc.value.message_dict["slug"] == ["An explicit slug must not be empty."]
+        assert empty_exc.value.message_dict["slug"] == [
+            "An explicit slug must not be empty."
+        ]
         malformed_message = [
             "An explicit slug must be a valid slug — letters, numbers, hyphens or underscores, "
             "with no spaces or slashes."
@@ -2032,7 +2338,9 @@ class TestOrderedCollection:
         basalt = Concept.objects.create(scheme=scheme, label="Basalt")
         granite = Concept.objects.create(scheme=scheme, label="Granite")
         gabbro = Concept.objects.create(scheme=scheme, label="Gabbro")
-        reading = Collection.objects.create(scheme=scheme, name="Reading order", ordered=True)
+        reading = Collection.objects.create(
+            scheme=scheme, name="Reading order", ordered=True
+        )
         reading.add(basalt)
         reading.add(granite)
         reading.add(gabbro)
@@ -2043,7 +2351,9 @@ class TestOrderedCollection:
         basalt = Concept.objects.create(scheme=scheme, label="Basalt")
         granite = Concept.objects.create(scheme=scheme, label="Granite")
         gabbro = Concept.objects.create(scheme=scheme, label="Gabbro")
-        reading = Collection.objects.create(scheme=scheme, name="Reading order", ordered=True)
+        reading = Collection.objects.create(
+            scheme=scheme, name="Reading order", ordered=True
+        )
         for c in (basalt, granite, gabbro):
             reading.add(c)
         reading.set_member_order([gabbro, basalt, granite])
@@ -2054,7 +2364,9 @@ class TestOrderedCollection:
         basalt = Concept.objects.create(scheme=scheme, label="Basalt")
         granite = Concept.objects.create(scheme=scheme, label="Granite")
         gabbro = Concept.objects.create(scheme=scheme, label="Gabbro")
-        reading = Collection.objects.create(scheme=scheme, name="Reading order", ordered=True)
+        reading = Collection.objects.create(
+            scheme=scheme, name="Reading order", ordered=True
+        )
         for c in (basalt, granite, gabbro):
             reading.add(c)
         reading.remove(granite)  # remove the middle member
@@ -2075,11 +2387,15 @@ class TestOrderedCollection:
         granite = Concept.objects.create(scheme=scheme, label="Granite")
         basalt = Concept.objects.create(scheme=scheme, label="Basalt")
         quartz = Concept.objects.create(scheme=scheme, label="Quartz")
-        reading = Collection.objects.create(scheme=scheme, name="Reading order", ordered=True)
+        reading = Collection.objects.create(
+            scheme=scheme, name="Reading order", ordered=True
+        )
         reading.add(granite)
         reading.add(basalt)
         with pytest.raises(ValidationError):
-            reading.set_member_order([granite, basalt, quartz])  # quartz is not a member
+            reading.set_member_order(
+                [granite, basalt, quartz]
+            )  # quartz is not a member
 
     @pytest.mark.django_db
     def test_unordered_collection_returns_its_members_as_a_set(self, scheme):
@@ -2165,7 +2481,9 @@ class TestBlankStaticUriIsAbsent:
 
     @pytest.mark.django_db
     def test_a_blank_static_uri_is_stored_as_null_not_an_empty_string(self, scheme):
-        concept = Concept.objects.create(scheme=scheme, label="Heat Flow", static_uri="")
+        concept = Concept.objects.create(
+            scheme=scheme, label="Heat Flow", static_uri=""
+        )
         concept.refresh_from_db()
         assert concept.static_uri is None
         assert concept.has_static_uri is False

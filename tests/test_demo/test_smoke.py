@@ -59,9 +59,13 @@ class TestCheckList:
         with pytest.raises(SmokeCheckFailed, match="did not load"):
             check_list(list_url, response.status_code, body)
 
-    def test_fails_when_a_concept_count_is_missing_from_the_page(self, seeded_list_response):
+    def test_fails_when_a_concept_count_is_missing_from_the_page(
+        self, seeded_list_response
+    ):
         list_url, response = seeded_list_response
-        body = response.content.decode().replace(f"{AUTHORED_CONCEPT_COUNT} concept", "")
+        body = response.content.decode().replace(
+            f"{AUTHORED_CONCEPT_COUNT} concept", ""
+        )
 
         with pytest.raises(SmokeCheckFailed, match="concept count"):
             check_list(list_url, response.status_code, body)
@@ -104,7 +108,10 @@ class TestExtractVocabularyUrl:
     def test_extracts_the_href_of_the_anchor_naming_the_vocabulary(self):
         body = '<a href="/browse/dcmi-type-vocabulary/">DCMI Type Vocabulary</a>'
 
-        assert extract_vocabulary_url(body, IMPORTED_NAME) == "/browse/dcmi-type-vocabulary/"
+        assert (
+            extract_vocabulary_url(body, IMPORTED_NAME)
+            == "/browse/dcmi-type-vocabulary/"
+        )
 
     def test_fails_when_no_link_names_the_vocabulary(self):
         with pytest.raises(SmokeCheckFailed, match="no link"):
@@ -129,7 +136,9 @@ class TestCheckVocabularyPage:
 
         check_vocabulary_page(url, response.status_code, response.content.decode())
 
-    def test_fails_when_the_seeded_concept_did_not_load(self, seeded_vocabulary_page_response):
+    def test_fails_when_the_seeded_concept_did_not_load(
+        self, seeded_vocabulary_page_response
+    ):
         url, response = seeded_vocabulary_page_response
         body = response.content.decode().replace(VOCABULARY_CONCEPT, "")
 
@@ -151,29 +160,39 @@ class TestCheckConceptSearch:
     def test_passes_when_a_search_by_hidden_label_narrows_to_one_concept(self, client):
         call_command(SeedDemoCommand())
         slug = ConceptScheme.objects.get(name=IMPORTED_NAME).slug
-        detail_url = reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug})
+        detail_url = reverse(
+            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug}
+        )
         search_url = f"{detail_url}?q={HIDDEN_LABEL_SEARCH_TERM}"
 
         response = client.get(search_url)
 
-        check_concept_search(search_url, response.status_code, response.content.decode())
+        check_concept_search(
+            search_url, response.status_code, response.content.decode()
+        )
 
     def test_fails_when_the_search_does_not_narrow(self, client):
         # The unsearched page carries both concepts, so the "excludes the other concept"
         # half of check_concept_search is what this exercises.
         call_command(SeedDemoCommand())
         slug = ConceptScheme.objects.get(name=IMPORTED_NAME).slug
-        detail_url = reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug})
+        detail_url = reverse(
+            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug}
+        )
 
         response = client.get(detail_url)
 
         with pytest.raises(SmokeCheckFailed, match="did not narrow"):
-            check_concept_search(detail_url, response.status_code, response.content.decode())
+            check_concept_search(
+                detail_url, response.status_code, response.content.decode()
+            )
 
     def test_fails_when_the_matching_concept_did_not_load(self, client):
         call_command(SeedDemoCommand())
         slug = ConceptScheme.objects.get(name=IMPORTED_NAME).slug
-        detail_url = reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug})
+        detail_url = reverse(
+            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug}
+        )
         search_url = f"{detail_url}?q={HIDDEN_LABEL_SEARCH_TERM}"
 
         response = client.get(search_url)

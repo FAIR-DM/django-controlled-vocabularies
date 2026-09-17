@@ -33,7 +33,13 @@ from controlled_vocabularies.exchange.mapping import (
     TYPE_CURIE,
     curie_uri,
 )
-from controlled_vocabularies.models import Collection, Concept, ConceptLabel, ConceptNote, ConceptScheme
+from controlled_vocabularies.models import (
+    Collection,
+    Concept,
+    ConceptLabel,
+    ConceptNote,
+    ConceptScheme,
+)
 
 
 class VocabularyListView(MVPListView):
@@ -159,7 +165,9 @@ class VocabularyListView(MVPListView):
         return None
 
 
-def concept_property_rows(concept: Concept, language: str, default_language: str | None = None) -> list[dict]:
+def concept_property_rows(
+    concept: Concept, language: str, default_language: str | None = None
+) -> list[dict]:
     """The fixed-order rows a concept's own page renders (015-read-single-record T003,
     T006, FR-003, FR-004, FR-005, FR-006, FR-018).
 
@@ -240,24 +248,38 @@ def concept_property_rows(concept: Concept, language: str, default_language: str
 
     preferred_label = localized_text(concept.preferred_label)
     if preferred_label:
-        rows.append(row(LABEL_CURIES[ConceptLabel.Kind.PREFERRED], value=preferred_label))
+        rows.append(
+            row(LABEL_CURIES[ConceptLabel.Kind.PREFERRED], value=preferred_label)
+        )
 
     rows.extend(
-        row(LABEL_CURIES[ConceptLabel.Kind.ALTERNATIVE], value=text) for text in localized_list(concept.alt_labels)
+        row(LABEL_CURIES[ConceptLabel.Kind.ALTERNATIVE], value=text)
+        for text in localized_list(concept.alt_labels)
     )
 
     for kind in ConceptNote.Kind:
         rows.extend(
             row(NOTE_CURIES[kind], value=value)
-            for value in localized_list(lambda lang, kind=kind: concept.notes(lang, kind=kind))
+            for value in localized_list(
+                lambda lang, kind=kind: concept.notes(lang, kind=kind)
+            )
         )
 
     # D-015-02: none of these three is prefetchable (each builds a fresh queryset), so
     # each read chains its own select_related("scheme") rather than relying on a
     # prefetch that would never be consulted.
-    rows.extend(record_row(BROADER_CURIE, related) for related in concept.broader().select_related("scheme"))
-    rows.extend(record_row(NARROWER_CURIE, related) for related in concept.narrower().select_related("scheme"))
-    rows.extend(record_row(RELATED_CURIE, related) for related in concept.related().select_related("scheme"))
+    rows.extend(
+        record_row(BROADER_CURIE, related)
+        for related in concept.broader().select_related("scheme")
+    )
+    rows.extend(
+        record_row(NARROWER_CURIE, related)
+        for related in concept.narrower().select_related("scheme")
+    )
+    rows.extend(
+        record_row(RELATED_CURIE, related)
+        for related in concept.related().select_related("scheme")
+    )
 
     scheme = concept.scheme
     rows.append(
@@ -268,7 +290,10 @@ def concept_property_rows(concept: Concept, language: str, default_language: str
             # short form only a record it holds carries.
             short_form=scheme.name,
             uri=scheme.uri,
-            href=reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}),
+            href=reverse(
+                "controlled_vocabularies_ui:vocabulary-detail",
+                kwargs={"slug": scheme.slug},
+            ),
         )
     )
 
@@ -298,7 +323,9 @@ def collection_property_rows(collection: Collection) -> list[dict]:
 
     identifier_ids = count()
 
-    def row(term: str, *, value=None, short_form=None, uri=None, href=None, entries=None) -> dict:
+    def row(
+        term: str, *, value=None, short_form=None, uri=None, href=None, entries=None
+    ) -> dict:
         # term_uri (T031): see concept_property_rows.row() — same disclosure, same reason.
         return {
             "term": term,
@@ -334,10 +361,15 @@ def collection_property_rows(collection: Collection) -> list[dict]:
             "identifier_id": f"identifier-{next(identifier_ids)}",
         }
 
-    type_curie = ORDERED_COLLECTION_TYPE_CURIE if collection.ordered else COLLECTION_TYPE_CURIE
+    type_curie = (
+        ORDERED_COLLECTION_TYPE_CURIE if collection.ordered else COLLECTION_TYPE_CURIE
+    )
     member_curie = MEMBER_LIST_CURIE if collection.ordered else MEMBER_CURIE
 
-    rows = [row(TYPE_CURIE, value=type_curie), row(LABEL_CURIES[ConceptLabel.Kind.PREFERRED], value=collection.name)]
+    rows = [
+        row(TYPE_CURIE, value=type_curie),
+        row(LABEL_CURIES[ConceptLabel.Kind.PREFERRED], value=collection.name),
+    ]
     entries = [member_entry(member) for member in collection.members()]
     if entries:
         rows.append(row(member_curie, entries=entries))
@@ -348,7 +380,10 @@ def collection_property_rows(collection: Collection) -> list[dict]:
             IN_SCHEME_CURIE,
             short_form=scheme.name,
             uri=scheme.uri,
-            href=reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}),
+            href=reverse(
+                "controlled_vocabularies_ui:vocabulary-detail",
+                kwargs={"slug": scheme.slug},
+            ),
         )
     )
 
@@ -401,7 +436,10 @@ class ConceptDetailView(MVPDetailView):
             {"text": _("Home"), "href": "/"},
             {
                 "text": self.vocabulary.name,
-                "href": reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": self.vocabulary.slug}),
+                "href": reverse(
+                    "controlled_vocabularies_ui:vocabulary-detail",
+                    kwargs={"slug": self.vocabulary.slug},
+                ),
             },
             {"text": self.get_page_title()},
         ]
@@ -412,7 +450,9 @@ class ConceptDetailView(MVPDetailView):
         # only because this view opts in by passing default_language explicitly.
         context = super().get_context_data(**kwargs)
         context["rows"] = concept_property_rows(
-            self.object, get_language(), default_language=self.object.scheme.effective_default_language
+            self.object,
+            get_language(),
+            default_language=self.object.scheme.effective_default_language,
         )
         # T021, FR-014: the collections that gather this concept, never a row in
         # `rows` above — membership is a statement other records make about this
@@ -445,7 +485,9 @@ class CollectionDetailView(MVPDetailView):
         # into the object fetch (015-read-single-record T014, SC-006) — the same
         # collection.scheme collection_property_rows() reads for the vocabulary
         # row and for every member row's short-form prefix (D-015-02).
-        return Collection.objects.filter(scheme=self.vocabulary).select_related("scheme")
+        return Collection.objects.filter(scheme=self.vocabulary).select_related(
+            "scheme"
+        )
 
     def get_breadcrumbs(self):
         # T025: same treatment as ConceptDetailView.get_breadcrumbs() — the upstream
@@ -454,7 +496,10 @@ class CollectionDetailView(MVPDetailView):
             {"text": _("Home"), "href": "/"},
             {
                 "text": self.vocabulary.name,
-                "href": reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": self.vocabulary.slug}),
+                "href": reverse(
+                    "controlled_vocabularies_ui:vocabulary-detail",
+                    kwargs={"slug": self.vocabulary.slug},
+                ),
             },
             {"text": self.get_page_title()},
         ]
@@ -546,7 +591,11 @@ class VocabularyDetailView(MVPListView):
         self.queryset = (
             Concept.objects.filter(scheme=self.vocabulary)
             .select_related("scheme")
-            .annotate(resolved_label=Coalesce(Subquery(preferred_in_active_language), F("label")))
+            .annotate(
+                resolved_label=Coalesce(
+                    Subquery(preferred_in_active_language), F("label")
+                )
+            )
         )
 
     def get_page_title(self):

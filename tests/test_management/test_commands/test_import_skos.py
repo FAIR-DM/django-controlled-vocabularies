@@ -25,7 +25,9 @@ from django.utils.functional import Promise
 
 from controlled_vocabularies.exchange.skos import import_skos
 from controlled_vocabularies.management import sources
-from controlled_vocabularies.management.commands import import_skos as import_skos_command
+from controlled_vocabularies.management.commands import (
+    import_skos as import_skos_command,
+)
 from controlled_vocabularies.management.commands.import_skos import Command
 from controlled_vocabularies.models import Concept, ConceptScheme
 
@@ -49,7 +51,9 @@ class TestImportSkosCommandCreatesAndUpdates:
     concepts, named by count; a second run against the same file reports updates and creates
     no duplicate concept. Every line comes from ``ReportRenderer`` (plan.md "Rendering")."""
 
-    def test_importing_into_an_empty_database_creates_the_vocabulary_and_names_the_count(self, db):
+    def test_importing_into_an_empty_database_creates_the_vocabulary_and_names_the_count(
+        self, db
+    ):
         out = StringIO()
         call_command("import_skos", str(FIXTURES / "rocks.ttl"), stdout=out)
         scheme = ConceptScheme.objects.get(static_uri=ROCKS_URI)
@@ -59,7 +63,9 @@ class TestImportSkosCommandCreatesAndUpdates:
         assert "8 records created." in output
         assert "0 records updated." in output
 
-    def test_reimporting_the_same_file_reports_updates_and_creates_no_duplicate_concept(self, db):
+    def test_reimporting_the_same_file_reports_updates_and_creates_no_duplicate_concept(
+        self, db
+    ):
         call_command("import_skos", str(FIXTURES / "rocks.ttl"), stdout=StringIO())
         out = StringIO()
         call_command("import_skos", str(FIXTURES / "rocks.ttl"), stdout=out)
@@ -106,12 +112,16 @@ class TestImportSkosCommandHelpIsTranslatable:
         # this story's to translate.
         parser = Command().create_parser("manage.py", "import_skos")
         ours = {
-            action.dest: action for action in parser._actions if action.dest in ("source", "format", "dry_run")
+            action.dest: action
+            for action in parser._actions
+            if action.dest in ("source", "format", "dry_run")
         }
         assert set(ours) == {"source", "format", "dry_run"}
         for dest, action in ours.items():
             assert action.help, f"{dest} has no help text"
-            assert isinstance(action.help, str), f"{dest} help reaches argparse as a proxy, which breaks --help"
+            assert isinstance(action.help, str), (
+                f"{dest} help reaches argparse as a proxy, which breaks --help"
+            )
         assert isinstance(parser.description, str)
 
 
@@ -127,14 +137,23 @@ class TestImportSkosCommandRefusesABadPath:
         assert missing in str(exc_info.value)
         assert ConceptScheme.objects.count() == 0
 
-    @pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores file permissions")
-    def test_an_unreadable_path_is_reported_distinctly_from_a_missing_one(self, db, tmp_path):
+    @pytest.mark.skipif(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        reason="root ignores file permissions",
+    )
+    def test_an_unreadable_path_is_reported_distinctly_from_a_missing_one(
+        self, db, tmp_path
+    ):
         unreadable = tmp_path / "vocab.ttl"
         unreadable.write_bytes((FIXTURES / "rocks.ttl").read_bytes())
         unreadable.chmod(0o000)
         try:
             with pytest.raises(CommandError) as missing_exc:
-                call_command("import_skos", str(FIXTURES / "does-not-exist.ttl"), stdout=StringIO())
+                call_command(
+                    "import_skos",
+                    str(FIXTURES / "does-not-exist.ttl"),
+                    stdout=StringIO(),
+                )
             with pytest.raises(CommandError) as unreadable_exc:
                 call_command("import_skos", str(unreadable), stdout=StringIO())
         finally:
@@ -152,13 +171,17 @@ class TestImportSkosCommandFormatOption:
     committed to `tests/fixtures/skos/`, per decisions.md D11's own precedent, so it is never
     swept by `TestEverySkosPredicateIsReadOrReported`'s directory walk."""
 
-    def test_a_file_whose_extension_names_no_format_imports_when_format_is_given(self, db, tmp_path):
+    def test_a_file_whose_extension_names_no_format_imports_when_format_is_given(
+        self, db, tmp_path
+    ):
         mystery = tmp_path / "vocab.mysteryext"
         mystery.write_bytes((FIXTURES / "rocks.ttl").read_bytes())
         call_command("import_skos", str(mystery), format="turtle", stdout=StringIO())
         assert ConceptScheme.objects.filter(static_uri=ROCKS_URI).exists()
 
-    def test_the_same_file_without_format_is_refused_with_the_existing_message(self, db, tmp_path):
+    def test_the_same_file_without_format_is_refused_with_the_existing_message(
+        self, db, tmp_path
+    ):
         mystery = tmp_path / "vocab.mysteryext"
         mystery.write_bytes((FIXTURES / "rocks.ttl").read_bytes())
         with pytest.raises(CommandError) as exc_info:
@@ -193,9 +216,14 @@ class TestImportSkosCommandURLFailureModes:
         assert url in str(exc_info.value)
         assert ConceptScheme.objects.count() == 0
 
-    def test_an_html_body_fails_as_unreadable_content_not_an_empty_vocabulary(self, db, http_stub):
+    def test_an_html_body_fails_as_unreadable_content_not_an_empty_vocabulary(
+        self, db, http_stub
+    ):
         http_stub.set_response(
-            "/vocab.ttl", status=200, body=b"<html><body>Not a vocabulary</body></html>", content_type="text/html"
+            "/vocab.ttl",
+            status=200,
+            body=b"<html><body>Not a vocabulary</body></html>",
+            content_type="text/html",
         )
         url = http_stub.url + "/vocab.ttl"
         with pytest.raises(CommandError) as exc_info:
@@ -242,7 +270,9 @@ class TestImportSkosCommandURLParity:
         self, db, http_stub
     ):
         rocks_bytes = (FIXTURES / "rocks.ttl").read_bytes()
-        http_stub.set_response("/rocks.ttl", status=200, body=rocks_bytes, content_type="text/turtle")
+        http_stub.set_response(
+            "/rocks.ttl", status=200, body=rocks_bytes, content_type="text/turtle"
+        )
 
         url_out = StringIO()
         call_command("import_skos", http_stub.url + "/rocks.ttl", stdout=url_out)
@@ -262,16 +292,23 @@ class TestImportSkosCommandURLParity:
         assert url_scheme_name == disk_scheme_name
         assert url_report == disk_out.getvalue()
 
-    def test_relative_identifiers_are_stored_under_the_stubs_address_not_a_file_path(self, db, http_stub):
+    def test_relative_identifiers_are_stored_under_the_stubs_address_not_a_file_path(
+        self, db, http_stub
+    ):
         http_stub.set_response(
-            "/relative.ttl", status=200, body=self._RELATIVE_URIS_TURTLE.encode(), content_type="text/turtle"
+            "/relative.ttl",
+            status=200,
+            body=self._RELATIVE_URIS_TURTLE.encode(),
+            content_type="text/turtle",
         )
         scheme_uri = http_stub.url + "/relative.ttl"
         concept_uri = http_stub.url + "/concept-a"
         call_command("import_skos", scheme_uri, stdout=StringIO())
         assert ConceptScheme.objects.filter(static_uri=scheme_uri).exists()
         assert Concept.objects.filter(static_uri=concept_uri).exists()
-        assert not ConceptScheme.objects.filter(static_uri__startswith="file://").exists()
+        assert not ConceptScheme.objects.filter(
+            static_uri__startswith="file://"
+        ).exists()
         assert not Concept.objects.filter(static_uri__startswith="file://").exists()
 
 
@@ -291,18 +328,29 @@ class TestImportSkosCommandDryRun:
             for model in apps.get_app_config("controlled_vocabularies").get_models()
         }
 
-    def test_a_dry_run_against_a_populated_database_leaves_every_table_unchanged(self, transactional_db):
+    def test_a_dry_run_against_a_populated_database_leaves_every_table_unchanged(
+        self, transactional_db
+    ):
         import_skos(FIXTURES / "rocks.ttl")
         before = self._snapshot()
 
-        call_command("import_skos", str(FIXTURES / "rocks_updated.ttl"), dry_run=True, stdout=StringIO())
+        call_command(
+            "import_skos",
+            str(FIXTURES / "rocks_updated.ttl"),
+            dry_run=True,
+            stdout=StringIO(),
+        )
 
         assert self._snapshot() == before
 
-    def test_a_dry_run_of_a_new_vocabulary_against_an_empty_database_creates_nothing(self, transactional_db):
+    def test_a_dry_run_of_a_new_vocabulary_against_an_empty_database_creates_nothing(
+        self, transactional_db
+    ):
         before = self._snapshot()
 
-        call_command("import_skos", str(FIXTURES / "rocks.ttl"), dry_run=True, stdout=StringIO())
+        call_command(
+            "import_skos", str(FIXTURES / "rocks.ttl"), dry_run=True, stdout=StringIO()
+        )
 
         assert self._snapshot() == before
         assert ConceptScheme.objects.count() == 0
@@ -328,10 +376,17 @@ class TestImportSkosCommandDryRunFidelity:
 
         monkeypatch.setattr(import_skos_command, "import_skos", spy)
 
-        call_command("import_skos", str(FIXTURES / "rocks_updated.ttl"), dry_run=True, stdout=StringIO())
+        call_command(
+            "import_skos",
+            str(FIXTURES / "rocks_updated.ttl"),
+            dry_run=True,
+            stdout=StringIO(),
+        )
         dry_run_report = captured.pop()
 
-        call_command("import_skos", str(FIXTURES / "rocks_updated.ttl"), stdout=StringIO())
+        call_command(
+            "import_skos", str(FIXTURES / "rocks_updated.ttl"), stdout=StringIO()
+        )
         live_report = captured.pop()
 
         assert dry_run_report.created == live_report.created
@@ -341,9 +396,16 @@ class TestImportSkosCommandDryRunFidelity:
         assert dry_run_report.absent_from_source == live_report.absent_from_source
         assert dry_run_report.fatal == live_report.fatal == []
 
-    def test_a_refused_source_is_reported_as_refused_when_dry_run_and_still_exits_non_zero(self, transactional_db):
+    def test_a_refused_source_is_reported_as_refused_when_dry_run_and_still_exits_non_zero(
+        self, transactional_db
+    ):
         with pytest.raises(CommandError):
-            call_command("import_skos", str(FIXTURES / "no_scheme_declared.ttl"), dry_run=True, stdout=StringIO())
+            call_command(
+                "import_skos",
+                str(FIXTURES / "no_scheme_declared.ttl"),
+                dry_run=True,
+                stdout=StringIO(),
+            )
         assert ConceptScheme.objects.count() == 0
 
 
@@ -351,9 +413,13 @@ class TestImportSkosCommandDryRunLine:
     """T014, FR-010, `decisions.md` D9 — the dry run line reaches the command's actual
     output: present for a dry run, absent for a live run of the same source."""
 
-    def test_the_dry_run_line_is_present_for_a_dry_run_and_absent_for_a_live_run(self, db):
+    def test_the_dry_run_line_is_present_for_a_dry_run_and_absent_for_a_live_run(
+        self, db
+    ):
         dry_run_out = StringIO()
-        call_command("import_skos", str(FIXTURES / "rocks.ttl"), dry_run=True, stdout=dry_run_out)
+        call_command(
+            "import_skos", str(FIXTURES / "rocks.ttl"), dry_run=True, stdout=dry_run_out
+        )
         assert "nothing was kept" in dry_run_out.getvalue()
 
         live_out = StringIO()
@@ -370,10 +436,17 @@ class TestImportSkosCommandRefusalPrintsEveryFatalFinding:
 
     def test_every_fatal_finding_prints_not_just_the_first(self, db):
         with pytest.raises(CommandError) as exc_info:
-            call_command("import_skos", str(FIXTURES / "multiple_fatal_problems.ttl"), stdout=StringIO())
+            call_command(
+                "import_skos",
+                str(FIXTURES / "multiple_fatal_problems.ttl"),
+                stdout=StringIO(),
+            )
         message = str(exc_info.value)
         assert "'Nameless' has no identifier that survives re-serialization" in message
-        assert "'ftp://mirror.example.org/mixed/refused' is not an identifier the application accepts" in message
+        assert (
+            "'ftp://mirror.example.org/mixed/refused' is not an identifier the application accepts"
+            in message
+        )
         assert exc_info.value.returncode != 0
         assert ConceptScheme.objects.count() == 0
         assert Concept.objects.count() == 0
@@ -388,16 +461,24 @@ class TestImportSkosCommandRefusesAnUndeterminedVocabulary:
     importing an empty vocabulary. The two new fixtures are built under ``tmp_path``, not
     committed to ``tests/fixtures/skos/``, per decisions.md D11's own precedent."""
 
-    _NOT_SKOS_MESSAGE = "declares no vocabulary of its own, and no target vocabulary was named"
+    _NOT_SKOS_MESSAGE = (
+        "declares no vocabulary of its own, and no target vocabulary was named"
+    )
 
     def test_a_source_declaring_no_concept_scheme_is_refused_as_not_skos(self, db):
         with pytest.raises(CommandError) as exc_info:
-            call_command("import_skos", str(FIXTURES / "no_scheme_declared.ttl"), stdout=StringIO())
+            call_command(
+                "import_skos",
+                str(FIXTURES / "no_scheme_declared.ttl"),
+                stdout=StringIO(),
+            )
         assert self._NOT_SKOS_MESSAGE in str(exc_info.value)
         assert exc_info.value.returncode != 0
         assert ConceptScheme.objects.count() == 0
 
-    def test_an_empty_file_is_refused_rather_than_importing_an_empty_vocabulary(self, db, tmp_path):
+    def test_an_empty_file_is_refused_rather_than_importing_an_empty_vocabulary(
+        self, db, tmp_path
+    ):
         empty = tmp_path / "empty.ttl"
         empty.write_text("")
         with pytest.raises(CommandError) as exc_info:
@@ -406,7 +487,9 @@ class TestImportSkosCommandRefusesAnUndeterminedVocabulary:
         assert exc_info.value.returncode != 0
         assert ConceptScheme.objects.count() == 0
 
-    def test_a_graph_with_no_skos_content_is_refused_rather_than_importing_an_empty_vocabulary(self, db, tmp_path):
+    def test_a_graph_with_no_skos_content_is_refused_rather_than_importing_an_empty_vocabulary(
+        self, db, tmp_path
+    ):
         no_skos = tmp_path / "no_skos.ttl"
         no_skos.write_text(
             '@prefix dc: <http://purl.org/dc/elements/1.1/> .\n<http://example.org/thing> dc:title "Just a thing" .\n'
@@ -428,14 +511,23 @@ class TestImportSkosCommandSafetyScanRefusalReachedFromBothSourceForms:
 
     def test_an_unsafe_rdf_xml_document_is_refused_from_a_path(self, db):
         with pytest.raises(CommandError) as exc_info:
-            call_command("import_skos", str(SECURITY_FIXTURES / "entity_bomb.rdf"), stdout=StringIO())
+            call_command(
+                "import_skos",
+                str(SECURITY_FIXTURES / "entity_bomb.rdf"),
+                stdout=StringIO(),
+            )
         assert "e0" in str(exc_info.value)
         assert exc_info.value.returncode != 0
         assert ConceptScheme.objects.count() == 0
 
     def test_an_unsafe_rdf_xml_document_is_refused_from_a_url(self, db, http_stub):
         body = (SECURITY_FIXTURES / "entity_bomb.rdf").read_bytes()
-        http_stub.set_response("/entity_bomb.rdf", status=200, body=body, content_type="application/rdf+xml")
+        http_stub.set_response(
+            "/entity_bomb.rdf",
+            status=200,
+            body=body,
+            content_type="application/rdf+xml",
+        )
         url = http_stub.url + "/entity_bomb.rdf"
         with pytest.raises(CommandError) as exc_info:
             call_command("import_skos", url, stdout=StringIO())
@@ -445,7 +537,11 @@ class TestImportSkosCommandSafetyScanRefusalReachedFromBothSourceForms:
 
     def test_an_unsafe_json_ld_document_is_refused_from_a_path(self, db):
         with pytest.raises(CommandError) as exc_info:
-            call_command("import_skos", str(SECURITY_FIXTURES / "remote_context_string.jsonld"), stdout=StringIO())
+            call_command(
+                "import_skos",
+                str(SECURITY_FIXTURES / "remote_context_string.jsonld"),
+                stdout=StringIO(),
+            )
         assert "http://127.0.0.1:1/x.json" in str(exc_info.value)
         assert exc_info.value.returncode != 0
         assert ConceptScheme.objects.count() == 0
@@ -453,7 +549,10 @@ class TestImportSkosCommandSafetyScanRefusalReachedFromBothSourceForms:
     def test_an_unsafe_json_ld_document_is_refused_from_a_url(self, db, http_stub):
         body = (SECURITY_FIXTURES / "remote_context_string.jsonld").read_bytes()
         http_stub.set_response(
-            "/remote_context_string.jsonld", status=200, body=body, content_type="application/ld+json"
+            "/remote_context_string.jsonld",
+            status=200,
+            body=body,
+            content_type="application/ld+json",
         )
         url = http_stub.url + "/remote_context_string.jsonld"
         with pytest.raises(CommandError) as exc_info:
@@ -469,9 +568,13 @@ class TestImportSkosCommandSurfacesAnAmbiguousVocabularyRefusalUnchanged:
     ``TestChoosingBetweenDeclaredVocabularies``); the command surfaces that refusal
     unchanged rather than reinterpreting it."""
 
-    def test_a_source_declaring_more_than_one_concept_scheme_is_refused_unchanged(self, db):
+    def test_a_source_declaring_more_than_one_concept_scheme_is_refused_unchanged(
+        self, db
+    ):
         with pytest.raises(CommandError) as exc_info:
-            call_command("import_skos", str(FIXTURES / "two_vocabularies.ttl"), stdout=StringIO())
+            call_command(
+                "import_skos", str(FIXTURES / "two_vocabularies.ttl"), stdout=StringIO()
+            )
         message = str(exc_info.value)
         assert "http://example.org/alpha/" in message
         assert "http://example.org/beta/" in message
@@ -492,10 +595,18 @@ class TestImportSkosCommandExitsZeroOnACompletedRun:
     def test_a_run_that_sets_values_aside_still_exits_zero(self, db):
         command = Command(stdout=StringIO())
         with mock.patch("sys.exit") as mock_exit:
-            command.run_from_argv(["manage.py", "import_skos", str(FIXTURES / "unconfigured_language_values.ttl")])
+            command.run_from_argv(
+                [
+                    "manage.py",
+                    "import_skos",
+                    str(FIXTURES / "unconfigured_language_values.ttl"),
+                ]
+            )
         mock_exit.assert_not_called()
         scheme = ConceptScheme.objects.get(static_uri="http://example.org/quarry3/")
-        assert Concept.objects.filter(scheme=scheme, static_uri__endswith="/schist").exists()
+        assert Concept.objects.filter(
+            scheme=scheme, static_uri__endswith="/schist"
+        ).exists()
 
     def test_a_refused_run_exits_non_zero_through_the_same_call_site(self, db):
         """The counterpart the assertion above needs to mean anything: were ``run_from_argv``
@@ -503,7 +614,9 @@ class TestImportSkosCommandExitsZeroOnACompletedRun:
         nothing. A refusal must fire it."""
         command = Command(stdout=StringIO(), stderr=StringIO())
         with mock.patch("sys.exit") as mock_exit:
-            command.run_from_argv(["manage.py", "import_skos", str(FIXTURES / "no_scheme_declared.ttl")])
+            command.run_from_argv(
+                ["manage.py", "import_skos", str(FIXTURES / "no_scheme_declared.ttl")]
+            )
         mock_exit.assert_called_once()
         assert mock_exit.call_args.args[0] != 0
         assert ConceptScheme.objects.count() == 0
@@ -516,16 +629,29 @@ class TestImportSkosCommandCarriesVerbosityIntoTheRenderer:
     renderer into ``handle()``; the wiring of this argument went with it, and T018's tests
     construct the renderer directly, so nothing proved the option reached it. These do."""
 
-    def test_the_default_verbosity_prints_counts_without_a_line_per_set_aside_value(self, db):
+    def test_the_default_verbosity_prints_counts_without_a_line_per_set_aside_value(
+        self, db
+    ):
         out = StringIO()
-        call_command("import_skos", str(FIXTURES / "unconfigured_language_values.ttl"), stdout=out)
+        call_command(
+            "import_skos",
+            str(FIXTURES / "unconfigured_language_values.ttl"),
+            stdout=out,
+        )
         lines = out.getvalue().splitlines()
         assert any("set aside" in line for line in lines)
-        assert not any(line.startswith("'http://example.org/quarry3/") for line in lines)
+        assert not any(
+            line.startswith("'http://example.org/quarry3/") for line in lines
+        )
 
     def test_raised_verbosity_prints_one_line_per_set_aside_entry(self, db):
         out = StringIO()
-        call_command("import_skos", str(FIXTURES / "unconfigured_language_values.ttl"), stdout=out, verbosity=2)
+        call_command(
+            "import_skos",
+            str(FIXTURES / "unconfigured_language_values.ttl"),
+            stdout=out,
+            verbosity=2,
+        )
         report = import_skos(FIXTURES / "unconfigured_language_values.ttl")
         rendered = out.getvalue()
         assert report.set_aside
@@ -564,25 +690,39 @@ class TestImportSkosCommandRemovesTheFetchedTemporaryFile:
         monkeypatch.setattr(sources.SourceResolver, "cleanup", recording_cleanup)
         return seen
 
-    def test_a_completed_url_import_leaves_no_temporary_file(self, db, http_stub, monkeypatch):
+    def test_a_completed_url_import_leaves_no_temporary_file(
+        self, db, http_stub, monkeypatch
+    ):
         seen = self._watch_temp_paths(monkeypatch)
         http_stub.set_response(
-            "/rocks.ttl", status=200, body=(FIXTURES / "rocks.ttl").read_bytes(), content_type="text/turtle"
+            "/rocks.ttl",
+            status=200,
+            body=(FIXTURES / "rocks.ttl").read_bytes(),
+            content_type="text/turtle",
         )
         call_command("import_skos", http_stub.url + "/rocks.ttl", stdout=StringIO())
-        assert len(seen) == 1, "the command built no resolver, so this test proves nothing"
+        assert len(seen) == 1, (
+            "the command built no resolver, so this test proves nothing"
+        )
         assert not seen[0].exists()
 
-    def test_a_refused_url_import_leaves_no_temporary_file(self, db, http_stub, monkeypatch):
+    def test_a_refused_url_import_leaves_no_temporary_file(
+        self, db, http_stub, monkeypatch
+    ):
         # The fetch succeeds and the import is what fails, so the file exists at the moment
         # the refusal is raised — the case a cleanup outside the finally would leak.
         seen = self._watch_temp_paths(monkeypatch)
         http_stub.set_response(
-            "/vocab.ttl", status=200, body=b"<html><body>Not found</body></html>", content_type="text/turtle"
+            "/vocab.ttl",
+            status=200,
+            body=b"<html><body>Not found</body></html>",
+            content_type="text/turtle",
         )
         with pytest.raises(CommandError):
             call_command("import_skos", http_stub.url + "/vocab.ttl", stdout=StringIO())
-        assert len(seen) == 1, "the command built no resolver, so this test proves nothing"
+        assert len(seen) == 1, (
+            "the command built no resolver, so this test proves nothing"
+        )
         assert not seen[0].exists()
 
     def test_a_local_path_import_deletes_nothing(self, db, monkeypatch):

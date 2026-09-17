@@ -51,7 +51,13 @@ from django.test import override_settings
 from django.urls import include, path, reverse
 
 from controlled_vocabularies.models import Concept
-from tests.factories import ConceptFactory, ConceptSchemeFactory, LocalityFactory, OutcropFactory, SpecimenFactory
+from tests.factories import (
+    ConceptFactory,
+    ConceptSchemeFactory,
+    LocalityFactory,
+    OutcropFactory,
+    SpecimenFactory,
+)
 from tests.testapp.models import Locality, Outcrop, Specimen
 
 
@@ -74,7 +80,10 @@ def _assert_control_rendered(content, model, field_name):
     assert "data-tomselect" in content
     assert "window.djangoTomSelect.initialize(element, config);" in content
     escaped_equals = "\\u003D"
-    assert f"autocompleteParams: 'field{escaped_equals}{_field_reference(model, field_name)}'" in content
+    assert (
+        f"autocompleteParams: 'field{escaped_equals}{_field_reference(model, field_name)}'"
+        in content
+    )
 
 
 @pytest.mark.django_db
@@ -93,12 +102,16 @@ class TestConceptControlRendersOnAdminPages:
         assert response.status_code == 200
         _assert_control_rendered(response.content.decode(), Outcrop, "minerals")
 
-    def test_change_page_renders_the_control_and_shows_the_held_concept_under_its_preferred_label(self, admin_client):
+    def test_change_page_renders_the_control_and_shows_the_held_concept_under_its_preferred_label(
+        self, admin_client
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme, label="Granite")
         specimen = SpecimenFactory(rock_type=concept)
 
-        response = admin_client.get(reverse("admin:testapp_specimen_change", args=[specimen.pk]))
+        response = admin_client.get(
+            reverse("admin:testapp_specimen_change", args=[specimen.pk])
+        )
         content = response.content.decode()
 
         assert response.status_code == 200
@@ -107,11 +120,16 @@ class TestConceptControlRendersOnAdminPages:
 
     def test_change_page_shows_every_concept_a_concepts_field_holds(self, admin_client):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [ConceptFactory(scheme=scheme, label=f"Mineral concept {i}") for i in range(3)]
+        concepts = [
+            ConceptFactory(scheme=scheme, label=f"Mineral concept {i}")
+            for i in range(3)
+        ]
         outcrop = OutcropFactory()
         outcrop.minerals.add(*concepts)
 
-        response = admin_client.get(reverse("admin:testapp_outcrop_change", args=[outcrop.pk]))
+        response = admin_client.get(
+            reverse("admin:testapp_outcrop_change", args=[outcrop.pk])
+        )
         content = response.content.decode()
 
         assert response.status_code == 200
@@ -130,10 +148,17 @@ class TestAdminPageRenderingIsBoundedByVocabularySize:
         scheme = ConceptSchemeFactory(name="Rock Type")
         for i in range(5):
             ConceptFactory(scheme=scheme, label=f"Small vocab concept {i}")
-        small_rendered = admin_client.get(reverse("admin:testapp_specimen_add")).content.decode()
+        small_rendered = admin_client.get(
+            reverse("admin:testapp_specimen_add")
+        ).content.decode()
 
-        large_concepts = [ConceptFactory(scheme=scheme, label=f"Large vocab concept {i}") for i in range(2000)]
-        large_rendered = admin_client.get(reverse("admin:testapp_specimen_add")).content.decode()
+        large_concepts = [
+            ConceptFactory(scheme=scheme, label=f"Large vocab concept {i}")
+            for i in range(2000)
+        ]
+        large_rendered = admin_client.get(
+            reverse("admin:testapp_specimen_add")
+        ).content.decode()
 
         assert len(large_rendered) == len(small_rendered)
         assert not any(concept.label in large_rendered for concept in large_concepts)
@@ -153,7 +178,9 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
     field, not on message text. And a concept referenced through the admin is
     still protected from deletion — both field kinds."""
 
-    def test_a_legitimate_concept_saves_through_the_add_page_for_a_concept_field(self, admin_client):
+    def test_a_legitimate_concept_saves_through_the_add_page_for_a_concept_field(
+        self, admin_client
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
 
@@ -166,13 +193,19 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
         specimen = Specimen.objects.get(name="Granite sample")
         assert specimen.rock_type_id == concept.pk
 
-    def test_a_foreign_concept_is_refused_by_the_add_page_for_a_concept_field(self, admin_client):
+    def test_a_foreign_concept_is_refused_by_the_add_page_for_a_concept_field(
+        self, admin_client
+    ):
         other_scheme = ConceptSchemeFactory(name="Mineral")
         foreign_concept = ConceptFactory(scheme=other_scheme)
 
         response = admin_client.post(
             reverse("admin:testapp_specimen_add"),
-            {"name": "Wrong vocabulary sample", "rock_type": foreign_concept.pk, "_save": "Save"},
+            {
+                "name": "Wrong vocabulary sample",
+                "rock_type": foreign_concept.pk,
+                "_save": "Save",
+            },
         )
         content = response.content.decode()
 
@@ -180,7 +213,9 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
         assert not Specimen.objects.filter(name="Wrong vocabulary sample").exists()
         assert 'id="id_rock_type_error"' in content
 
-    def test_a_legitimate_concept_saves_through_the_add_page_for_a_concepts_field(self, admin_client):
+    def test_a_legitimate_concept_saves_through_the_add_page_for_a_concepts_field(
+        self, admin_client
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
         concept = ConceptFactory(scheme=scheme)
 
@@ -193,13 +228,19 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
         outcrop = Outcrop.objects.get(name="Basalt outcrop")
         assert concept in outcrop.minerals.all()
 
-    def test_a_foreign_concept_is_refused_by_the_add_page_for_a_concepts_field(self, admin_client):
+    def test_a_foreign_concept_is_refused_by_the_add_page_for_a_concepts_field(
+        self, admin_client
+    ):
         other_scheme = ConceptSchemeFactory(name="Rock Type")
         foreign_concept = ConceptFactory(scheme=other_scheme)
 
         response = admin_client.post(
             reverse("admin:testapp_outcrop_add"),
-            {"name": "Wrong vocabulary outcrop", "minerals": [foreign_concept.pk], "_save": "Save"},
+            {
+                "name": "Wrong vocabulary outcrop",
+                "minerals": [foreign_concept.pk],
+                "_save": "Save",
+            },
         )
         content = response.content.decode()
 
@@ -207,7 +248,9 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
         assert not Outcrop.objects.filter(name="Wrong vocabulary outcrop").exists()
         assert 'id="id_minerals_error"' in content
 
-    def test_a_concept_field_saved_through_the_admin_still_cannot_be_deleted(self, admin_client):
+    def test_a_concept_field_saved_through_the_admin_still_cannot_be_deleted(
+        self, admin_client
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
         admin_client.post(
@@ -218,9 +261,13 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
         with pytest.raises(ProtectedError):
             concept.delete()
 
-        assert Specimen.objects.filter(name="Protected sample", rock_type=concept).exists()
+        assert Specimen.objects.filter(
+            name="Protected sample", rock_type=concept
+        ).exists()
 
-    def test_a_concepts_field_saved_through_the_admin_still_cannot_be_deleted(self, admin_client):
+    def test_a_concepts_field_saved_through_the_admin_still_cannot_be_deleted(
+        self, admin_client
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
         concept = ConceptFactory(scheme=scheme)
         admin_client.post(
@@ -317,7 +364,9 @@ class TestConceptFieldOffersNoRelatedObjectAffordance:
     at all.
     """
 
-    def test_add_page_offers_no_affordance_for_a_concept_field(self, admin_client, concept_registered_admin_site):
+    def test_add_page_offers_no_affordance_for_a_concept_field(
+        self, admin_client, concept_registered_admin_site
+    ):
         with override_settings(ROOT_URLCONF=URLConf(concept_registered_admin_site)):
             response = admin_client.get(reverse("admin:testapp_specimen_add"))
         content = response.content.decode()
@@ -326,20 +375,26 @@ class TestConceptFieldOffersNoRelatedObjectAffordance:
         _assert_no_related_object_affordance(content)
         _assert_control_rendered(content, Specimen, "rock_type")
 
-    def test_change_page_offers_no_affordance_for_a_concept_field(self, admin_client, concept_registered_admin_site):
+    def test_change_page_offers_no_affordance_for_a_concept_field(
+        self, admin_client, concept_registered_admin_site
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
         specimen = SpecimenFactory(rock_type=concept)
 
         with override_settings(ROOT_URLCONF=URLConf(concept_registered_admin_site)):
-            response = admin_client.get(reverse("admin:testapp_specimen_change", args=[specimen.pk]))
+            response = admin_client.get(
+                reverse("admin:testapp_specimen_change", args=[specimen.pk])
+            )
         content = response.content.decode()
 
         assert response.status_code == 200
         _assert_no_related_object_affordance(content)
         _assert_control_rendered(content, Specimen, "rock_type")
 
-    def test_add_page_offers_no_affordance_for_a_concepts_field(self, admin_client, concept_registered_admin_site):
+    def test_add_page_offers_no_affordance_for_a_concepts_field(
+        self, admin_client, concept_registered_admin_site
+    ):
         with override_settings(ROOT_URLCONF=URLConf(concept_registered_admin_site)):
             response = admin_client.get(reverse("admin:testapp_outcrop_add"))
         content = response.content.decode()
@@ -348,21 +403,27 @@ class TestConceptFieldOffersNoRelatedObjectAffordance:
         _assert_no_related_object_affordance(content)
         _assert_control_rendered(content, Outcrop, "minerals")
 
-    def test_change_page_offers_no_affordance_for_a_concepts_field(self, admin_client, concept_registered_admin_site):
+    def test_change_page_offers_no_affordance_for_a_concepts_field(
+        self, admin_client, concept_registered_admin_site
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
         concept = ConceptFactory(scheme=scheme)
         outcrop = OutcropFactory()
         outcrop.minerals.add(concept)
 
         with override_settings(ROOT_URLCONF=URLConf(concept_registered_admin_site)):
-            response = admin_client.get(reverse("admin:testapp_outcrop_change", args=[outcrop.pk]))
+            response = admin_client.get(
+                reverse("admin:testapp_outcrop_change", args=[outcrop.pk])
+            )
         content = response.content.decode()
 
         assert response.status_code == 200
         _assert_no_related_object_affordance(content)
         _assert_control_rendered(content, Outcrop, "minerals")
 
-    def test_the_same_absence_holds_with_concept_not_registered(self, admin_client, bare_admin_site):
+    def test_the_same_absence_holds_with_concept_not_registered(
+        self, admin_client, bare_admin_site
+    ):
         """Pins US-2 scenario 4, and documents rather than checks it: Django
         suppresses all four links itself when the related model is
         unregistered, so this passes with or without the unwrap. The tests
@@ -431,7 +492,10 @@ def _assert_inline_row_control_rendered(content, model, field_name, prefix, inde
     assert f'id="{element_id}"' in content
     assert "data-tomselect" in content
     escaped_equals = "\\u003D"
-    assert f"autocompleteParams: 'field{escaped_equals}{_field_reference(model, field_name)}'" in content
+    assert (
+        f"autocompleteParams: 'field{escaped_equals}{_field_reference(model, field_name)}'"
+        in content
+    )
 
 
 @pytest.mark.django_db
@@ -444,18 +508,26 @@ class TestInlineRowsCarryTheControl:
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
         first_concept = ConceptFactory(scheme=rock_scheme, label="Granite")
         second_concept = ConceptFactory(scheme=rock_scheme, label="Basalt")
-        unattached_concept = ConceptFactory(scheme=rock_scheme, label="Unattached concept")
+        unattached_concept = ConceptFactory(
+            scheme=rock_scheme, label="Unattached concept"
+        )
         locality = LocalityFactory()
         SpecimenFactory(locality=locality, rock_type=first_concept)
         SpecimenFactory(locality=locality, rock_type=second_concept)
 
         with override_settings(ROOT_URLCONF=URLConf(locality_tabular_site)):
-            response = admin_client.get(reverse("admin:testapp_locality_change", args=[locality.pk]))
+            response = admin_client.get(
+                reverse("admin:testapp_locality_change", args=[locality.pk])
+            )
         content = response.content.decode()
 
         assert response.status_code == 200
-        _assert_inline_row_control_rendered(content, Specimen, "rock_type", "specimens", 0)
-        _assert_inline_row_control_rendered(content, Specimen, "rock_type", "specimens", 1)
+        _assert_inline_row_control_rendered(
+            content, Specimen, "rock_type", "specimens", 0
+        )
+        _assert_inline_row_control_rendered(
+            content, Specimen, "rock_type", "specimens", 1
+        )
         assert first_concept.label in content
         assert second_concept.label in content
         assert unattached_concept.label not in content
@@ -465,13 +537,17 @@ class TestInlineRowsCarryTheControl:
     ):
         mineral_scheme = ConceptSchemeFactory(name="Mineral")
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
-        parent_concept = ConceptFactory(scheme=mineral_scheme, label="Locality primary mineral")
+        parent_concept = ConceptFactory(
+            scheme=mineral_scheme, label="Locality primary mineral"
+        )
         row_concept = ConceptFactory(scheme=rock_scheme, label="Row rock type")
         locality = LocalityFactory(primary_mineral=parent_concept)
         SpecimenFactory(locality=locality, rock_type=row_concept)
 
         with override_settings(ROOT_URLCONF=URLConf(locality_tabular_site)):
-            response = admin_client.get(reverse("admin:testapp_locality_change", args=[locality.pk]))
+            response = admin_client.get(
+                reverse("admin:testapp_locality_change", args=[locality.pk])
+            )
         content = response.content.decode()
 
         parent_reference = _field_reference(Locality, "primary_mineral")
@@ -480,7 +556,9 @@ class TestInlineRowsCarryTheControl:
         assert response.status_code == 200
         assert parent_reference != row_reference
         _assert_control_rendered(content, Locality, "primary_mineral")
-        _assert_inline_row_control_rendered(content, Specimen, "rock_type", "specimens", 0)
+        _assert_inline_row_control_rendered(
+            content, Specimen, "rock_type", "specimens", 0
+        )
         assert parent_concept.label in content
         assert row_concept.label in content
 
@@ -501,14 +579,19 @@ class TestEmptyFormRowIsInitialisable:
         locality = LocalityFactory()
 
         with override_settings(ROOT_URLCONF=URLConf(locality_stacked_site)):
-            response = admin_client.get(reverse("admin:testapp_locality_change", args=[locality.pk]))
+            response = admin_client.get(
+                reverse("admin:testapp_locality_change", args=[locality.pk])
+            )
         content = response.content.decode()
 
         assert response.status_code == 200
         assert 'id="id_specimens-__prefix__-rock_type"' in content
         assert "data-tomselect" in content
         escaped_equals = "\\u003D"
-        assert f"autocompleteParams: 'field{escaped_equals}{_field_reference(Specimen, 'rock_type')}'" in content
+        assert (
+            f"autocompleteParams: 'field{escaped_equals}{_field_reference(Specimen, 'rock_type')}'"
+            in content
+        )
 
     def test_the_id_substitution_matches_the_identifier_djangos_inlinesjs_produces_for_a_new_row(
         self, admin_client, locality_tabular_site
@@ -529,7 +612,9 @@ class TestEmptyFormRowIsInitialisable:
         locality = LocalityFactory()
 
         with override_settings(ROOT_URLCONF=URLConf(locality_tabular_site)):
-            response = admin_client.get(reverse("admin:testapp_locality_change", args=[locality.pk]))
+            response = admin_client.get(
+                reverse("admin:testapp_locality_change", args=[locality.pk])
+            )
         content = response.content.decode()
 
         numbered_row_id = "id_specimens-0-rock_type"
@@ -538,9 +623,16 @@ class TestEmptyFormRowIsInitialisable:
 
         assert f'id="{numbered_row_id}"' in content
         assert f'id="{template_row_id}"' in content
-        assert re.sub(innermost_segment, "-__prefix__-", numbered_row_id) == template_row_id
         assert (
-            re.sub(innermost_segment, "-__prefix__-", "id_localities-0-specimens-1-rock_type")
+            re.sub(innermost_segment, "-__prefix__-", numbered_row_id)
+            == template_row_id
+        )
+        assert (
+            re.sub(
+                innermost_segment,
+                "-__prefix__-",
+                "id_localities-0-specimens-1-rock_type",
+            )
             == "id_localities-0-specimens-__prefix__-rock_type"
         )
 
@@ -572,7 +664,9 @@ class TestNewInlineRowSavesItsConcept:
         }
 
         with override_settings(ROOT_URLCONF=URLConf(locality_stacked_site)):
-            response = admin_client.post(reverse("admin:testapp_locality_change", args=[locality.pk]), data)
+            response = admin_client.post(
+                reverse("admin:testapp_locality_change", args=[locality.pk]), data
+            )
 
         assert response.status_code == 302
         specimen = Specimen.objects.get(name="Newly added specimen")
@@ -680,7 +774,9 @@ class TestExplicitDeclarationWins:
         assert 'class="admin-autocomplete' in content
         _assert_no_related_object_affordance(content)
 
-    def test_raw_id_fields_renders_the_raw_identifier_control(self, admin_client, raw_id_site):
+    def test_raw_id_fields_renders_the_raw_identifier_control(
+        self, admin_client, raw_id_site
+    ):
         with override_settings(ROOT_URLCONF=URLConf(raw_id_site)):
             response = admin_client.get(reverse("admin:testapp_specimen_add"))
         content = response.content.decode()
@@ -691,7 +787,9 @@ class TestExplicitDeclarationWins:
         assert 'name="rock_type"' in content
         assert 'type="text"' in content
 
-    def test_a_forms_declared_widget_renders_in_place_of_the_concept_control(self, admin_client, declared_widget_site):
+    def test_a_forms_declared_widget_renders_in_place_of_the_concept_control(
+        self, admin_client, declared_widget_site
+    ):
         with override_settings(ROOT_URLCONF=URLConf(declared_widget_site)):
             response = admin_client.get(reverse("admin:testapp_specimen_add"))
         content = response.content.decode()
@@ -701,8 +799,13 @@ class TestExplicitDeclarationWins:
         assert 'class="admin-autocomplete' not in content
         _assert_no_related_object_affordance(content)
 
-    @pytest.mark.parametrize("site_fixture_name", ["autocomplete_site", "raw_id_site", "declared_widget_site"])
-    def test_a_legitimate_concept_still_saves(self, admin_client, request, site_fixture_name):
+    @pytest.mark.parametrize(
+        "site_fixture_name",
+        ["autocomplete_site", "raw_id_site", "declared_widget_site"],
+    )
+    def test_a_legitimate_concept_still_saves(
+        self, admin_client, request, site_fixture_name
+    ):
         site = request.getfixturevalue(site_fixture_name)
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
@@ -710,15 +813,24 @@ class TestExplicitDeclarationWins:
         with override_settings(ROOT_URLCONF=URLConf(site)):
             response = admin_client.post(
                 reverse("admin:testapp_specimen_add"),
-                {"name": f"{site_fixture_name} sample", "rock_type": concept.pk, "_save": "Save"},
+                {
+                    "name": f"{site_fixture_name} sample",
+                    "rock_type": concept.pk,
+                    "_save": "Save",
+                },
             )
 
         assert response.status_code == 302
         specimen = Specimen.objects.get(name=f"{site_fixture_name} sample")
         assert specimen.rock_type_id == concept.pk
 
-    @pytest.mark.parametrize("site_fixture_name", ["autocomplete_site", "raw_id_site", "declared_widget_site"])
-    def test_an_ineligible_concept_is_still_refused(self, admin_client, request, site_fixture_name):
+    @pytest.mark.parametrize(
+        "site_fixture_name",
+        ["autocomplete_site", "raw_id_site", "declared_widget_site"],
+    )
+    def test_an_ineligible_concept_is_still_refused(
+        self, admin_client, request, site_fixture_name
+    ):
         site = request.getfixturevalue(site_fixture_name)
         other_scheme = ConceptSchemeFactory(name="Mineral")
         foreign_concept = ConceptFactory(scheme=other_scheme)
@@ -726,13 +838,21 @@ class TestExplicitDeclarationWins:
         with override_settings(ROOT_URLCONF=URLConf(site)):
             response = admin_client.post(
                 reverse("admin:testapp_specimen_add"),
-                {"name": f"{site_fixture_name} wrong vocabulary", "rock_type": foreign_concept.pk, "_save": "Save"},
+                {
+                    "name": f"{site_fixture_name} wrong vocabulary",
+                    "rock_type": foreign_concept.pk,
+                    "_save": "Save",
+                },
             )
 
         assert response.status_code == 200
-        assert not Specimen.objects.filter(name=f"{site_fixture_name} wrong vocabulary").exists()
+        assert not Specimen.objects.filter(
+            name=f"{site_fixture_name} wrong vocabulary"
+        ).exists()
 
-    def test_no_declaration_reports_a_check_error(self, autocomplete_site, raw_id_site, declared_widget_site):
+    def test_no_declaration_reports_a_check_error(
+        self, autocomplete_site, raw_id_site, declared_widget_site
+    ):
         for site in (autocomplete_site, raw_id_site, declared_widget_site):
             assert site.check(None) == []
 
@@ -771,7 +891,9 @@ def _view_only_staff_user(*codenames):
     # No password: every caller reaches the page through ``force_login``, so the
     # user never authenticates, and a literal here is a credential-shaped string
     # in the repository for nothing.
-    user = get_user_model().objects.create_user(username="readonly-viewer", is_staff=True)
+    user = get_user_model().objects.create_user(
+        username="readonly-viewer", is_staff=True
+    )
     for codename in codenames:
         user.user_permissions.add(Permission.objects.get(codename=codename))
     return user
@@ -797,30 +919,45 @@ class TestReadOnlyPresentationRendersNoControl:
     for the many-to-many.
     """
 
-    def test_a_declared_readonly_field_links_to_the_concepts_own_change_page(self, admin_client, readonly_concept_site):
+    def test_a_declared_readonly_field_links_to_the_concepts_own_change_page(
+        self, admin_client, readonly_concept_site
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme, label="Granite")
         specimen = SpecimenFactory(rock_type=concept)
 
         with override_settings(ROOT_URLCONF=URLConf(readonly_concept_site)):
-            response = admin_client.get(reverse("admin:testapp_specimen_change", args=[specimen.pk]))
-            concept_change_url = reverse("admin:controlled_vocabularies_concept_change", args=[concept.pk])
+            response = admin_client.get(
+                reverse("admin:testapp_specimen_change", args=[specimen.pk])
+            )
+            concept_change_url = reverse(
+                "admin:controlled_vocabularies_concept_change", args=[concept.pk]
+            )
         content = response.content.decode()
 
         assert response.status_code == 200
         assert "data-tomselect" not in content
         assert f'<a href="{concept_change_url}">Granite</a>' in content
 
-    def test_a_declared_readonly_field_renders_plain_text_for_a_many_to_many(self, admin_client, readonly_concept_site):
+    def test_a_declared_readonly_field_renders_plain_text_for_a_many_to_many(
+        self, admin_client, readonly_concept_site
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [ConceptFactory(scheme=scheme, label=f"Mineral {i}") for i in range(2)]
+        concepts = [
+            ConceptFactory(scheme=scheme, label=f"Mineral {i}") for i in range(2)
+        ]
         outcrop = OutcropFactory()
         outcrop.minerals.add(*concepts)
 
         with override_settings(ROOT_URLCONF=URLConf(readonly_concept_site)):
-            response = admin_client.get(reverse("admin:testapp_outcrop_change", args=[outcrop.pk]))
+            response = admin_client.get(
+                reverse("admin:testapp_outcrop_change", args=[outcrop.pk])
+            )
             concept_change_urls = [
-                reverse("admin:controlled_vocabularies_concept_change", args=[concept.pk]) for concept in concepts
+                reverse(
+                    "admin:controlled_vocabularies_concept_change", args=[concept.pk]
+                )
+                for concept in concepts
             ]
         content = response.content.decode()
 
@@ -841,8 +978,12 @@ class TestReadOnlyPresentationRendersNoControl:
         client.force_login(viewer)
 
         with override_settings(ROOT_URLCONF=URLConf(concept_registered_admin_site)):
-            response = client.get(reverse("admin:testapp_specimen_change", args=[specimen.pk]))
-            concept_change_url = reverse("admin:controlled_vocabularies_concept_change", args=[concept.pk])
+            response = client.get(
+                reverse("admin:testapp_specimen_change", args=[specimen.pk])
+            )
+            concept_change_url = reverse(
+                "admin:controlled_vocabularies_concept_change", args=[concept.pk]
+            )
         content = response.content.decode()
 
         assert response.status_code == 200
@@ -853,15 +994,22 @@ class TestReadOnlyPresentationRendersNoControl:
         self, client, concept_registered_admin_site
     ):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [ConceptFactory(scheme=scheme, label=f"Viewer mineral {i}") for i in range(2)]
+        concepts = [
+            ConceptFactory(scheme=scheme, label=f"Viewer mineral {i}") for i in range(2)
+        ]
         outcrop = OutcropFactory()
         outcrop.minerals.add(*concepts)
         client.force_login(_view_only_staff_user("view_outcrop"))
 
         with override_settings(ROOT_URLCONF=URLConf(concept_registered_admin_site)):
-            response = client.get(reverse("admin:testapp_outcrop_change", args=[outcrop.pk]))
+            response = client.get(
+                reverse("admin:testapp_outcrop_change", args=[outcrop.pk])
+            )
             concept_change_urls = [
-                reverse("admin:controlled_vocabularies_concept_change", args=[concept.pk]) for concept in concepts
+                reverse(
+                    "admin:controlled_vocabularies_concept_change", args=[concept.pk]
+                )
+                for concept in concepts
             ]
         content = response.content.decode()
 
@@ -901,7 +1049,9 @@ class TestCustomAdminSiteGetsTheSameBehaviour:
     site answers the request.
     """
 
-    def test_add_page_renders_the_control_with_no_related_object_affordance(self, admin_client, custom_admin_site):
+    def test_add_page_renders_the_control_with_no_related_object_affordance(
+        self, admin_client, custom_admin_site
+    ):
         with override_settings(ROOT_URLCONF=URLConf(custom_admin_site)):
             response = admin_client.get(reverse("admin:testapp_specimen_add"))
         content = response.content.decode()
@@ -910,28 +1060,40 @@ class TestCustomAdminSiteGetsTheSameBehaviour:
         _assert_control_rendered(content, Specimen, "rock_type")
         _assert_no_related_object_affordance(content)
 
-    def test_a_legitimate_concept_saves_through_the_custom_sites_add_page(self, admin_client, custom_admin_site):
+    def test_a_legitimate_concept_saves_through_the_custom_sites_add_page(
+        self, admin_client, custom_admin_site
+    ):
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
 
         with override_settings(ROOT_URLCONF=URLConf(custom_admin_site)):
             response = admin_client.post(
                 reverse("admin:testapp_specimen_add"),
-                {"name": "Custom site sample", "rock_type": concept.pk, "_save": "Save"},
+                {
+                    "name": "Custom site sample",
+                    "rock_type": concept.pk,
+                    "_save": "Save",
+                },
             )
 
         assert response.status_code == 302
         specimen = Specimen.objects.get(name="Custom site sample")
         assert specimen.rock_type_id == concept.pk
 
-    def test_an_ineligible_concept_is_refused_through_the_custom_sites_add_page(self, admin_client, custom_admin_site):
+    def test_an_ineligible_concept_is_refused_through_the_custom_sites_add_page(
+        self, admin_client, custom_admin_site
+    ):
         other_scheme = ConceptSchemeFactory(name="Mineral")
         foreign_concept = ConceptFactory(scheme=other_scheme)
 
         with override_settings(ROOT_URLCONF=URLConf(custom_admin_site)):
             response = admin_client.post(
                 reverse("admin:testapp_specimen_add"),
-                {"name": "Custom site wrong vocabulary", "rock_type": foreign_concept.pk, "_save": "Save"},
+                {
+                    "name": "Custom site wrong vocabulary",
+                    "rock_type": foreign_concept.pk,
+                    "_save": "Save",
+                },
             )
         content = response.content.decode()
 
@@ -954,5 +1116,9 @@ class TestCustomAdminSiteGetsTheSameBehaviour:
 
         assert default_response.status_code == 200
         assert custom_response.status_code == 200
-        _assert_control_rendered(default_response.content.decode(), Specimen, "rock_type")
-        _assert_control_rendered(custom_response.content.decode(), Specimen, "rock_type")
+        _assert_control_rendered(
+            default_response.content.decode(), Specimen, "rock_type"
+        )
+        _assert_control_rendered(
+            custom_response.content.decode(), Specimen, "rock_type"
+        )

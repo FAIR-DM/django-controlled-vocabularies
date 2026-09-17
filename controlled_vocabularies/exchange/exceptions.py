@@ -86,7 +86,9 @@ class SkosImportFailed(ValidationError):
     def __init__(self, report: ImportReport) -> None:
         self.report = report
         super().__init__(
-            _("The import was refused: %(count)s problem(s) were found. See the report for details."),
+            _(
+                "The import was refused: %(count)s problem(s) were found. See the report for details."
+            ),
             params={"count": len(report.fatal)},
             code="skos_import_failed",
         )

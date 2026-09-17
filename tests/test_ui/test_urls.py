@@ -21,7 +21,10 @@ class TestVocabularyDetailUrl:
 
     def test_reverses_by_name_and_slug(self):
         assert (
-            reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": "geology"})
+            reverse(
+                "controlled_vocabularies_ui:vocabulary-detail",
+                kwargs={"slug": "geology"},
+            )
             == "/vocabularies/geology/"
         )
 
@@ -61,7 +64,9 @@ class TestConceptDetailUrl:
         assert unquote(url).rstrip("/") == urlparse(concept.local_url).path
 
     @pytest.mark.django_db
-    def test_a_slug_shared_by_two_vocabularies_resolves_to_the_one_named_in_the_address(self, client):
+    def test_a_slug_shared_by_two_vocabularies_resolves_to_the_one_named_in_the_address(
+        self, client
+    ):
         scheme_a = ConceptSchemeFactory()
         scheme_b = ConceptSchemeFactory()
         concept_a = ConceptFactory(scheme=scheme_a, label="Granite")
@@ -87,7 +92,9 @@ class TestConceptDetailUrl:
         assert response_b.context["object"] == concept_b
 
     @pytest.mark.django_db
-    def test_an_address_whose_vocabulary_segment_names_nothing_returns_404(self, client):
+    def test_an_address_whose_vocabulary_segment_names_nothing_returns_404(
+        self, client
+    ):
         concept = ConceptFactory()
 
         response = client.get(
@@ -128,7 +135,9 @@ class TestCollectionDetailUrl:
         assert unquote(url).rstrip("/") == urlparse(collection.local_url).path
 
     @pytest.mark.django_db
-    def test_a_slug_shared_by_two_vocabularies_resolves_to_the_one_named_in_the_address(self, client):
+    def test_a_slug_shared_by_two_vocabularies_resolves_to_the_one_named_in_the_address(
+        self, client
+    ):
         scheme_a = ConceptSchemeFactory()
         scheme_b = ConceptSchemeFactory()
         collection_a = CollectionFactory(scheme=scheme_a, name="Igneous Rocks")
@@ -154,13 +163,18 @@ class TestCollectionDetailUrl:
         assert response_b.context["object"] == collection_b
 
     @pytest.mark.django_db
-    def test_an_address_whose_vocabulary_segment_names_nothing_returns_404(self, client):
+    def test_an_address_whose_vocabulary_segment_names_nothing_returns_404(
+        self, client
+    ):
         collection = CollectionFactory()
 
         response = client.get(
             reverse(
                 "controlled_vocabularies_ui:collection-detail",
-                kwargs={"slug": "no-such-vocabulary", "collection_slug": collection.slug},
+                kwargs={
+                    "slug": "no-such-vocabulary",
+                    "collection_slug": collection.slug,
+                },
             )
         )
 

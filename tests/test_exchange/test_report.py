@@ -29,7 +29,9 @@ _EXAMPLE_PARAMS = {
     SetAsideReason.NOTATION: {},
     SetAsideReason.MAPPING: {"predicate": "skos:exactMatch"},
     SetAsideReason.MISSING_RELATION_END: {"other": "https://example.org/vocab/missing"},
-    SetAsideReason.MISSING_MEMBER: {"collection": "https://example.org/vocab/collection/rocks"},
+    SetAsideReason.MISSING_MEMBER: {
+        "collection": "https://example.org/vocab/collection/rocks"
+    },
     SetAsideReason.NO_PREFERRED_LABEL: {"language": "en"},
     SetAsideReason.VOCABULARY_MISMATCH: {"other": "https://example.org/vocab/other"},
     SetAsideReason.DEFAULT_LANGUAGE_FROZEN: {"declared": "fr", "frozen": "en"},
@@ -53,8 +55,12 @@ _EXAMPLE_FATAL_PARAMS = {
     FatalReason.MISSING_IDENTITY: {},
     FatalReason.REFUSED_IDENTITY: {},
     FatalReason.VOCABULARY_UNDETERMINED: {},
-    FatalReason.VOCABULARY_TARGET_MISMATCH: {"target": "https://example.org/vocab/target"},
-    FatalReason.VOCABULARY_AMBIGUOUS: {"declared": "https://example.org/vocab/a, https://example.org/vocab/b"},
+    FatalReason.VOCABULARY_TARGET_MISMATCH: {
+        "target": "https://example.org/vocab/target"
+    },
+    FatalReason.VOCABULARY_AMBIGUOUS: {
+        "declared": "https://example.org/vocab/a, https://example.org/vocab/b"
+    },
     FatalReason.DEFAULT_LANGUAGE_UNCONFIGURED: {"language": "en-us"},
     FatalReason.VOCABULARY_SLUG_UNUSABLE: {},
     FatalReason.VOCABULARY_NAME_UNUSABLE: {"language": "en"},
@@ -64,7 +70,10 @@ _EXAMPLE_FATAL_PARAMS = {
 
 # One example params dict per normalized reason (T021), the same shape as _EXAMPLE_PARAMS.
 _EXAMPLE_NORMALIZED_PARAMS = {
-    NormalizedReason.FOREIGN_DEFINITION: {"predicate": "dcterms:description", "language": "en"},
+    NormalizedReason.FOREIGN_DEFINITION: {
+        "predicate": "dcterms:description",
+        "language": "en",
+    },
     NormalizedReason.LANGUAGE_SUBSTITUTION: {"language": "en-gb", "kept_as": "en"},
 }
 
@@ -113,10 +122,16 @@ class TestImportReportBuckets:
 
     def test_set_aside_by_reason_groups_and_counts_without_parsing_prose(self):
         report = ImportReport()
-        report.add_set_aside(SetAsideReason.NOTATION, "https://example.org/vocab/rocks/granite")
-        report.add_set_aside(SetAsideReason.NOTATION, "https://example.org/vocab/rocks/basalt")
         report.add_set_aside(
-            SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/vocab/rocks/granite", language="es"
+            SetAsideReason.NOTATION, "https://example.org/vocab/rocks/granite"
+        )
+        report.add_set_aside(
+            SetAsideReason.NOTATION, "https://example.org/vocab/rocks/basalt"
+        )
+        report.add_set_aside(
+            SetAsideReason.UNCONFIGURED_LANGUAGE,
+            "https://example.org/vocab/rocks/granite",
+            language="es",
         )
         grouped = report.set_aside_by_reason()
         assert len(grouped[SetAsideReason.NOTATION]) == 2
@@ -133,11 +148,19 @@ class TestLanguageAccount:
     on ``params["language"]``, which both members put the *published* tag
     under (T022)."""
 
-    def test_counts_every_value_not_stored_for_a_language_reason_broken_down_by_published_language(self):
+    def test_counts_every_value_not_stored_for_a_language_reason_broken_down_by_published_language(
+        self,
+    ):
         report = ImportReport()
-        report.add_set_aside(SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/a", language="fr")
-        report.add_set_aside(SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/b", language="fr")
-        report.add_set_aside(SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/c", language="es")
+        report.add_set_aside(
+            SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/a", language="fr"
+        )
+        report.add_set_aside(
+            SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/b", language="fr"
+        )
+        report.add_set_aside(
+            SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/c", language="es"
+        )
         assert report.language_account() == {"fr": 2, "es": 1}
 
     def test_a_value_that_was_stored_is_not_counted(self):
@@ -146,12 +169,17 @@ class TestLanguageAccount:
         report.add_updated("https://example.org/b")
         assert report.language_account() == {}
 
-    def test_a_contest_loser_is_counted_under_its_own_published_tag_not_what_it_lost_to(self):
+    def test_a_contest_loser_is_counted_under_its_own_published_tag_not_what_it_lost_to(
+        self,
+    ):
         # FR-008/T022: en-us lost the contest to en-gb, but it is en-us — the
         # language configuring would actually recover — that must be counted.
         report = ImportReport()
         report.add_set_aside(
-            SetAsideReason.VARIANT_NOT_KEPT, "https://example.org/a", language="en-us", kept_as="en-gb"
+            SetAsideReason.VARIANT_NOT_KEPT,
+            "https://example.org/a",
+            language="en-us",
+            kept_as="en-gb",
         )
         assert report.language_account() == {"en-us": 1}
 
@@ -159,7 +187,11 @@ class TestLanguageAccount:
         # SURPLUS_PREFERRED_LABEL's language is a configured code the site
         # already holds; nothing recovers a same-language duplicate (D14).
         report = ImportReport()
-        report.add_set_aside(SetAsideReason.SURPLUS_PREFERRED_LABEL, "https://example.org/a", language="de")
+        report.add_set_aside(
+            SetAsideReason.SURPLUS_PREFERRED_LABEL,
+            "https://example.org/a",
+            language="de",
+        )
         assert report.language_account() == {}
 
     def test_present_and_empty_after_a_run_that_left_nothing_behind(self):
@@ -170,9 +202,15 @@ class TestLanguageAccount:
 
     def test_a_caller_can_rank_languages_by_what_configuring_them_would_recover(self):
         report = ImportReport()
-        report.add_set_aside(SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/a", language="fr")
-        report.add_set_aside(SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/b", language="fr")
-        report.add_set_aside(SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/c", language="es")
+        report.add_set_aside(
+            SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/a", language="fr"
+        )
+        report.add_set_aside(
+            SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/b", language="fr"
+        )
+        report.add_set_aside(
+            SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/c", language="es"
+        )
         # Ranked without parsing any rendered message — read as plain data.
         ranked = sorted(report.language_account().items(), key=lambda item: -item[1])
         assert ranked[0] == ("fr", 2)
@@ -182,8 +220,16 @@ class TestLanguageAccount:
         # must rank as one recoverable language, not two — FR-001's
         # case-insensitivity applies to the account as much as to matching.
         report = ImportReport()
-        report.add_set_aside(SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/a", language="PT-br")
-        report.add_set_aside(SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/b", language="pt-BR")
+        report.add_set_aside(
+            SetAsideReason.UNCONFIGURED_LANGUAGE,
+            "https://example.org/a",
+            language="PT-br",
+        )
+        report.add_set_aside(
+            SetAsideReason.UNCONFIGURED_LANGUAGE,
+            "https://example.org/b",
+            language="pt-BR",
+        )
         account = report.language_account()
         assert len(account) == 1
         assert sum(account.values()) == 2
@@ -194,7 +240,9 @@ class TestSetAsideEntry:
     a reason, subject or params after it has been reported."""
 
     def test_set_aside_entry_is_immutable(self):
-        entry = SetAsideEntry(reason=SetAsideReason.NOTATION, subject="https://example.org/vocab/x")
+        entry = SetAsideEntry(
+            reason=SetAsideReason.NOTATION, subject="https://example.org/vocab/x"
+        )
         with pytest.raises((AttributeError, TypeError)):
             entry.subject = "changed"
 
@@ -206,7 +254,9 @@ class TestAnEmptyLanguageTagRendersAsAPhraseNotAnEmptyQuote:
     placeholder, rendering "...in ''..." — nothing unsafe or leaked, just uninformative.
     """
 
-    def test_value_too_long_with_an_untagged_literal_names_no_language_tag_not_empty_quotes(self):
+    def test_value_too_long_with_an_untagged_literal_names_no_language_tag_not_empty_quotes(
+        self,
+    ):
         entry = SetAsideEntry(
             reason=SetAsideReason.VALUE_TOO_LONG,
             subject="https://example.org/vocab/rocks",
@@ -216,7 +266,9 @@ class TestAnEmptyLanguageTagRendersAsAPhraseNotAnEmptyQuote:
         assert "''" not in rendered
         assert "no language tag" in rendered
 
-    def test_vocabulary_name_unusable_with_an_untagged_literal_names_no_language_tag_not_empty_quotes(self):
+    def test_vocabulary_name_unusable_with_an_untagged_literal_names_no_language_tag_not_empty_quotes(
+        self,
+    ):
         finding = FatalFinding(
             reason=FatalReason.VOCABULARY_NAME_UNUSABLE,
             subject="https://example.org/vocab/rocks",
@@ -234,16 +286,28 @@ class TestSetAsideReasonVocabulary:
 
     @pytest.mark.parametrize("reason", list(SetAsideReason))
     def test_every_reason_has_a_translatable_label(self, reason):
-        assert isinstance(reason.label, Promise), f"{reason} label is not lazily translatable"
+        assert isinstance(reason.label, Promise), (
+            f"{reason} label is not lazily translatable"
+        )
 
     @pytest.mark.parametrize("reason", list(SetAsideReason))
-    def test_every_reason_template_is_translatable_with_a_named_subject_placeholder(self, reason):
-        assert isinstance(reason.template, Promise), f"{reason} template is not lazily translatable"
-        assert "%(subject)s" in str(reason.template), f"{reason} template lacks a named %(subject)s placeholder"
+    def test_every_reason_template_is_translatable_with_a_named_subject_placeholder(
+        self, reason
+    ):
+        assert isinstance(reason.template, Promise), (
+            f"{reason} template is not lazily translatable"
+        )
+        assert "%(subject)s" in str(reason.template), (
+            f"{reason} template lacks a named %(subject)s placeholder"
+        )
 
     @pytest.mark.parametrize("reason", list(SetAsideReason))
     def test_every_reason_renders_with_its_example_params(self, reason):
-        entry = SetAsideEntry(reason=reason, subject="https://example.org/vocab/x", params=_EXAMPLE_PARAMS[reason])
+        entry = SetAsideEntry(
+            reason=reason,
+            subject="https://example.org/vocab/x",
+            params=_EXAMPLE_PARAMS[reason],
+        )
         rendered = entry.render()
         assert isinstance(rendered, str)
         assert "https://example.org/vocab/x" in rendered
@@ -260,7 +324,9 @@ class TestVariantNotKeptReason:
     destination it lost to under ``kept_as`` — the wrong way round keys T004's
     account under a language the site already holds."""
 
-    def test_the_entry_carries_the_published_tag_under_language_and_the_destination_under_kept_as(self):
+    def test_the_entry_carries_the_published_tag_under_language_and_the_destination_under_kept_as(
+        self,
+    ):
         report = ImportReport()
         report.add_set_aside(
             SetAsideReason.VARIANT_NOT_KEPT,
@@ -307,7 +373,9 @@ class TestFatalBucketAndFinding:
 
     def test_add_fatal_records_reason_subject_and_params_as_data(self):
         report = ImportReport()
-        report.add_fatal(FatalReason.MISSING_IDENTITY, "https://example.org/vocab/rocks/blank")
+        report.add_fatal(
+            FatalReason.MISSING_IDENTITY, "https://example.org/vocab/rocks/blank"
+        )
         assert len(report.fatal) == 1
         entry = report.fatal[0]
         assert isinstance(entry, FatalFinding)
@@ -316,7 +384,9 @@ class TestFatalBucketAndFinding:
         assert entry.params == {}
 
     def test_fatal_finding_is_immutable(self):
-        finding = FatalFinding(reason=FatalReason.MISSING_IDENTITY, subject="https://example.org/vocab/x")
+        finding = FatalFinding(
+            reason=FatalReason.MISSING_IDENTITY, subject="https://example.org/vocab/x"
+        )
         with pytest.raises((AttributeError, TypeError)):
             finding.subject = "changed"
 
@@ -328,16 +398,28 @@ class TestFatalReasonVocabulary:
 
     @pytest.mark.parametrize("reason", list(FatalReason))
     def test_every_fatal_reason_has_a_translatable_label(self, reason):
-        assert isinstance(reason.label, Promise), f"{reason} label is not lazily translatable"
+        assert isinstance(reason.label, Promise), (
+            f"{reason} label is not lazily translatable"
+        )
 
     @pytest.mark.parametrize("reason", list(FatalReason))
-    def test_every_fatal_reason_template_is_translatable_with_a_named_subject_placeholder(self, reason):
-        assert isinstance(reason.template, Promise), f"{reason} template is not lazily translatable"
-        assert "%(subject)s" in str(reason.template), f"{reason} template lacks a named %(subject)s placeholder"
+    def test_every_fatal_reason_template_is_translatable_with_a_named_subject_placeholder(
+        self, reason
+    ):
+        assert isinstance(reason.template, Promise), (
+            f"{reason} template is not lazily translatable"
+        )
+        assert "%(subject)s" in str(reason.template), (
+            f"{reason} template lacks a named %(subject)s placeholder"
+        )
 
     @pytest.mark.parametrize("reason", list(FatalReason))
     def test_every_fatal_reason_renders_with_its_example_params(self, reason):
-        entry = FatalFinding(reason=reason, subject="https://example.org/vocab/x", params=_EXAMPLE_FATAL_PARAMS[reason])
+        entry = FatalFinding(
+            reason=reason,
+            subject="https://example.org/vocab/x",
+            params=_EXAMPLE_FATAL_PARAMS[reason],
+        )
         rendered = entry.render()
         assert isinstance(rendered, str)
         assert "https://example.org/vocab/x" in rendered
@@ -385,7 +467,10 @@ class TestImportReportNormalizedBucket:
         assert report.fatal == []
 
     def test_normalized_entry_is_immutable(self):
-        entry = NormalizedEntry(reason=NormalizedReason.FOREIGN_DEFINITION, subject="https://example.org/vocab/x")
+        entry = NormalizedEntry(
+            reason=NormalizedReason.FOREIGN_DEFINITION,
+            subject="https://example.org/vocab/x",
+        )
         with pytest.raises((AttributeError, TypeError)):
             entry.subject = "changed"
 
@@ -397,17 +482,27 @@ class TestNormalizedReasonVocabulary:
 
     @pytest.mark.parametrize("reason", list(NormalizedReason))
     def test_every_normalized_reason_has_a_translatable_label(self, reason):
-        assert isinstance(reason.label, Promise), f"{reason} label is not lazily translatable"
+        assert isinstance(reason.label, Promise), (
+            f"{reason} label is not lazily translatable"
+        )
 
     @pytest.mark.parametrize("reason", list(NormalizedReason))
-    def test_every_normalized_reason_template_is_translatable_with_a_named_subject_placeholder(self, reason):
-        assert isinstance(reason.template, Promise), f"{reason} template is not lazily translatable"
-        assert "%(subject)s" in str(reason.template), f"{reason} template lacks a named %(subject)s placeholder"
+    def test_every_normalized_reason_template_is_translatable_with_a_named_subject_placeholder(
+        self, reason
+    ):
+        assert isinstance(reason.template, Promise), (
+            f"{reason} template is not lazily translatable"
+        )
+        assert "%(subject)s" in str(reason.template), (
+            f"{reason} template lacks a named %(subject)s placeholder"
+        )
 
     @pytest.mark.parametrize("reason", list(NormalizedReason))
     def test_every_normalized_reason_renders_with_its_example_params(self, reason):
         entry = NormalizedEntry(
-            reason=reason, subject="https://example.org/vocab/x", params=_EXAMPLE_NORMALIZED_PARAMS[reason]
+            reason=reason,
+            subject="https://example.org/vocab/x",
+            params=_EXAMPLE_NORMALIZED_PARAMS[reason],
         )
         rendered = entry.render()
         assert isinstance(rendered, str)
@@ -435,7 +530,9 @@ class TestLanguageSubstitutionReason:
         assert entry.subject == "https://example.org/vocab/rocks/granite"
         assert entry.params == {"language": "en-gb", "kept_as": "en"}
 
-    def test_it_renders_naming_both_the_published_tag_and_the_language_stored_under(self):
+    def test_it_renders_naming_both_the_published_tag_and_the_language_stored_under(
+        self,
+    ):
         entry = NormalizedEntry(
             reason=NormalizedReason.LANGUAGE_SUBSTITUTION,
             subject="https://example.org/vocab/rocks/granite",
@@ -480,8 +577,12 @@ class TestReasonTemplatesUseOnlyNamedPlaceholders:
     per-reason tests don't check for the absence of. A reason added later without
     its own dedicated test is still caught here."""
 
-    @pytest.mark.parametrize("reason", list(SetAsideReason) + list(FatalReason) + list(NormalizedReason))
-    def test_reason_template_has_no_positional_placeholder(self, reason, uses_only_named_placeholders):
+    @pytest.mark.parametrize(
+        "reason", list(SetAsideReason) + list(FatalReason) + list(NormalizedReason)
+    )
+    def test_reason_template_has_no_positional_placeholder(
+        self, reason, uses_only_named_placeholders
+    ):
         template = str(reason.template)
         assert uses_only_named_placeholders(template), (
             f"{reason} template carries something other than a named placeholder: {template!r}"
@@ -520,7 +621,9 @@ class TestDocumentSuppliedTextCannotDriveTheTerminal:
         assert "Innocent" in rendered
 
     def test_a_fatal_subject_cannot_carry_an_escape_sequence(self):
-        finding = FatalFinding(reason=FatalReason.REFUSED_IDENTITY, subject=self._HOSTILE, params={})
+        finding = FatalFinding(
+            reason=FatalReason.REFUSED_IDENTITY, subject=self._HOSTILE, params={}
+        )
         assert "\x1b" not in finding.render()
 
     def test_a_normalized_param_cannot_carry_an_escape_sequence(self):

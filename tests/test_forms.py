@@ -38,7 +38,14 @@ from tests.factories import (
     SampleFactory,
     collection_with_members,
 )
-from tests.testapp.models import BranchSample, ChipSample, CoreSample, Deposit, Outcrop, Sample
+from tests.testapp.models import (
+    BranchSample,
+    ChipSample,
+    CoreSample,
+    Deposit,
+    Outcrop,
+    Sample,
+)
 
 
 def _rendered_under_an_ambient_request(build):
@@ -113,7 +120,10 @@ class TestConceptFieldRenderingIsBoundedByVocabularySize:
 
     def test_rendered_length_and_absence_of_labels_hold_for_a_small_vocabulary(self):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [ConceptFactory(scheme=scheme, label=f"Small vocab concept {i}") for i in range(5)]
+        concepts = [
+            ConceptFactory(scheme=scheme, label=f"Small vocab concept {i}")
+            for i in range(5)
+        ]
 
         rendered = str(SampleForm())
 
@@ -125,7 +135,10 @@ class TestConceptFieldRenderingIsBoundedByVocabularySize:
             ConceptFactory(scheme=scheme, label=f"Small vocab concept {i}")
         small_rendered = str(SampleForm())
 
-        large_concepts = [ConceptFactory(scheme=scheme, label=f"Large vocab concept {i}") for i in range(2000)]
+        large_concepts = [
+            ConceptFactory(scheme=scheme, label=f"Large vocab concept {i}")
+            for i in range(2000)
+        ]
         large_rendered = str(SampleForm())
 
         assert len(large_rendered) == len(small_rendered)
@@ -172,7 +185,9 @@ class TestConceptFieldSubmissionSurvives:
         concept = ConceptFactory(scheme=mineral_scheme)
         outcrop = OutcropFactory()
 
-        form = OutcropForm(data={"name": "Outcrop A", "minerals": [concept.pk]}, instance=outcrop)
+        form = OutcropForm(
+            data={"name": "Outcrop A", "minerals": [concept.pk]}, instance=outcrop
+        )
 
         assert form.is_valid(), form.errors
         instance = form.save()
@@ -183,7 +198,10 @@ class TestConceptFieldSubmissionSurvives:
         foreign_concept = ConceptFactory(scheme=other_scheme)
         outcrop = OutcropFactory()
 
-        form = OutcropForm(data={"name": "Outcrop B", "minerals": [foreign_concept.pk]}, instance=outcrop)
+        form = OutcropForm(
+            data={"name": "Outcrop B", "minerals": [foreign_concept.pk]},
+            instance=outcrop,
+        )
 
         assert not form.is_valid()
         assert "minerals" in form.errors
@@ -203,7 +221,9 @@ class TestConceptFieldCollectionRestrictionFormChoices:
 
     def test_the_modelforms_own_queryset_is_exactly_the_members(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite", "Basalt"))
+        _collection, members = collection_with_members(
+            scheme=scheme, name="Core Samples", labels=("Granite", "Basalt")
+        )
         outsider = ConceptFactory(scheme=scheme, label="Marble")
 
         choices = list(CoreSampleForm().fields["rock_type"].queryset)
@@ -214,7 +234,9 @@ class TestConceptFieldCollectionRestrictionFormChoices:
 
     def test_the_widgets_own_queryset_is_exactly_the_members(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite", "Basalt"))
+        _collection, members = collection_with_members(
+            scheme=scheme, name="Core Samples", labels=("Granite", "Basalt")
+        )
         outsider = ConceptFactory(scheme=scheme, label="Marble")
 
         widget = CoreSampleForm().fields["rock_type"].widget
@@ -226,7 +248,9 @@ class TestConceptFieldCollectionRestrictionFormChoices:
 
     def test_a_member_of_a_second_collection_too_is_not_duplicated_on_either_path(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite",))
+        _collection, members = collection_with_members(
+            scheme=scheme, name="Core Samples", labels=("Granite",)
+        )
         other_collection = CollectionFactory(scheme=scheme, name="Display Samples")
         other_collection.add(members[0])
 
@@ -364,47 +388,69 @@ class TestConceptFieldShowsWhatARecordAlreadyHolds:
     regress — the exact gap T008 found and repaired.
     """
 
-    def test_a_concept_field_shows_the_attached_concept_under_its_active_language_label(self):
+    def test_a_concept_field_shows_the_attached_concept_under_its_active_language_label(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
         concept = ConceptFactory(scheme=scheme, multilingual=True, label="Quartz")
         sample = SampleFactory(mineral=concept)
 
         with translation.override("de"):
-            rendered = _rendered_under_an_ambient_request(lambda: str(SampleForm(instance=sample)))
+            rendered = _rendered_under_an_ambient_request(
+                lambda: str(SampleForm(instance=sample))
+            )
 
         assert concept.preferred_label("de") in rendered
         assert "Quartz" not in rendered
 
-    def test_a_concepts_field_shows_every_attached_concept_under_its_active_language_label(self):
+    def test_a_concepts_field_shows_every_attached_concept_under_its_active_language_label(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [ConceptFactory(scheme=scheme, multilingual=True, label=f"Concept {i}") for i in range(3)]
+        concepts = [
+            ConceptFactory(scheme=scheme, multilingual=True, label=f"Concept {i}")
+            for i in range(3)
+        ]
         outcrop = OutcropFactory()
         outcrop.minerals.add(*concepts)
 
         with translation.override("de"):
-            rendered = _rendered_under_an_ambient_request(lambda: str(OutcropForm(instance=outcrop)))
+            rendered = _rendered_under_an_ambient_request(
+                lambda: str(OutcropForm(instance=outcrop))
+            )
 
         for concept in concepts:
             assert concept.preferred_label("de") in rendered
 
-    def test_submitting_the_concepts_field_form_untouched_leaves_all_three_attached(self):
+    def test_submitting_the_concepts_field_form_untouched_leaves_all_three_attached(
+        self,
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [ConceptFactory(scheme=scheme, label=f"Concept {i}") for i in range(3)]
+        concepts = [
+            ConceptFactory(scheme=scheme, label=f"Concept {i}") for i in range(3)
+        ]
         outcrop = OutcropFactory()
         outcrop.minerals.add(*concepts)
 
         form = OutcropForm(
-            data={"name": outcrop.name, "minerals": [concept.pk for concept in concepts]},
+            data={
+                "name": outcrop.name,
+                "minerals": [concept.pk for concept in concepts],
+            },
             instance=outcrop,
         )
 
         assert form.is_valid(), form.errors
         instance = form.save()
-        assert set(instance.minerals.values_list("pk", flat=True)) == {concept.pk for concept in concepts}
+        assert set(instance.minerals.values_list("pk", flat=True)) == {
+            concept.pk for concept in concepts
+        }
 
     def test_removing_one_attached_concept_and_saving_removes_exactly_that_one(self):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [ConceptFactory(scheme=scheme, label=f"Concept {i}") for i in range(3)]
+        concepts = [
+            ConceptFactory(scheme=scheme, label=f"Concept {i}") for i in range(3)
+        ]
         outcrop = OutcropFactory()
         outcrop.minerals.add(*concepts)
         kept = concepts[:2]
@@ -416,9 +462,13 @@ class TestConceptFieldShowsWhatARecordAlreadyHolds:
 
         assert form.is_valid(), form.errors
         instance = form.save()
-        assert set(instance.minerals.values_list("pk", flat=True)) == {concept.pk for concept in kept}
+        assert set(instance.minerals.values_list("pk", flat=True)) == {
+            concept.pk for concept in kept
+        }
 
-    def test_a_concept_field_still_shows_an_attached_concept_outside_the_current_vocabulary(self):
+    def test_a_concept_field_still_shows_an_attached_concept_outside_the_current_vocabulary(
+        self,
+    ):
         """The un-overridden widget drops this concept (plan.md A8, R1): the
         record already holds it, but ``_get_selected_options()`` resolves it
         through the same narrowed ``get_queryset()`` the validation path uses,
@@ -427,11 +477,15 @@ class TestConceptFieldShowsWhatARecordAlreadyHolds:
         outside_concept = ConceptFactory(scheme=outside_scheme, label="Basalt")
         sample = SampleFactory(mineral=outside_concept)
 
-        rendered = _rendered_under_an_ambient_request(lambda: str(SampleForm(instance=sample)))
+        rendered = _rendered_under_an_ambient_request(
+            lambda: str(SampleForm(instance=sample))
+        )
 
         assert "Basalt" in rendered
 
-    def test_a_concepts_field_still_shows_an_attached_concept_outside_the_current_vocabulary(self):
+    def test_a_concepts_field_still_shows_an_attached_concept_outside_the_current_vocabulary(
+        self,
+    ):
         """The multiple-valued field's own widget class, proved independently
         (see the single-valued case above for why the un-overridden widget
         drops it).
@@ -455,7 +509,9 @@ class TestConceptFieldShowsWhatARecordAlreadyHolds:
         concept.scheme = other_scheme
         concept.save()
 
-        rendered = _rendered_under_an_ambient_request(lambda: str(OutcropForm(instance=outcrop)))
+        rendered = _rendered_under_an_ambient_request(
+            lambda: str(OutcropForm(instance=outcrop))
+        )
 
         assert "Basalt" in rendered
 
@@ -496,9 +552,14 @@ class TestDisplayingAnAttachedConceptLeavesValidationNarrow:
 
     @pytest.mark.parametrize(
         ("form_class", "field_name", "instance_factory"),
-        [(SampleForm, "mineral", SampleFactory), (OutcropForm, "minerals", OutcropFactory)],
+        [
+            (SampleForm, "mineral", SampleFactory),
+            (OutcropForm, "minerals", OutcropFactory),
+        ],
     )
-    def test_the_widget_queryset_is_narrow_again_after_a_render(self, form_class, field_name, instance_factory):
+    def test_the_widget_queryset_is_narrow_again_after_a_render(
+        self, form_class, field_name, instance_factory
+    ):
         mineral_scheme = ConceptSchemeFactory(name="Mineral")
         attached = ConceptFactory(scheme=mineral_scheme)
         foreign = ConceptFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
@@ -528,11 +589,15 @@ class TestConceptFieldDeclinesTheAdminWrapper:
     so "model_field binding intact" means the field holds the very same
     widget instance it already carried, not a freshly constructed one."""
 
-    def test_a_concept_field_unwraps_a_related_field_widget_wrapper_to_its_own_widget(self):
+    def test_a_concept_field_unwraps_a_related_field_widget_wrapper_to_its_own_widget(
+        self,
+    ):
         model_field = Sample._meta.get_field("mineral")
         field = ConceptChoiceField(model_field=model_field, required=False)
         original_widget = field.widget
-        wrapper = RelatedFieldWidgetWrapper(field.widget, model_field.remote_field, AdminSite())
+        wrapper = RelatedFieldWidgetWrapper(
+            field.widget, model_field.remote_field, AdminSite()
+        )
 
         field.widget = wrapper
 
@@ -548,11 +613,15 @@ class TestConceptFieldDeclinesTheAdminWrapper:
 
         assert field.widget is ordinary_widget
 
-    def test_a_concepts_field_unwraps_a_related_field_widget_wrapper_to_its_own_widget(self):
+    def test_a_concepts_field_unwraps_a_related_field_widget_wrapper_to_its_own_widget(
+        self,
+    ):
         model_field = Outcrop._meta.get_field("minerals")
         field = ConceptsChoiceField(model_field=model_field, required=False)
         original_widget = field.widget
-        wrapper = RelatedFieldWidgetWrapper(field.widget, model_field.remote_field, AdminSite())
+        wrapper = RelatedFieldWidgetWrapper(
+            field.widget, model_field.remote_field, AdminSite()
+        )
 
         field.widget = wrapper
 
@@ -583,11 +652,15 @@ class TestConceptWidgetsShipTheInlineInitialisationScript:
         assert find(self._ASSET) is not None
 
     def test_the_concept_widget_declares_the_asset_in_its_media(self):
-        widget = ConceptChoiceField(model_field=Sample._meta.get_field("mineral"), required=False).widget
+        widget = ConceptChoiceField(
+            model_field=Sample._meta.get_field("mineral"), required=False
+        ).widget
 
         assert self._ASSET in widget.media._js
 
     def test_the_concepts_widget_declares_the_asset_in_its_media(self):
-        widget = ConceptsChoiceField(model_field=Outcrop._meta.get_field("minerals"), required=False).widget
+        widget = ConceptsChoiceField(
+            model_field=Outcrop._meta.get_field("minerals"), required=False
+        ).widget
 
         assert self._ASSET in widget.media._js

@@ -82,7 +82,9 @@ def curie_uri(curie: str) -> str:
     """
     prefix, separator, local = curie.partition(":")
     if not separator or not local or prefix not in CURIE_NAMESPACES:
-        raise ValueError(f"'{curie}' is not a CURIE in a namespace this package declares.")
+        raise ValueError(
+            f"'{curie}' is not a CURIE in a namespace this package declares."
+        )
     return f"{CURIE_NAMESPACES[prefix]}{local}"
 
 
@@ -132,12 +134,16 @@ MAPPING_PREDICATES: dict[rdflib.URIRef, str] = {
 #: Stored :class:`~controlled_vocabularies.models.ConceptLabel.Kind` -> ``skos:xxx`` CURIE
 #: (015-read-single-record T001, FR-003). The inverse of :data:`LABEL_PREDICATES`, derived
 #: rather than hand-written, so a predicate added there appears here with no second edit.
-LABEL_CURIES: dict[str, str] = {kind: skos_curie(predicate) for predicate, kind in LABEL_PREDICATES.items()}
+LABEL_CURIES: dict[str, str] = {
+    kind: skos_curie(predicate) for predicate, kind in LABEL_PREDICATES.items()
+}
 
 #: Stored :class:`~controlled_vocabularies.models.ConceptNote.Kind` -> ``skos:xxx`` CURIE
 #: (015-read-single-record T001, FR-003). The inverse of :data:`NOTE_PREDICATES`, same
 #: no-second-edit guarantee as :data:`LABEL_CURIES`.
-NOTE_CURIES: dict[str, str] = {kind: skos_curie(predicate) for predicate, kind in NOTE_PREDICATES.items()}
+NOTE_CURIES: dict[str, str] = {
+    kind: skos_curie(predicate) for predicate, kind in NOTE_PREDICATES.items()
+}
 
 #: The relation, scheme-membership, collection-membership and type CURIEs a record's page
 #: keys its remaining rows on (015-read-single-record T001, FR-010 to FR-013). None of
