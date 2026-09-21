@@ -797,15 +797,15 @@ rich = ">=13"
 
 [[package]]
 name = "django-mvp"
-version = "0.20.1"
+version = "0.23.0"
 description = "MVP framework for Django - scaffold production-ready applications with sophisticated layouts and UI patterns designed for data-centric applications."
 optional = true
 python-versions = "<4.0,>=3.12"
 groups = ["main"]
 markers = "python_version >= \"3.12\" and extra == \"ui\""
 files = [
-    {file = "django_mvp-0.20.1-py3-none-any.whl", hash = "sha256:5a44cc362028fac8384c2a4d57434b6c6275d7045ada34ba6a12b9fb4480a548"},
-    {file = "django_mvp-0.20.1.tar.gz", hash = "sha256:bb8a4d1b67af546ca1ce9e6440a1ab328396cdd4f9c9cc3843144ed7e04c2a5a"},
+    {file = "django_mvp-0.23.0-py3-none-any.whl", hash = "sha256:deeb8ab10596a7cf6401bba1e377eb3cfee705d26af9cd300c48ce19812b6615"},
+    {file = "django_mvp-0.23.0.tar.gz", hash = "sha256:568bc9c25cf0330218608b0d5ad0217864c6b140119e068a6e5cf8b05e346426"},
 ]
 
 [package.dependencies]
@@ -3065,4 +3065,4 @@ ui = ["django-mvp"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "62550a9b4bc2d880dcbaede098bbb6e02c0699eeb7285aa3cf04c8db65e2b2f1"
+content-hash = "be43b93ea0ea396f4b11ed9fcef0b7de034c021a1322e6d451411a6ae35d9259"
