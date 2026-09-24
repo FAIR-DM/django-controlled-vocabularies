@@ -46,10 +46,10 @@ def _run_django_admin(
     with a different ``INSTALLED_APPS``, which only a subprocess can give (012
     decisions.md D13, D-T014)."""
     env = {**os.environ, "DJANGO_SETTINGS_MODULE": settings}
-    poetry = shutil.which("poetry")
-    assert poetry is not None, "poetry must be on PATH to run this test"
+    uv = shutil.which("uv")
+    assert uv is not None, "uv must be on PATH to run this test"
     return subprocess.run(  # noqa: S603 — fixed argv, no untrusted input
-        [poetry, "run", "django-admin", *args],
+        [uv, "run", "django-admin", *args],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,

@@ -5,7 +5,7 @@ the page. Nothing else in this suite reads the documentation, so the documented 
 drift from the working ones — and did: the section first shipped calling a bare
 ``python manage.py``, which on a machine whose path carries only ``python3`` fails at the demo's
 own first step, while every test here and the walk in CI passed, because both go through
-``poetry run``.
+``uv run``.
 
 There is no ``demo/test_documented_commands.py`` for this to mirror — the subject is the
 documentation and the workflow agreeing with each other — so this file is a non-mirror exception
@@ -63,9 +63,9 @@ class TestDocumentedCommands:
         """Every invocation the section carries, not only the three that start it: the same
         drift that shipped a bare ``python manage.py migrate`` can ship a bare
         ``createsuperuser`` beside it."""
-        assert prefix.strip().endswith("poetry run"), (
+        assert prefix.strip().endswith("uv run"), (
             f"{BROWSING_DOC.name} documents '{prefix} python manage.py {subcommand}': a bare "
-            "interpreter is not the environment 'poetry install' just built, and on a "
+            "interpreter is not the environment 'uv sync' just built, and on a "
             "machine whose path carries only 'python3' it does not exist at all"
         )
 

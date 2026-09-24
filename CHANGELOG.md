@@ -6,6 +6,16 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+### Added
+
+- Django 6.1 is supported, and tested on every change alongside 5.2 and 6.0.
+
+### Changed
+
+- The project is built and developed with uv instead of Poetry. Contributors run `uv sync` in
+  place of `poetry install`, and `uv run` in place of `poetry run`. Published packages are
+  unaffected.
+
 ## [v0.1.0] - 2026-08-26
 
 ## [v0.0.3] - 2026-08-25

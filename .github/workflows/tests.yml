@@ -8,7 +8,7 @@ on:
       - 'controlled_vocabularies/**'
       - 'tests/**'
       - 'pyproject.toml'
-      - 'poetry.lock'
+      - 'uv.lock'
       - '.github/workflows/tests.yml'
   # No paths filter on pull_request: these checks are ruleset-required, and a
   # path-filtered required check never reports on out-of-scope PRs, blocking merge.
@@ -18,14 +18,11 @@ on:
 
 jobs:
   call-tests:
-    uses: django-mvp/shared/.github/workflows/tests.yml@v0.4.1
+    uses: django-mvp/shared/.github/workflows/tests.yml@v0.6.0
     with:
       coverage-package: controlled_vocabularies
-      django-versions: '["5.2", "6.0"]'
-      # test/lint tooling lives in the single (non-optional) dev group plus the
-      # mvp-shared test extra. --extras ui installs django-mvp too, so the
-      # 013-find-a-vocabulary ui suite (tests/test_ui/) has its dependency;
-      # the matrix below runs 3.12/3.13 only, both above the extra's
+      # The dev group carries django-mvp as well as the mvp-shared bundle, so the
+      # 013-find-a-vocabulary ui suite (tests/test_ui/) has its dependency after the
+      # default `uv sync`; the matrix runs 3.12/3.13 only, both above the extra's
       # python>=3.12 marker (research.md R6).
-      poetry-install-args: '--extras ui'
     secrets: inherit
