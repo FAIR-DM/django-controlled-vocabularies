@@ -1,45 +1,52 @@
-[tool.poetry]
+[project]
 name = "django-controlled-vocabularies"
 version = "0.1.0"
 description = "Manage, publish, and consume SKOS controlled vocabularies in Django"
-authors = ["Sam Jennings"]
+authors = [{ name = "Sam Jennings" }]
 license = "MIT"
+license-files = ["LICENSE"]
 readme = "README.md"
-packages = [{include = "controlled_vocabularies"}]
-homepage = "https://github.com/FAIR-DM/django-controlled-vocabularies"
+requires-python = ">=3.11,<4.0"
 keywords = ["django", "SKOS", "RDF", "controlled vocabulary", "thesaurus", "research", "FAIR", "metadata"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Framework :: Django :: 5.2",
     "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
 ]
+dependencies = [
+    # Only actively supported Django releases (family standard). 5.2 LTS + current
+    # stable; dropping a version is a constitution-level change.
+    "django>=5.2",
+    # Runtime deps that carry the vocabulary model (rdflib for the import/export
+    # boundary, django-parler for translations) are declared alongside the v0.1 code
+    # that imports them — deptry fails a declared-but-unused dependency, so the
+    # born-green scaffold stays lean.
+    "defusedxml>=0.7.1,<0.8",
+    # The RDF parsing boundary (research.md R1). Moved here from the dev group in
+    # this same commit — T006/skos.py is the first code that imports it at
+    # runtime (decisions.md D12).
+    "rdflib>=7.6.0,<8",
+    # The search-as-you-type endpoint and its form fields (FR-002, FR-015). This
+    # package's own views.py and forms.py are the code that imports it at runtime
+    # (research.md, decisions.md D9).
+    "django-tomselect>=2026.6.2,<2027",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.11,<4.0"
-# Only actively supported Django releases (family standard). 5.2 LTS + current
-# stable; dropping a version is a constitution-level change.
-django = ">=5.2"
-# Runtime deps that carry the vocabulary model (rdflib for the import/export
-# boundary, django-parler for translations) are declared alongside the v0.1 code
-# that imports them — deptry fails a declared-but-unused dependency, so the
-# born-green scaffold stays lean.
-defusedxml = "^0.7.1"
-# The RDF parsing boundary (research.md R1). Moved here from the dev group in
-# this same commit — T006/skos.py is the first code that imports it at
-# runtime (decisions.md D12).
-rdflib = "^7.6.0"
-# The search-as-you-type endpoint and its form fields (FR-002, FR-015). This
-# package's own views.py and forms.py are the code that imports it at runtime
-# (research.md, decisions.md D9).
-django-tomselect = "^2026.6.2"
+[project.urls]
+Homepage = "https://github.com/FAIR-DM/django-controlled-vocabularies"
+
+[project.optional-dependencies]
 # The opt-in browsing front end (013-find-a-vocabulary, FR-012). Optional: the
 # core package carries no UI dependency, only controlled_vocabularies/ui/
 # imports it (test_ui/test_architecture.py, test_ui/test_packaging.py prove
@@ -51,22 +58,32 @@ django-tomselect = "^2026.6.2"
 # it the shipped search and sort controls render associated with a form only
 # the filter action defines (django-mvp#282), so both are inert on a page that
 # shows neither a filter nor a create button — which is every page here.
-django-mvp = { version = ">=0.19.2,<0.24.0", optional = true, python = ">=3.12" }
+ui = ["django-mvp>=0.19.2,<0.24.0; python_version >= '3.12'"]
 
-[tool.poetry.extras]
-ui = ["django-mvp"]
-
-[tool.poetry.group.dev.dependencies]
+[dependency-groups]
 # Family toolchain bundle; the pin tag is the family-standard version. Ships
 # ruff, mypy, deptry, pre-commit, pytest, pytest-django, coverage, django-stubs.
 # python marker: the bundle needs >=3.12; the package floor stays 3.11 for
-# consumers — dev tooling never ships to them.
-mvp-shared = { git = "https://github.com/django-mvp/shared.git", tag = "v0.4.1", extras = ["dev", "test"], python = ">=3.12" }
+# consumers — dev tooling never ships to them. django-mvp is here as well as in
+# the `ui` extra so the front-end suite (tests/test_ui/) and the demo have their
+# dependency after a plain `uv sync`, in CI and locally.
+dev = [
+    "mvp-shared[dev,test]; python_version >= '3.12'",
+    "django-mvp>=0.19.2,<0.24.0; python_version >= '3.12'",
+]
+
+[tool.uv.sources]
+mvp-shared = { git = "https://github.com/django-mvp/shared.git", tag = "v0.6.0" }
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["controlled_vocabularies"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/controlled_vocabularies", "/README.md", "/LICENSE"]
 
 [tool.mypy]
 files = ["controlled_vocabularies"]

@@ -8,7 +8,7 @@ on:
       - 'demo/**'
       - 'controlled_vocabularies/**'
       - 'pyproject.toml'
-      - 'poetry.lock'
+      - 'uv.lock'
       - '.github/workflows/demo.yml'
   # No paths filter on pull_request: this check is ruleset-required, and a
   # path-filtered required check never reports on out-of-scope PRs, blocking
@@ -31,19 +31,23 @@ jobs:
       - name: Check out
         uses: actions/checkout@v7
 
-      - name: Set up Poetry env
-        uses: django-mvp/shared/.github/actions/setup-poetry@v0.4.1
+      # The dev group carries django-mvp, the demo's front-end dependency.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: '3.13'
-          poetry-install-args: '--extras ui'
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
 
       - name: Build and seed the demo database
         # The same commands, in the same order, that README.md documents. There is no
         # composite command to run instead, so keeping this list and the README in step is
         # what FR-015/SC-007 are about.
         run: |
-          poetry run python manage.py migrate --noinput
-          poetry run python manage.py seed_demo
+          uv run python manage.py migrate --noinput
+          uv run python manage.py seed_demo
         env:
           DEMO_DB_PATH: ${{ runner.temp }}/demo-db.sqlite3
 
@@ -52,7 +56,7 @@ jobs:
         # autoreloader on, the pid recorded here is the parent and the kill at the end
         # leaves the child serving.
         run: |
-          poetry run python manage.py runserver --noreload &
+          uv run python manage.py runserver --noreload &
           echo $! > "${RUNNER_TEMP}/demo.pid"
         env:
           DEMO_DB_PATH: ${{ runner.temp }}/demo-db.sqlite3
@@ -72,7 +76,7 @@ jobs:
           exit 1
 
       - name: Walk the demo (demo/smoke.py)
-        run: poetry run python demo/smoke.py http://127.0.0.1:8000
+        run: uv run python demo/smoke.py http://127.0.0.1:8000
 
       - name: Stop the demo
         if: always()

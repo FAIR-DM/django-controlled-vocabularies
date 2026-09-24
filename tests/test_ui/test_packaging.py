@@ -19,31 +19,28 @@ def load_pyproject():
 class TestDjangoMVPIsOptOnly:
     """FR-012 — installing the core alone resolves no ui dependency."""
 
-    def test_django_mvp_is_optional(self):
+    def test_django_mvp_is_absent_from_the_core_dependencies(self):
         pyproject = load_pyproject()
-        dependency = pyproject["tool"]["poetry"]["dependencies"]["django-mvp"]
-        assert dependency["optional"] is True
+        assert not any(
+            requirement.startswith("django-mvp")
+            for requirement in pyproject["project"]["dependencies"]
+        )
 
     def test_django_mvp_is_declared_in_the_ui_extra(self):
         pyproject = load_pyproject()
-        extras = pyproject["tool"]["poetry"]["extras"]
-        assert extras["ui"] == ["django-mvp"]
+        extras = pyproject["project"]["optional-dependencies"]
+        assert [requirement.split(">")[0] for requirement in extras["ui"]] == [
+            "django-mvp"
+        ]
 
     def test_django_mvp_is_absent_from_every_other_extra(self):
         pyproject = load_pyproject()
-        extras = pyproject["tool"]["poetry"]["extras"]
-        for extra_name, packages in extras.items():
+        extras = pyproject["project"]["optional-dependencies"]
+        for extra_name, requirements in extras.items():
             if extra_name == "ui":
                 continue
-            assert "django-mvp" not in packages
-
-    def test_django_mvp_is_absent_from_every_poetry_dependency_group(self):
-        pyproject = load_pyproject()
-        groups = pyproject["tool"]["poetry"].get("group", {})
-        for group_name, group in groups.items():
-            dependencies = group.get("dependencies", {})
-            assert "django-mvp" not in dependencies, (
-                f"django-mvp found in poetry group '{group_name}'"
+            assert not any(
+                requirement.startswith("django-mvp") for requirement in requirements
             )
 
 

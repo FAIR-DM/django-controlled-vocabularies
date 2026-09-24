@@ -22,7 +22,7 @@ except ImportError:
     sys.stderr.write(
         "The demo needs the front end's dependencies, which are not installed. "
         "Install them with: pip install django-controlled-vocabularies[ui] "
-        "(or poetry install --extras ui).\n"
+        "(or uv sync --extra ui).\n"
     )
     sys.exit(1)
 

@@ -158,7 +158,7 @@ a published URI never changes activates at 1.0 per Article VIII; the mechanisms 
 regardless, to keep a single deployment's data self-consistent.)
 
 ### Article X — Stack & architecture norms
-- **Django** 5.2 LTS + current stable (6.0); **Python** floor 3.11; Poetry-managed; dev toolchain
+- **Django** 5.2 LTS + current stable (6.0, 6.1); **Python** floor 3.11; uv-managed; dev toolchain
   from `mvp-shared[dev,test]`; ruff owns lint **and** format (no black/isort/pyupgrade).
 - **Models are the source of truth; RDF is a projection** produced only at the import/export
   boundary. The app is not a triplestore and exposes no SPARQL endpoint.
