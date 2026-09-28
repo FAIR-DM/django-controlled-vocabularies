@@ -1,24 +1,21 @@
-"""Tests proving django-mvp only ever arrives through the opt-in ``ui`` extra (T004).
-
-There is no ``controlled_vocabularies/ui/packaging.py`` to mirror against — the subject is
-``pyproject.toml`` itself — so this file is one of the standing non-mirror exceptions
-(``[tool.forge.conformance] non-mirror-paths``, T001).
-"""
-
-from pathlib import Path
+"""Tests that django-mvp only arrives through the opt-in ``ui`` extra."""
 
 import tomllib
+from pathlib import Path
 
 PYPROJECT_PATH = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
 
 def load_pyproject():
+    """Parse the repository's pyproject.toml.
+
+    Returns:
+        The parsed document.
+    """
     return tomllib.loads(PYPROJECT_PATH.read_text())
 
 
 class TestDjangoMVPIsOptOnly:
-    """FR-012 — installing the core alone resolves no ui dependency."""
-
     def test_django_mvp_is_absent_from_the_core_dependencies(self):
         pyproject = load_pyproject()
         assert not any(
@@ -45,15 +42,10 @@ class TestDjangoMVPIsOptOnly:
 
 
 class TestToolingReadsCoreOnlySettings:
-    """The type checker runs in a job that installs no extras, so anything it imports has to be
-    resolvable without them.
-    """
-
     def test_django_stubs_points_at_a_settings_module_that_installs_no_ui_app(self):
-        # django-stubs' mypy plugin imports this module at startup. Pointed at tests.settings,
-        # which installs django-mvp's stack, the plugin cannot be constructed in a job installed
-        # without the `ui` extra — and it fails as an internal error naming the plugin, not the
-        # import, on a machine where mypy passes locally because the extra happens to be there.
+        # The mypy plugin imports this module at startup, and the type-check job installs no
+        # extras. Pointed at tests.settings it fails there as an internal plugin error, while
+        # passing locally where the ui extra happens to be installed.
         settings_module = load_pyproject()["tool"]["django-stubs"][
             "django_settings_module"
         ]

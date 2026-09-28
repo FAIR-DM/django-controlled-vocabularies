@@ -100,7 +100,7 @@ everything else unchanged. Two mechanics to get right, both raised by the design
 must come **before** the django-tomselect field class in the bases, or the inherited class-level
 `widget` attribute shadows the property; and the getter must tolerate being read before anything has
 been stored, because `django/forms/fields.py:146` evaluates `widget = widget or self.widget` during
-`Field.__init__`. Per Article XV the behaviour is one named mixin shared by both classes,
+`Field.__init__`. Per Article XIV the behaviour is one named mixin shared by both classes,
 not duplicated logic; per Article III it stays a mixin on the existing classes and nothing is
 exported for a project to use.
 

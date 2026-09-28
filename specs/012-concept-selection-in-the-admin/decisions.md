@@ -160,7 +160,7 @@ to know what a `RelatedFieldWidgetWrapper` is.
 returns `None` when the admin is not installed. It registers nothing.
 
 **Why defensible**: it keeps an admin-only import out of `forms.py`, which otherwise has nothing to
-do with the admin, and it gives `tests/test_admin.py` a source module to mirror under Article XIV.
+do with the admin, and it gives `tests/test_admin.py` a source module to mirror under testing standard §4.
 
 *Corrected at the design review (DR-005).* The original rationale claimed that Django's
 `AdminConfig.ready()` autodiscovery is what makes the module conditional. It is not: `forms.py`
@@ -602,7 +602,7 @@ untouched here, because renaming them would pull four modules this feature never
 diff. Worth doing as its own small change.
 
 **Consequence worth naming**: the four widget mixins were module-private and are now part of
-`controlled_vocabularies.forms`'s public surface. That is consistent with Article XV, which treats a
+`controlled_vocabularies.forms`'s public surface. That is consistent with Article XIV, which treats a
 class as the extension point a consumer subclasses, and the package is at `0.0.x` before its first
 publish, so no compatibility window is owed.
 

@@ -142,7 +142,7 @@ The README tells a developer that a model declaring one of these fields gets sea
 
 1. **Given** the shipped documentation, **When** the README is read, **Then** it states that registering a consuming model in the admin is enough, that the wiring is the same three entries the forms feature already asks for, that concepts cannot be created or edited from a consuming record's page, and how a project overrides the default.
 2. **Given** the feature's user-visible strings, **When** the source is inspected, **Then** each is wrapped for translation per Article XII, with named placeholders.
-3. **Given** the test suite, **When** the modules are located, **Then** they mirror the source tree per Article XIV and reuse the shared consuming models and fixtures rather than defining new ones.
+3. **Given** the test suite, **When** the modules are located, **Then** they mirror the source tree per testing standard §4 and reuse the shared consuming models and fixtures rather than defining new ones.
 4. **Given** the CHANGELOG, **When** it is read, **Then** it records the addition.
 5. **Given** `CONTEXT.md`, **When** it is read, **Then** any term this feature introduces into the package's public vocabulary is defined there, and the concept search control's entry reflects that it is now the admin's representation too.
 

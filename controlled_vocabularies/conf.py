@@ -1,23 +1,12 @@
-"""Configuration access for controlled_vocabularies.
-
-A single read site for the base address used to compose concept and scheme URIs
-(research decision R2). Keeping the read in one place stops the composition rule
-from scattering across the models.
-"""
+"""Readers for the package's settings and their defaults."""
 
 from django.conf import settings
 
-#: Default base address when the host project does not configure one. A localhost
-#: placeholder that signals "configure me for real deployments" while keeping the
-#: package usable standalone. Documented in the README.
+#: A localhost placeholder that signals "configure me" while keeping the package usable standalone.
 DEFAULT_BASE_URI = "http://localhost:8000/vocabularies"
 
-#: Default schemes accepted for an externally assigned static URI (FR-004,
-#: decisions.md D5/D15, T035): a small, stable allowlist rather than an
-#: unbounded denylist. ``http``/``https`` are the overwhelming common case;
-#: ``urn``, ``doi``, ``info``, ``ark``, ``tag``, ``hdl``, and ``oai`` are the
-#: non-http identifier schemes real SKOS vocabularies actually use (``tag``,
-#: ``hdl``, and ``oai`` added in review round 4, decisions.md D15).
+#: An allowlist rather than a denylist: ``http``/``https`` plus the non-http identifier
+#: schemes real SKOS vocabularies use.
 DEFAULT_ALLOWED_URI_SCHEMES = (
     "http",
     "https",
@@ -32,22 +21,26 @@ DEFAULT_ALLOWED_URI_SCHEMES = (
 
 
 def get_base_uri() -> str:
-    """Return the configured base URI for vocabulary/concept URIs, without a trailing slash.
+    """Return the base address for composed URIs, without a trailing slash.
 
-    Reads ``settings.CONTROLLED_VOCABULARIES_BASE_URI`` and falls back to
-    :data:`DEFAULT_BASE_URI`. A trailing slash is stripped so callers can compose
-    with ``f"{base}/{slug}"`` unconditionally.
+    Reads ``settings.CONTROLLED_VOCABULARIES_BASE_URI``, falling back to
+    :data:`DEFAULT_BASE_URI`.
+
+    Returns:
+        The base address.
     """
     base = getattr(settings, "CONTROLLED_VOCABULARIES_BASE_URI", DEFAULT_BASE_URI)
     return base.rstrip("/")
 
 
 def get_allowed_uri_schemes() -> frozenset[str]:
-    """Return the configured, lower-cased set of accepted static-URI schemes.
+    """Return the lower-cased schemes accepted for a static URI.
 
-    Reads ``settings.CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES`` and falls
-    back to :data:`DEFAULT_ALLOWED_URI_SCHEMES`, so a downstream project with
-    an unusual scheme is not stuck with the defaults (T035).
+    Reads ``settings.CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES``, falling back to
+    :data:`DEFAULT_ALLOWED_URI_SCHEMES`.
+
+    Returns:
+        The accepted schemes.
     """
     schemes = getattr(
         settings,

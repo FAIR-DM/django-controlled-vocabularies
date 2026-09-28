@@ -14,7 +14,7 @@ Append-only log of stage transitions and gate outcomes.
   owns *where* they read it. A fourth question drifted into rule design and was pulled back on
   Sam's correction. Feature statement confirmed. Issue labelled `accepted`.
 - **S1 SPECIFY** — repo synced first at Sam's instruction: `main` was two commits behind
-  (PR #68, constitution Articles XIV and XV), and Article XV constrains this feature's shape.
+  (PR #68, constitution Articles XIV and XV), and Article XIV constrains this feature's shape.
   Branch `007-import-keeps-published` created. `spec.md` written: 5 user stories (2×P1, 2×P2,
   1×P3), FR-001..015, SC-001..021. Clarify coverage scan run and self-answered — eight ambiguities
   resolved into the spec across two sessions, rationale in `decisions.md` (D1–D11). The scan caught
@@ -144,7 +144,7 @@ Append-only log of stage transitions and gate outcomes.
     variant still needed T007 to actually import, so "every concept is named" is T007's own test.
   - **T007** — `SkosGraph.preferred_label_in` returns every `(published tag, value)` candidate a
     node's `skos:prefLabel` carries, unfiltered by language (configured-language policy stays off
-    the RDF boundary, Article XV); `ConceptImporter.import_concepts`, its one caller, filters for
+    the RDF boundary, Article XIV); `ConceptImporter.import_concepts`, its one caller, filters for
     candidates resolving to the target default language and reads `LanguageMatcher.resolve_winner`
     (T021) for `Concept.label`. An exact match is proven not displaced by a more predominant
     variant.
@@ -376,7 +376,7 @@ Append-only log of stage transitions and gate outcomes.
     `<http://a.org/colours>` then `<http://b.org/colours>` raised exactly that on this branch and
     imported cleanly on `cd4f1c6`. Fixed by factoring `assign_unique_slug`'s own collision shape
     into a shared `unique_slug_for_identifier(static_uri, taken_slugs)`, called by both
-    `ConceptImporter.assign_unique_slug` and `SchemeResolver.resolve_scheme` (Article XV) — a
+    `ConceptImporter.assign_unique_slug` and `SchemeResolver.resolve_scheme` (Article XIV) — a
     numeric suffix minted only when the candidate already belongs to a different record's
     `static_uri`. `ConceptScheme.save()`'s own refusal is untouched. Full rationale in D41.
   - **T036** — The scheme path had no guard for an identifier segment that `slugify()` strips to

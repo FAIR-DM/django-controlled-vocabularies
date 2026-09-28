@@ -1,27 +1,11 @@
-"""The demo's admin lets a person add a vocabulary by hand (T015, FR-014, User Story 3).
-
-The story promises a reader can "add a vocabulary by hand to see it appear", and the README
-turns that into a documented instruction: run ``createsuperuser``, sign in at ``/admin/``. The
-package registers nothing with any admin site — a curator interface is a later feature — so the
-demo project has to register the model itself, or the documented step leads to an admin index
-holding only users and groups.
-
-Run in a fresh subprocess for the same reason ``test_demo.py`` is: ``django.setup()`` runs once
-per interpreter, and the pytest session has already booted the app registry from
-``tests.settings``.
-
-The subject is ``demo/admin.py``, which sits outside the package the mirror rule walks, so this
-file is a non-mirror exception (``[tool.forge.conformance] non-mirror-paths``) alongside every
-other module in this directory.
-"""
+"""Tests for the demo project's admin."""
 
 import subprocess
 import sys
 
-#: The documented instruction walked end to end. Asserting the model is merely *registered*
-#: would be too weak a gate: a bare registration satisfies it and still refuses the submission,
-#: because ``slug`` is unique, required and derived on save, so a form carrying it demands a
-#: value the model is about to compute.
+# Runs in a fresh interpreter because django.setup() runs once per process. Walks the
+# documented instruction end to end: a bare registration would pass a registered-only
+# check yet refuse the form, since slug is required.
 ADMIN_SCRIPT = """
 import os, tempfile
 os.environ["DJANGO_SETTINGS_MODULE"] = "demo.settings"
@@ -57,9 +41,6 @@ print("DEMO_ADMIN_OK")
 
 
 class TestDemoAdmin:
-    """FR-014, User Story 3 — signing in at the demo's admin, adding a vocabulary and finding
-    it on the list is the one interactive instruction the demo carries, and it works."""
-
     def test_a_vocabulary_added_through_the_admin_appears_on_the_list(self):
         result = subprocess.run(  # noqa: S603 — fixed interpreter, literal script, no user input
             [sys.executable, "-c", ADMIN_SCRIPT],

@@ -55,7 +55,7 @@ is linear in triples and runs beside the traversals already there. Nothing here 
 concept count (G5).
 
 **Constraints**: matching must not depend on Django translation catalogs (`research.md` R1). The
-account must be derived from report entries rather than accumulated beside them (R3). Article XV
+account must be derived from report entries rather than accumulated beside them (R3). Article XIV
 requires the new behaviour to be grouped in a class rather than added as further module-level
 functions in `skos.py`.
 
@@ -111,7 +111,7 @@ controlled_vocabularies/
 
 tests/
 ├── test_exchange/
-│   ├── test_languages.py    # NEW — mirrors the new module (Article XIV)
+│   ├── test_languages.py    # NEW — mirrors the new module (testing standard §4)
 │   ├── test_report.py       # CHANGED — the account
 │   └── test_skos.py         # CHANGED — the behavioural scenarios
 └── fixtures/
@@ -163,7 +163,7 @@ grep, and confirm it against `skos.py` before starting.
 
 `skos.py::configured_language_codes()` is **deleted** by this feature, not left in place. Its one
 remaining job — reading `settings.LANGUAGES` — becomes the matcher's default construction, so the
-subject is not split across the new module and the function the plan cites as its own Article XV
+subject is not split across the new module and the function the plan cites as its own Article XIV
 justification. `models.py::_configured_language_codes` stays exactly as it is: it is private, it
 serves model validation, and `exchange` already imports `models`, so folding it the other way would
 invert the dependency.
@@ -180,7 +180,7 @@ nowhere. SC-005 fails and the report contradicts the database.
 The rule therefore lives in **one place**: a `LanguageMatcher` method that takes the candidate
 `(tag, value)` pairs for one resolved language and returns the winner and the losers. Both call sites
 read it. That also keeps the predominance ranking private to the matcher rather than reaching into
-it from `import_labels` (Article XV, the article this plan cites as its own justification).
+it from `import_labels` (Article XIV, the article this plan cites as its own justification).
 
 ### Rules the implementer must not have to invent
 

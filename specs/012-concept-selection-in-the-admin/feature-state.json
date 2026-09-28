@@ -83,7 +83,7 @@
         "DR-002 medium: T016's help-text change had no spec provenance and its stated rule could not deliver its own third assertion. Verified against django/contrib/admin/options.py:337-341. Task dropped, D11 superseded by D15, carried to the retro as a follow-up candidate",
         "DR-003 medium: four files are shared across stories, only one collision was recorded. Stories are now dispatched sequentially onto the branch with the full collision table in tasks.md (D16)",
         "DR-004 medium: plan.md and research.md wrongly claimed autocomplete_fields and declared widgets are not wrapped. Corrected in both, and T012 gained the assertion that they carry no related link either",
-        "DR-005 low: T014 asserted the wrong negative for FR-006 and D10's rationale was false, since forms.py imports the module on every render. Assertion changed to sys.modules, D10's reason corrected to Article XIV mirroring",
+        "DR-005 low: T014 asserted the wrong negative for FR-006 and D10's rationale was false, since forms.py imports the module on every render. Assertion changed to sys.modules, D10's reason corrected to testing standard §4 mirroring",
         "DR-006 low: FR-002, FR-013, SC-001 and US-1 scenario 6 traced to no task. Traces added to T002 and to the verification section; no new work",
         "DR-007 low: plan.md claimed no migration while T008 adds one to the test app. Both rows corrected",
         "Six editorial notes swept: the wrap is options.py:215 not :193, T001's settings premise, _run_django_admin's hardcoded settings module, the inline failure needs extra=0, the data-context attribute survives unwrapping, and the mixin's base ordering",

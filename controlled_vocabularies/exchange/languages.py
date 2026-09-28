@@ -1,20 +1,4 @@
-"""Resolving a published language tag to a configured language (FS-007 US0).
-
-One class owns this subject (constitution Article XV) rather than a handful of
-module-level functions beside ``skos.py``'s own ``configured_language_codes()`` —
-the plan's "eight comparisons" all read through :class:`LanguageMatcher` once the
-stories after this one wire them up. This module imports nothing from ``rdflib``:
-the graph traversal that produces a predominance ranking stays behind
-:class:`~controlled_vocabularies.exchange.skos.SkosGraph`, this codebase's RDF
-boundary (``research.md`` R2), so a matcher here is testable from a plain dict.
-
-Django's own ``django.utils.translation.get_supported_language_variant`` was
-measured and rejected (``research.md`` R1): it refuses any language Django ships
-no translation catalog for, including one the project explicitly declares in
-``settings.LANGUAGES`` — which would make this feature silently useless for the
-research vocabularies it exists to serve. Nothing here consults a translation
-catalog; matching is plain string comparison against the configured codes.
-"""
+"""Resolving a published language tag to a configured language (FS-007)."""
 
 from __future__ import annotations
 
@@ -26,18 +10,16 @@ from django.conf import settings
 
 @dataclass(frozen=True)
 class LanguageResolution:
-    """One published tag's resolution against the site's configured languages (T001).
+    """One published tag's resolution against the site's configured languages.
 
-    ``configured_language`` is ``None`` when ``published_tag`` shares no base
-    language with any configured language (FR-001). Otherwise it is the winning
-    code exactly as declared in ``settings.LANGUAGES`` — case folding is for
-    comparison only, never for the returned value, because a project declaring
-    ``en-GB`` that received the normalised ``en-gb`` back would raise
-    ``ValidationError`` from ``ConceptLabel.clean`` on every write.
+    ``configured_language`` is returned exactly as declared in ``settings.LANGUAGES``.
+    Case folding is only for comparison, because a project declaring ``en-GB`` that
+    received ``en-gb`` back would fail ``ConceptLabel.clean`` on every write.
 
-    ``is_exact`` is derived from ``published_tag`` and ``configured_language``
-    rather than stored alongside them, so the pair can never disagree with
-    itself.
+    Attributes:
+        published_tag: The language tag as the file published it.
+        configured_language: The configured language it resolved to, or ``None`` when
+            it shares a base language with none of them.
     """
 
     published_tag: str
@@ -45,7 +27,7 @@ class LanguageResolution:
 
     @property
     def is_exact(self) -> bool:
-        """Whether ``configured_language`` matches ``published_tag`` verbatim, case-insensitively."""
+        """Whether ``configured_language`` equals ``published_tag``, ignoring case."""
         return (
             self.configured_language is not None
             and self.configured_language.lower() == self.published_tag.lower()
@@ -53,17 +35,17 @@ class LanguageResolution:
 
 
 class LanguageMatcher:
-    """Resolves published language tags against the site's configured languages
-    (FR-001, FR-002, FR-003; decisions.md D3, D5, D15).
+    """Resolve published language tags against the site's configured languages.
 
-    Immutable once constructed: ``configured_languages`` is the deterministically
-    ordered sequence of codes the site holds — never a ``set``, whose iteration
-    order varies per process and would make :meth:`resolve` non-deterministic on
-    the one ambiguous base Django's own 99-language default contains,
-    ``zh-hans``/``zh-hant`` (D15). ``tag_counts`` is how often each published tag
-    appears across the vocabulary's own concept nodes' ``skos:prefLabel`` values
-    (``research.md`` R2) — the population :meth:`resolve_winner` settles a contest
-    over.
+    Immutable once constructed.
+
+    Args:
+        configured_languages: The configured language codes, in a deterministic order.
+            Never a ``set``: its iteration order varies per process and would make
+            :meth:`resolve` non-deterministic for ``zh-hans``/``zh-hant``, which Django's
+            default languages both contain.
+        tag_counts: How often each published tag appears across the vocabulary's concept
+            ``skos:prefLabel`` values, the population :meth:`resolve_winner` ranks by.
     """
 
     def __init__(
@@ -74,23 +56,31 @@ class LanguageMatcher:
 
     @classmethod
     def from_settings(cls, tag_counts: Mapping[str, int]) -> LanguageMatcher:
-        """Build a matcher for the site's own ``settings.LANGUAGES`` (research.md R2).
+        """Build a matcher for the site's own ``settings.LANGUAGES``.
 
-        Replaces ``skos.py``'s ``configured_language_codes()`` as the one place
-        that reads the site's configured languages for this feature's purposes.
+        Args:
+            tag_counts: How often each published tag appears in the vocabulary.
+
+        Returns:
+            A matcher over the codes in ``settings.LANGUAGES``.
         """
         return cls([code for code, _label in settings.LANGUAGES], tag_counts)
 
+    # Matching is plain string comparison, not django's get_supported_language_variant:
+    # that refuses any language Django ships no catalog for, even one in settings.LANGUAGES.
     def resolve(self, published_tag: str) -> LanguageResolution:
-        """Resolve ``published_tag`` to one configured language, or none (FR-001/FR-002).
+        """Resolve ``published_tag`` to one configured language, or none.
 
-        An exact match always wins and is never displaced by a variant (FR-002).
-        Otherwise, among the configured languages sharing ``published_tag``'s base
-        language, the least specific one receives it (D3); where several are
-        equally specific, the lower code wins, ordered lexicographically over the
-        deterministically ordered ``configured_languages`` sequence given at
-        construction, never over a ``set`` (D15). Comparison is case-insensitive
-        throughout.
+        An exact match always wins. Otherwise, among the configured languages sharing the
+        tag's base language, the least specific one wins, and equally specific ones
+        resolve to the lowest code. Comparison is case-insensitive throughout.
+
+        Args:
+            published_tag: The language tag as the file published it.
+
+        Returns:
+            The resolution, whose ``configured_language`` is ``None``
+            when no configured language shares the tag's base language.
         """
         tag_lower = published_tag.lower()
         base = tag_lower.split("-", 1)[0]
@@ -109,24 +99,27 @@ class LanguageMatcher:
     def resolve_winner(
         self, configured_language: str, candidates: Sequence[tuple[str, str]]
     ) -> tuple[tuple[str, str], list[tuple[str, str]]]:
-        """The one winner among several published variants filling one configured
-        language's slot, and everyone else (T021, FR-002, FR-003; S3R SPEC-001).
+        """Pick the one variant that fills a configured language's slot.
 
-        ``candidates`` are the ``(published_tag, value)`` pairs a caller has
-        already resolved to ``configured_language`` via :meth:`resolve`. Exact
-        match wins first and always (FR-002); otherwise the tag this matcher's
-        ``tag_counts`` shows publishing most often wins (FR-003); ties — equal
-        predominance, or no predominance data at all — break lexicographically by
-        tag (FR-003, D5). Lives here rather than in the importer because two call
-        sites need the identical answer for the identical candidate set —
-        ``preferred_label_in`` (``Concept.label``) and ``import_labels`` (the
-        surplus report) — and today they agree only by the coincidence that both
-        happen to sort the same way.
+        An exact match wins first. Otherwise the tag published most often wins, and ties
+        (including no predominance data at all) break lexicographically by tag. It lives
+        here so ``Concept.label`` and the importer's surplus report get the same answer
+        for the same candidates.
+
+        Args:
+            configured_language: The configured language the candidates compete for.
+            candidates: The ``(published_tag, value)`` pairs already resolved to
+                ``configured_language`` through :meth:`resolve`.
+
+        Returns:
+            The winning pair, then every
+            other candidate.
         """
         candidates = list(candidates)
         config_lower = configured_language.lower()
 
         def sort_key(pair: tuple[str, str]) -> tuple[bool, int, str, str]:
+            """Rank a candidate: exact match first, then predominance, then tag, then value."""
             tag, value = pair
             tag_lower = tag.lower()
             return (

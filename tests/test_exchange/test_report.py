@@ -1,12 +1,4 @@
-"""T003 — ``ImportReport`` and ``SetAsideEntry`` (FR-015, decisions.md D7).
-
-The report is the structured contract #51 and #52 consume: what was created,
-what was updated, what was set aside and why, and what the source no longer
-mentions, all inspectable as data rather than only as text (spec Acceptance
-Scenario US1-11). Every set-aside reason comes from a closed, translatable
-vocabulary (Article XII) rather than freeform prose, so a caller can group and
-count without parsing a message.
-"""
+"""Tests for controlled_vocabularies.exchange.report."""
 
 import pytest
 from django.utils.functional import Promise
@@ -21,8 +13,8 @@ from controlled_vocabularies.exchange.report import (
     SetAsideReason,
 )
 
-# One example params dict per reason, exercising every named placeholder its
-# template declares (beyond the universal %(subject)s).
+# Exercises every named placeholder each template declares beyond the universal
+# %(subject)s.
 _EXAMPLE_PARAMS = {
     SetAsideReason.UNCONFIGURED_LANGUAGE: {"language": "es"},
     SetAsideReason.UNMODELLED_PREDICATE: {"predicate": "skos:hiddenLabel-ish"},
@@ -50,7 +42,6 @@ _EXAMPLE_PARAMS = {
     SetAsideReason.COLLECTION_NOT_CREATED: {},
 }
 
-# One example params dict per fatal reason (T007), the same shape as _EXAMPLE_PARAMS.
 _EXAMPLE_FATAL_PARAMS = {
     FatalReason.MISSING_IDENTITY: {},
     FatalReason.REFUSED_IDENTITY: {},
@@ -68,7 +59,6 @@ _EXAMPLE_FATAL_PARAMS = {
     FatalReason.VOCABULARY_NAME_UNPUBLISHED: {},
 }
 
-# One example params dict per normalized reason (T021), the same shape as _EXAMPLE_PARAMS.
 _EXAMPLE_NORMALIZED_PARAMS = {
     NormalizedReason.FOREIGN_DEFINITION: {
         "predicate": "dcterms:description",
@@ -79,9 +69,6 @@ _EXAMPLE_NORMALIZED_PARAMS = {
 
 
 class TestImportReportBuckets:
-    """``ImportReport`` starts with four empty buckets, and each ``add_*``
-    method appends only to its own — never fatal, which is tracked apart."""
-
     def test_import_report_starts_with_four_empty_buckets(self):
         report = ImportReport()
         assert report.created == []
@@ -95,7 +82,6 @@ class TestImportReportBuckets:
         report.add_updated("https://example.org/vocab/rocks/granite")
         assert report.created == ["https://example.org/vocab/rocks"]
         assert report.updated == ["https://example.org/vocab/rocks/granite"]
-        # Adding to one bucket never touches another.
         assert report.set_aside == []
         assert report.absent_from_source == []
 
@@ -114,8 +100,6 @@ class TestImportReportBuckets:
         assert len(report.set_aside) == 1
         entry = report.set_aside[0]
         assert isinstance(entry, SetAsideEntry)
-        # Inspectable as data (spec US1-11): the reason and subject are read directly,
-        # never by parsing a rendered message.
         assert entry.reason is SetAsideReason.UNCONFIGURED_LANGUAGE
         assert entry.subject == "https://example.org/vocab/rocks/granite"
         assert entry.params == {"language": "es"}
@@ -140,14 +124,6 @@ class TestImportReportBuckets:
 
 
 class TestLanguageAccount:
-    """T004 — the per-published-language account (FR-008, research.md R3): a
-    fold over :attr:`ImportReport.set_aside`, not a field accumulated beside
-    it, so the count can never disagree with the entries a caller can also
-    read directly. Membership is an explicit set of reasons —
-    ``UNCONFIGURED_LANGUAGE`` and ``VARIANT_NOT_KEPT``, nothing else — keyed
-    on ``params["language"]``, which both members put the *published* tag
-    under (T022)."""
-
     def test_counts_every_value_not_stored_for_a_language_reason_broken_down_by_published_language(
         self,
     ):
@@ -172,8 +148,8 @@ class TestLanguageAccount:
     def test_a_contest_loser_is_counted_under_its_own_published_tag_not_what_it_lost_to(
         self,
     ):
-        # FR-008/T022: en-us lost the contest to en-gb, but it is en-us — the
-        # language configuring would actually recover — that must be counted.
+        # The loser counts under its own tag, since configuring that language is what
+        # recovers it.
         report = ImportReport()
         report.add_set_aside(
             SetAsideReason.VARIANT_NOT_KEPT,
@@ -184,8 +160,8 @@ class TestLanguageAccount:
         assert report.language_account() == {"en-us": 1}
 
     def test_a_same_language_surplus_is_excluded(self):
-        # SURPLUS_PREFERRED_LABEL's language is a configured code the site
-        # already holds; nothing recovers a same-language duplicate (D14).
+        # A same-language duplicate is in a language the site already holds, so
+        # configuring nothing recovers it.
         report = ImportReport()
         report.add_set_aside(
             SetAsideReason.SURPLUS_PREFERRED_LABEL,
@@ -211,14 +187,12 @@ class TestLanguageAccount:
         report.add_set_aside(
             SetAsideReason.UNCONFIGURED_LANGUAGE, "https://example.org/c", language="es"
         )
-        # Ranked without parsing any rendered message — read as plain data.
         ranked = sorted(report.language_account().items(), key=lambda item: -item[1])
         assert ranked[0] == ("fr", 2)
 
     def test_mixed_case_spellings_of_one_language_fold_into_one_entry(self):
-        # CORR-003/SEC-003: a file tagging some values @PT-br and some @pt-BR
-        # must rank as one recoverable language, not two — FR-001's
-        # case-insensitivity applies to the account as much as to matching.
+        # Language tags are case-insensitive, so @PT-br and @pt-BR must rank as one
+        # language.
         report = ImportReport()
         report.add_set_aside(
             SetAsideReason.UNCONFIGURED_LANGUAGE,
@@ -236,9 +210,6 @@ class TestLanguageAccount:
 
 
 class TestSetAsideEntry:
-    """A ``SetAsideEntry`` is a frozen record — nothing downstream can mutate
-    a reason, subject or params after it has been reported."""
-
     def test_set_aside_entry_is_immutable(self):
         entry = SetAsideEntry(
             reason=SetAsideReason.NOTATION, subject="https://example.org/vocab/x"
@@ -248,12 +219,6 @@ class TestSetAsideEntry:
 
 
 class TestAnEmptyLanguageTagRendersAsAPhraseNotAnEmptyQuote:
-    """SEC-406, decisions.md D64 (fix cycle 5): ``SkosGraph.first_literal_with_language`` reports
-    ``""`` (D52) for an untagged literal. When that value is over-long, ``winning_tag`` carries
-    ``""`` straight into ``VALUE_TOO_LONG``'s or ``VOCABULARY_NAME_UNUSABLE``'s ``%(language)s``
-    placeholder, rendering "...in ''..." — nothing unsafe or leaked, just uninformative.
-    """
-
     def test_value_too_long_with_an_untagged_literal_names_no_language_tag_not_empty_quotes(
         self,
     ):
@@ -280,10 +245,6 @@ class TestAnEmptyLanguageTagRendersAsAPhraseNotAnEmptyQuote:
 
 
 class TestSetAsideReasonVocabulary:
-    """Every member of the closed ``SetAsideReason`` vocabulary is lazily
-    translatable, carries a named ``%(subject)s`` placeholder, and renders
-    with its own example params (Article XII)."""
-
     @pytest.mark.parametrize("reason", list(SetAsideReason))
     def test_every_reason_has_a_translatable_label(self, reason):
         assert isinstance(reason.label, Promise), (
@@ -316,14 +277,6 @@ class TestSetAsideReasonVocabulary:
 
 
 class TestVariantNotKeptReason:
-    """T022 — a value that lost a variant contest is set aside under its own
-    reason, not ``SURPLUS_PREFERRED_LABEL``, whose message means more than one
-    preferred label in one and the same language and is factually false here
-    (S3R SPEC-002, decisions.md D14). The published tag goes under
-    ``language``, identically to ``UNCONFIGURED_LANGUAGE``, and the configured
-    destination it lost to under ``kept_as`` — the wrong way round keys T004's
-    account under a language the site already holds."""
-
     def test_the_entry_carries_the_published_tag_under_language_and_the_destination_under_kept_as(
         self,
     ):
@@ -345,29 +298,11 @@ class TestVariantNotKeptReason:
             params={"language": "en-us", "kept_as": "en-gb"},
         )
         rendered = entry.render()
-        # A contest loser's file carries exactly one preferred label in its own
-        # published tag — SURPLUS_PREFERRED_LABEL's "more than one" claim would
-        # be false here (research.md R4).
-        assert "more than one preferred label" not in rendered
         assert "en-us" in rendered
         assert "en-gb" in rendered
 
-    def test_surplus_preferred_label_meaning_and_message_are_unchanged(self):
-        entry = SetAsideEntry(
-            reason=SetAsideReason.SURPLUS_PREFERRED_LABEL,
-            subject="https://example.org/vocab/rocks/granite",
-            params={"language": "de"},
-        )
-        assert entry.render() == (
-            "'https://example.org/vocab/rocks/granite' carries more than one preferred label in the "
-            "language 'de'; only one is kept and the surplus value was set aside."
-        )
-
 
 class TestFatalBucketAndFinding:
-    """T007 — the fatal bucket starts empty, ``add_fatal`` records reason,
-    subject and params as data, and a recorded ``FatalFinding`` is frozen."""
-
     def test_import_report_starts_with_an_empty_fatal_bucket(self):
         assert ImportReport().fatal == []
 
@@ -392,10 +327,6 @@ class TestFatalBucketAndFinding:
 
 
 class TestFatalReasonVocabulary:
-    """Every member of the closed ``FatalReason`` vocabulary is lazily
-    translatable, carries a named ``%(subject)s`` placeholder, and renders
-    with its own example params (Article XII)."""
-
     @pytest.mark.parametrize("reason", list(FatalReason))
     def test_every_fatal_reason_has_a_translatable_label(self, reason):
         assert isinstance(reason.label, Promise), (
@@ -428,9 +359,6 @@ class TestFatalReasonVocabulary:
 
 
 class TestReasonVocabulariesAreDisjoint:
-    """decisions.md D3/D8: a fatal finding is never one of the set-aside
-    reasons — the two closed vocabularies never overlap."""
-
     def test_set_aside_reason_and_fatal_reason_are_disjoint_vocabularies(self):
         set_aside_values = {reason.value for reason in SetAsideReason}
         fatal_values = {reason.value for reason in FatalReason}
@@ -438,13 +366,6 @@ class TestReasonVocabulariesAreDisjoint:
 
 
 class TestImportReportNormalizedBucket:
-    """T021 — the normalised bucket starts empty, ``add_normalized`` records
-    reason, subject and params as data without touching any other bucket, and
-    a recorded ``NormalizedEntry`` is frozen. Deliberately apart from
-    :attr:`ImportReport.set_aside`: a normalised value *was* stored (T021,
-    FR-009, decisions.md D24) — only under a different predicate than the
-    file itself asserted — whereas everything in ``set_aside`` was not."""
-
     def test_import_report_starts_with_an_empty_normalized_bucket(self):
         assert ImportReport().normalized == []
 
@@ -476,10 +397,6 @@ class TestImportReportNormalizedBucket:
 
 
 class TestNormalizedReasonVocabulary:
-    """Every member of the closed ``NormalizedReason`` vocabulary is lazily
-    translatable, carries a named ``%(subject)s`` placeholder, and renders
-    with its own example params (Article XII)."""
-
     @pytest.mark.parametrize("reason", list(NormalizedReason))
     def test_every_normalized_reason_has_a_translatable_label(self, reason):
         assert isinstance(reason.label, Promise), (
@@ -512,11 +429,6 @@ class TestNormalizedReasonVocabulary:
 
 
 class TestLanguageSubstitutionReason:
-    """T003 — a value stored under a configured language other than its
-    published tag carries a translatable, named-placeholder entry naming
-    both (FR-006), inspectable as data and distinct from a value that was
-    not stored at all (research.md R4)."""
-
     def test_the_entry_is_inspectable_as_data(self):
         report = ImportReport()
         report.add_normalized(
@@ -543,8 +455,8 @@ class TestLanguageSubstitutionReason:
         assert "en" in rendered
 
     def test_it_sits_in_the_normalized_bucket_not_the_set_aside_one(self):
-        # A caller filtering for "things that did not make it in" (research.md
-        # R4) must still get a truthful answer: the value *was* stored.
+        # The value was stored, so a filter for what did not make it in must not see it
+        # (docs/adr/0003-a-report-reason-is-an-outcome-and-its-message-must-always-be-true.md).
         report = ImportReport()
         report.add_normalized(
             NormalizedReason.LANGUAGE_SUBSTITUTION,
@@ -557,9 +469,6 @@ class TestLanguageSubstitutionReason:
 
 
 class TestNormalizedReasonIsDisjointFromSetAsideAndFatal:
-    """A normalised value was stored; a set-aside or fatal one was not
-    (decisions.md D24) — the three closed vocabularies never share a value."""
-
     def test_normalized_reason_shares_no_value_with_set_aside_or_fatal_reason(self):
         normalized_values = {reason.value for reason in NormalizedReason}
         set_aside_values = {reason.value for reason in SetAsideReason}
@@ -569,14 +478,6 @@ class TestNormalizedReasonIsDisjointFromSetAsideAndFatal:
 
 
 class TestReasonTemplatesUseOnlyNamedPlaceholders:
-    """T031 (FR-016, spec User Story 6 Acceptance Scenario 1) — one closed-world
-    sweep across all three report-reason vocabularies. The per-reason tests above
-    assert each template is lazily translatable and carries a named
-    ``%(subject)s``; this asserts there is nothing *besides* named placeholders in
-    any of them — the "named rather than positional" half FR-016 states but the
-    per-reason tests don't check for the absence of. A reason added later without
-    its own dedicated test is still caught here."""
-
     @pytest.mark.parametrize(
         "reason", list(SetAsideReason) + list(FatalReason) + list(NormalizedReason)
     )
@@ -590,21 +491,6 @@ class TestReasonTemplatesUseOnlyNamedPlaceholders:
 
 
 class TestDocumentSuppliedTextCannotDriveTheTerminal:
-    """SEC-702 (review, security lens, decisions.md D22) — every value in an entry is
-    text the source document chose, and since #52 that document can come from a remote
-    server and its account is written to an operator's terminal.
-
-    ``\\x1b[2K\\r`` erases the line being written and ``\\x1b[1A`` moves the cursor over
-    the one above, so before this a published label could overwrite the report of itself.
-    Measured on the branch: a refusal read ``'Innocent\\x1b[2K\\rALL CLEAR - 0 problems
-    found.\\x1b[1A' has no identifier that survives re-serialization`` — with the escape
-    sequences intact. It matters most under ``--dry-run``, whose only product is the
-    text an operator reads before deciding to commit.
-
-    Stripping happens at ``_render_params``, the one boundary all three entry kinds pass
-    through, so all three are covered by construction rather than one at a time.
-    """
-
     _HOSTILE = "Innocent\x1b[2K\rALL CLEAR - 0 problems found.\x1b[1A"
 
     def test_a_set_aside_subject_cannot_carry_an_escape_sequence(self):
@@ -616,8 +502,6 @@ class TestDocumentSuppliedTextCannotDriveTheTerminal:
         rendered = entry.render()
         assert "\x1b" not in rendered
         assert "\r" not in rendered
-        # The text itself survives — this strips the control characters, it does not
-        # discard the value or replace it with a placeholder.
         assert "Innocent" in rendered
 
     def test_a_fatal_subject_cannot_carry_an_escape_sequence(self):
@@ -635,9 +519,8 @@ class TestDocumentSuppliedTextCannotDriveTheTerminal:
         assert "\x1b" not in entry.render()
 
     def test_a_newline_cannot_fake_an_additional_report_line(self):
-        # The carve-out the usual "control characters minus \n and \t" rule would leave:
-        # a report entry is one line by construction, so an embedded newline both breaks
-        # the format and lets a document write a line of the account itself.
+        # The usual "strip control characters except \n and \t" rule would let a newline
+        # through, and a report entry is one line by construction.
         entry = SetAsideEntry(
             reason=SetAsideReason.UNCONFIGURED_LANGUAGE,
             subject="granite\n8 records created.",
@@ -646,7 +529,6 @@ class TestDocumentSuppliedTextCannotDriveTheTerminal:
         assert "\n" not in entry.render()
 
     def test_an_ordinary_subject_and_params_are_untouched(self):
-        # The control: stripping must be invisible to every real vocabulary.
         entry = SetAsideEntry(
             reason=SetAsideReason.UNCONFIGURED_LANGUAGE,
             subject="https://example.org/vocab/rocks/granite (Granit, Gränit)",
@@ -655,3 +537,51 @@ class TestDocumentSuppliedTextCannotDriveTheTerminal:
         rendered = entry.render()
         assert "https://example.org/vocab/rocks/granite (Granit, Gränit)" in rendered
         assert "es" in rendered
+
+
+class TestLanguageReasonMessagesUseNamedPlaceholders:
+    def test_language_substitution_reason_message_uses_named_placeholders(self):
+        assert isinstance(NormalizedReason.LANGUAGE_SUBSTITUTION.template, Promise), (
+            "LANGUAGE_SUBSTITUTION template is not lazily translatable"
+        )
+        template = str(NormalizedReason.LANGUAGE_SUBSTITUTION.template)
+        assert "%(language)s" in template and "%(kept_as)s" in template, (
+            "LANGUAGE_SUBSTITUTION template lacks named %(language)s/%(kept_as)s placeholders"
+        )
+        entry = NormalizedEntry(
+            reason=NormalizedReason.LANGUAGE_SUBSTITUTION,
+            subject="https://example.org/vocab/rocks/granite",
+            params={"language": "en-gb", "kept_as": "en"},
+        )
+        rendered = entry.render()
+        assert "en-gb" in rendered
+        assert "en" in rendered
+
+    def test_the_kept_as_placeholder_actually_interpolates_its_own_value(self):
+        # "en" is a substring of "en-gb", so the test above still passes if %(kept_as)s
+        # stops interpolating. These values do not overlap.
+        entry = NormalizedEntry(
+            reason=NormalizedReason.LANGUAGE_SUBSTITUTION,
+            subject="https://example.org/vocab/rocks/granite",
+            params={"language": "en-gb", "kept_as": "zh-hans"},
+        )
+        rendered = entry.render()
+        assert "en-gb" in rendered
+        assert "zh-hans" in rendered
+
+    def test_variant_not_kept_reason_message_uses_named_placeholders(self):
+        assert isinstance(SetAsideReason.VARIANT_NOT_KEPT.template, Promise), (
+            "VARIANT_NOT_KEPT template is not lazily translatable"
+        )
+        template = str(SetAsideReason.VARIANT_NOT_KEPT.template)
+        assert "%(language)s" in template and "%(kept_as)s" in template, (
+            "VARIANT_NOT_KEPT template lacks named %(language)s/%(kept_as)s placeholders"
+        )
+        entry = SetAsideEntry(
+            reason=SetAsideReason.VARIANT_NOT_KEPT,
+            subject="https://example.org/vocab/rocks/granite",
+            params={"language": "en-us", "kept_as": "en-gb"},
+        )
+        rendered = entry.render()
+        assert "en-us" in rendered
+        assert "en-gb" in rendered

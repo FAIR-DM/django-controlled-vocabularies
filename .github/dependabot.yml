@@ -1,5 +1,3 @@
-# Family Dependabot configuration — materialized into each repo at onboarding.
-#
 # The load-bearing choice is the grouping: one group per ecosystem matching "*",
 # so a cycle's updates arrive as a SINGLE pull request. That is what makes
 # auto-merge-dependabot.yml viable — one PR, one set of checks, merged when they

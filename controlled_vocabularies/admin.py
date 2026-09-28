@@ -1,19 +1,17 @@
-"""The one admin-facing lookup this package owns (T006, FR-004, FR-006).
-
-Registers nothing. ``forms.py``'s declining mixin calls
-:func:`related_field_widget_wrapper_class` on every ``widget`` assignment, so
-this module is imported on every render regardless of whether the admin is
-installed — FR-006 is satisfied by the import inside this function staying
-conditional, not by keeping this module itself unimported (plan.md,
-"Structure Decision").
-"""
+"""Lookup of the Django admin's related-field widget wrapper, which stays an optional dependency."""
 
 from django.apps import apps
 
 
 def related_field_widget_wrapper_class():
-    """``django.contrib.admin.widgets.RelatedFieldWidgetWrapper``, or ``None``
-    when ``django.contrib.admin`` is not among the installed applications."""
+    """Return the admin's ``RelatedFieldWidgetWrapper`` class, if the admin is installed.
+
+    The import stays inside the function so this module loads without ``django.contrib.admin``
+    (docs/adr/0013-the-django-admin-stays-an-optional-dependency.md).
+
+    Returns:
+        The wrapper class, or ``None`` when ``django.contrib.admin`` is not installed.
+    """
     if not apps.is_installed("django.contrib.admin"):
         return None
 

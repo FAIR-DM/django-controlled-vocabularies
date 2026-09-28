@@ -1,0 +1,1 @@
+"""The consuming test app."""

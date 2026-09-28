@@ -93,7 +93,7 @@ Phase F lands. US-6 is last because it documents what the others built.
   the rebuilt field carries the same vocabulary, the same `limit_choices_to`, and `PROTECT`. Assert
   the emitted kwargs contain none of the three stripped names.
 
-- **T002** — The consuming test app (FR-001, Article IV, Article XIV).
+- **T002** — The consuming test app (FR-001, Article IV, testing standard §4).
 
   New `tests/testapp/`, added to `INSTALLED_APPS` in `tests/settings.py`. It holds the models this
   package's public API is exercised against, and it lives in `tests/` rather than in the package

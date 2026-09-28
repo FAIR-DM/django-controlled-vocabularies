@@ -1,15 +1,4 @@
-"""Rendering an :class:`~controlled_vocabularies.exchange.report.ImportReport` for a terminal
-(T015, T016, T017, T018, FR-006, FR-007, FR-008, plan.md "Rendering").
-
-The bucket counts an import run leaves behind — created, updated, set aside, normalized, absent
-from source — plus the set-aside account in full: grouped by reason with a count each, the
-per-language account, records absent from the source named in their own section, and per-entry
-detail at raised verbosity (``--verbosity``, decisions.md D6). Every section prints, whatever it
-holds: a section reading zero and a section silently missing look identical to a reader but mean
-different things (FR-008's own reasoning for ``absent_from_source``, applied here to every bucket)
-— which is also why each grouping below is a plain iteration over the report's own accessors: an
-empty grouping simply yields nothing, and the bucket count above it already shows the zero.
-"""
+"""Rendering an import report as translated terminal lines (FS-008)."""
 
 from __future__ import annotations
 
@@ -22,16 +11,17 @@ from controlled_vocabularies.exchange.report import ImportReport
 
 
 class ReportRenderer:
-    """Turns an :class:`ImportReport` into translated lines a curator reads at a terminal.
+    """Turn an :class:`ImportReport` into translated lines a curator reads at a terminal.
 
-    ``dry_run`` is the one deliberate difference between a dry run's rendering and a live
-    run's (T014, FR-010, `decisions.md` D9): when set, one extra line states that nothing was
-    kept, so a dry run's counts are never mistaken for a completed import.
+    Every section prints whatever it holds, because a section reading zero and a section
+    silently missing mean different things to a reader.
 
-    ``verbosity`` carries Django's own ``--verbosity`` (T018, FR-007, `decisions.md` D6): at 0
-    nothing prints at all, which is Django's own contract for that value (CORR-004, decisions.md
-    D23); at the default of 1, the set-aside account is counts only; at 2 or above, each set-aside
-    entry also prints, rendered by the entry's own ``render()``. No flag of this feature's own.
+    Args:
+        report: The report to render.
+        dry_run: Add a line stating that nothing was kept, so a dry run's counts are never
+            mistaken for a completed import.
+        verbosity: Django's ``--verbosity``. At 0 nothing prints, at 1 the set-aside
+            account is counts only, and from 2 each set-aside entry prints too.
     """
 
     def __init__(
@@ -42,16 +32,18 @@ class ReportRenderer:
         self.verbosity = verbosity
 
     def render(self) -> Iterator[str]:
-        """Yield translated lines: bucket counts, then the set-aside account (grouped by reason,
-        per-entry detail at raised verbosity, then the per-language account), then the records
-        absent from the source, then the dry-run line. Nothing at all at ``--verbosity 0``."""
+        """Yield the report's lines: bucket counts, the set-aside account, then the rest.
+
+        After the counts come the set-aside groups by reason, the per-entry detail at raised
+        verbosity, the per-language account, the records absent from the source and the
+        dry-run line.
+
+        Yields:
+            One translated line at a time, and none at all at ``--verbosity 0``.
+        """
+        # Django's contract for --verbosity 0 is no output. A refusal is unaffected, since
+        # it is raised as a CommandError rather than rendered here.
         if self.verbosity == 0:
-            # CORR-004 (review, correctness): D6 justifies reusing Django's own option on the
-            # grounds that it "already means exactly this and every management command an
-            # operator has ever run supports it" — and Django's contract for 0 is no output.
-            # Only the >= 2 branch below existed, so a deployment script silencing this command
-            # the documented Django way got the full report on stdout. A refusal is unaffected:
-            # it is raised as a CommandError, not rendered here.
             return
         yield str(
             ngettext_lazy(
@@ -97,9 +89,14 @@ class ReportRenderer:
             yield str(_("This was a dry run: nothing was kept."))
 
     def _render_set_aside_by_reason(self) -> Iterator[str]:
-        """One line per reason with its count (T016, FR-007), read from
-        :meth:`ImportReport.set_aside_by_reason` — never by parsing a rendered message. A reason
-        with no entries has no group in that mapping, so it yields no line of its own."""
+        """Yield one line per set-aside reason with its count.
+
+        Read from :meth:`ImportReport.set_aside_by_reason`, never by parsing a message. A
+        reason with no entries has no group and so no line.
+
+        Yields:
+            One translated line per reason that has entries.
+        """
         for reason, entries in self.report.set_aside_by_reason().items():
             count = len(entries)
             yield str(
@@ -111,15 +108,23 @@ class ReportRenderer:
             ) % {"count": count, "reason": reason.label}
 
     def _render_set_aside_detail(self) -> Iterator[str]:
-        """One line per set-aside entry, each rendered by the entry's own ``render()`` (T018,
-        FR-007). Only reached at raised verbosity — :meth:`render` guards the call."""
+        """Yield one line per set-aside entry, rendered by the entry itself.
+
+        Yields:
+            The entry's own message, one per set-aside value.
+        """
         for entry in self.report.set_aside:
             yield entry.render()
 
     def _render_language_account(self) -> Iterator[str]:
-        """The per-language account (T016, FR-007/FR-008), read from
-        :meth:`ImportReport.language_account` — how many values a language would recover if
-        configured, one line per language."""
+        """Yield one line per language the set-aside values were published in.
+
+        Read from :meth:`ImportReport.language_account`.
+
+        Yields:
+            One translated line per language, with how many values configuring it
+            recovers.
+        """
         for language, count in self.report.language_account().items():
             yield str(
                 ngettext_lazy(
@@ -130,9 +135,14 @@ class ReportRenderer:
             ) % {"count": count, "language": language}
 
     def _render_absent_from_source_detail(self) -> Iterator[str]:
-        """Records absent from the source, named in their own section (T017, FR-008,
-        `decisions.md` D7): existing data left untouched, visibly separate from set-asides and
-        never counted among them."""
+        """Yield a line for each record the source no longer mentions.
+
+        They get a section of their own, visibly separate from set-asides and never counted
+        among them: the existing data is left untouched.
+
+        Yields:
+            One translated line per absent record.
+        """
         for subject in self.report.absent_from_source:
             yield str(
                 _("'%(subject)s' is present but no longer mentioned by the source.")

@@ -1,5 +1,4 @@
-"""Tests for :mod:`controlled_vocabularies.ui.urls` (T006, FR-012; T001; 015-read-single-record
-T000)."""
+"""Tests for controlled_vocabularies.ui.urls."""
 
 from urllib.parse import unquote, urlparse
 
@@ -10,15 +9,11 @@ from tests.factories import CollectionFactory, ConceptFactory, ConceptSchemeFact
 
 
 class TestVocabularyListUrl:
-    """The route reverses by name, under its own namespace and the project's chosen prefix."""
-
     def test_reverses_by_name_under_its_own_namespace(self):
         assert reverse("controlled_vocabularies_ui:vocabulary-list") == "/vocabularies/"
 
 
 class TestVocabularyDetailUrl:
-    """The detail route reverses by name and slug, mounted after the list route."""
-
     def test_reverses_by_name_and_slug(self):
         assert (
             reverse(
@@ -30,10 +25,6 @@ class TestVocabularyDetailUrl:
 
 
 class TestConceptDetailUrl:
-    """A concept's address reverses to what ``local_url`` composes, and resolves the record
-    named in it — 015-read-single-record T000, FR-001, FR-002.
-    """
-
     @pytest.mark.django_db
     def test_reverses_to_the_address_local_url_composes(self):
         concept = ConceptFactory(label="Granite")
@@ -43,10 +34,8 @@ class TestConceptDetailUrl:
             kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
         )
 
-        # local_url carries the configured base address (scheme + host); reverse() gives
-        # only the path django-mvp's own trailing slash convention adds. Comparing paths,
-        # the way controlled_vocabularies.ui.W001 already does for the vocabulary route,
-        # is what "exactly the address local_url composes" means here.
+        # local_url carries the base address's scheme and host and no trailing slash, so
+        # compare paths.
         assert url.rstrip("/") == urlparse(concept.local_url).path
 
     @pytest.mark.django_db
@@ -58,9 +47,7 @@ class TestConceptDetailUrl:
             kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
         )
 
-        # reverse() percent-encodes the non-ASCII segment; local_url does not, so the
-        # comparison unquotes the reversed path rather than the other way round — the
-        # slug itself, not its encoded form, is what local_url and the route agree on.
+        # reverse() percent-encodes the non-ASCII segment and local_url does not.
         assert unquote(url).rstrip("/") == urlparse(concept.local_url).path
 
     @pytest.mark.django_db
@@ -108,10 +95,6 @@ class TestConceptDetailUrl:
 
 
 class TestCollectionDetailUrl:
-    """A collection's address reverses to what ``local_url`` composes, and resolves the
-    record named in it — 015-read-single-record T000, FR-001, FR-002.
-    """
-
     @pytest.mark.django_db
     def test_reverses_to_the_address_local_url_composes(self):
         collection = CollectionFactory(name="Igneous Rocks")

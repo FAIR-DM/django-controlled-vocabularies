@@ -1,23 +1,4 @@
-"""The core-only boot test (T004) — plan.md Structure Decision, third proof.
-
-A static import scan (``test_architecture.py``) cannot see a *runtime* dependency: a module that
-never names ``mvp`` in an import statement but would still explode if the ui stack were absent
-from ``INSTALLED_APPS``. This test proves the core actually boots — ``django.setup()`` *and* the
-system check framework — against ``tests.settings_core``, then imports every module under
-``controlled_vocabularies/`` except ``controlled_vocabularies.ui``.
-
-Run in a fresh subprocess, never the pytest process itself: ``django.setup()`` only ever runs once
-per interpreter, and the pytest session has already populated the app registry from
-``tests.settings`` (which *does* install the ui stack) before this test executes.
-``DJANGO_SETTINGS_MODULE`` is forced inside the subprocess script itself, not read from the
-parent's exported environment variable: pytest-django exports
-``DJANGO_SETTINGS_MODULE=tests.settings`` into the environment, and this subprocess inherits it by
-default.
-
-There is no ``controlled_vocabularies/ui/boot.py`` for this to mirror — the subject is the core
-package as a whole, booted with the ui app absent — so this file is one of the standing non-mirror
-exceptions (``[tool.forge.conformance] non-mirror-paths``, T001).
-"""
+"""Tests that the core boots and passes system checks with no ui app installed."""
 
 import subprocess
 import sys
@@ -28,12 +9,14 @@ UI_ROOT = PACKAGE_ROOT / "ui"
 
 
 def core_module_names():
-    """Every importable dotted module name under ``controlled_vocabularies/``, excluding
-    ``controlled_vocabularies.ui``.
+    """List every importable dotted module name outside ``controlled_vocabularies.ui``.
 
     Migration filenames such as ``0001_initial`` are not valid Python identifiers, so the
     subprocess script below imports each name with ``importlib.import_module`` rather than a
     literal ``import`` statement.
+
+    Returns:
+        The dotted module names, sorted by path.
     """
     names = []
     for path in sorted(PACKAGE_ROOT.rglob("*.py")):
@@ -46,6 +29,8 @@ def core_module_names():
     return names
 
 
+# Runs in a fresh subprocess because django.setup() only runs once per interpreter, and the
+# settings module is forced inside the script because pytest-django exports tests.settings.
 BOOT_SCRIPT_TEMPLATE = """
 import importlib
 import os
@@ -67,9 +52,6 @@ print("BOOT_OK")
 
 
 class TestCoreBootsWithNoUIAppInstalled:
-    """FR-012, the isolation proof — the core still boots and passes system checks with
-    nothing ui installed."""
-
     def test_core_boots_checks_clean_and_imports_every_core_module(self):
         script = BOOT_SCRIPT_TEMPLATE.format(module_names=core_module_names())
         result = subprocess.run(  # noqa: S603 — fixed interpreter, literal script, no user input

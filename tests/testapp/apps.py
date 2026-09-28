@@ -1,16 +1,13 @@
-"""App config for :mod:`tests.testapp` — the consuming test app (T002).
-
-Lives under ``tests/`` rather than in ``controlled_vocabularies`` itself: a
-consumer of this package's own public API (:class:`~controlled_vocabularies.fields.ConceptField`)
-belongs to the test suite, not the distribution — shipping it as a package app
-would make a fixture an accidental part of every install (``plan.md``,
-Structure Decision).
-"""
+"""App config for the consuming test app."""
 
 from django.apps import AppConfig
 
 
+# Lives under tests/, not in the package: a consumer of ConceptField belongs to the
+# suite, and shipping it would make a fixture part of every install.
 class TestappConfig(AppConfig):
+    """Configure the consuming test app."""
+
     default_auto_field = "django.db.models.BigAutoField"
     name = "tests.testapp"
     label = "testapp"

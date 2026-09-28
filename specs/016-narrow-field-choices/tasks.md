@@ -47,7 +47,7 @@ empty vocabulary slug: it reads as a restriction and offers nothing.
 Store the normalised values on the instance. Nothing resolves yet; a field declared with a
 restriction still behaves exactly as one declared without.
 
-**Test scope**: one class in `tests/test_fields.py` per Article XIV, covering both field classes.
+**Test scope**: one class in `tests/test_fields.py` per testing standard §4, covering both field classes.
 
 ### T002 — A restriction needs exactly one vocabulary
 
@@ -104,7 +104,7 @@ that is the point of doing it alone. What it must additionally prove:
 
 - calling `get_limit_choices_to()` returns the same `Q` the attribute held before;
 - constructing a field and reading its declaration issues **no query** (FR-007) — assert with
-  `django_assert_num_queries(0)`, per Article XIV;
+  `django_assert_num_queries(0)`, per testing standard §4;
 - a declaration naming no vocabulary still sets no restriction at all, rather than a callable
   returning an empty `Q` that matches everything.
 

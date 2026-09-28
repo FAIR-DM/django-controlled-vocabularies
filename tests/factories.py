@@ -1,12 +1,4 @@
-"""factory_boy factories for the vocabulary models.
-
-Downstream stories build their fixtures on these instead of hand-constructing
-schemes and concepts. Both factories drive the human-facing field (``name`` /
-``label``) via a sequence so the derived, uniqueness-guarded slugs never collide
-across repeated calls: ``ConceptScheme.slug`` is unique app-wide and
-``Concept.slug`` is unique within its scheme, and the models raise
-``ValidationError`` on a collision rather than auto-suffixing.
-"""
+"""factory_boy factories for the vocabulary and test-app models."""
 
 import factory
 from django.utils.text import slugify
@@ -43,23 +35,15 @@ from tests.testapp.models import (
 
 
 class ConceptSchemeFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`ConceptScheme` with an app-wide-unique name.
-
-    The opt-in ``external`` trait gives the scheme a fixed, plausible externally
-    assigned ``static_uri`` (FS-005), as if it had arrived from an import
-    rather than been authored here.
-    """
+    """Build a saved :class:`ConceptScheme` with an app-wide-unique name."""
 
     class Meta:
         model = ConceptScheme
 
     name = factory.Sequence(lambda n: f"Vocabulary {n}")
-    # Derived here as well as in ``save()``, and by the same call, so that an unsaved
-    # ``.build()`` fixture carries the slug it would have had once saved. Without it a
-    # built scheme has a blank slug, and any template reversing a URL against it raises
-    # ``NoReverseMatch`` — which is a property of the fixture, not of the page under test.
-    # ``save()`` recomputes the identical value for a created scheme (``slug_is_manual``
-    # stays False), so nothing about a saved fixture changes.
+    # Derived here as well as in save(), so an unsaved .build() scheme has the slug it
+    # would get once saved. A blank slug makes any URL reversal against it raise
+    # NoReverseMatch.
     slug = factory.LazyAttribute(
         lambda scheme: slugify(scheme.name, allow_unicode=True)
     )
@@ -73,17 +57,7 @@ class ConceptSchemeFactory(factory.django.DjangoModelFactory):
 
 
 class ConceptFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`Concept`, auto-creating its owning scheme.
-
-    ``label`` is the preferred label in the scheme's effective default language
-    (``en`` in the test suite) — the concept's identity anchor. The opt-in
-    ``multilingual`` trait hangs a second-language preferred label plus notes off
-    the concept so a single ``ConceptFactory(multilingual=True)`` call yields a
-    concept whose preferred labels and notes span more than one language. The
-    opt-in ``external`` trait gives the concept a fixed, plausible externally
-    assigned ``static_uri`` (FS-005), independent of its (by default,
-    provisional) scheme's own identifier.
-    """
+    """Build a saved :class:`Concept`, auto-creating its owning scheme."""
 
     class Meta:
         model = Concept
@@ -98,8 +72,8 @@ class ConceptFactory(factory.django.DjangoModelFactory):
             ),
         )
         multilingual = factory.Trait(
-            # en preferred label is the anchor ``label`` above; de is a real
-            # ConceptLabel PREFERRED row (the field owns only the default language).
+            # The en preferred label is ``label`` above; de is a real ConceptLabel row,
+            # because the field owns only the default language.
             german_label=factory.RelatedFactory(
                 "tests.factories.ConceptLabelFactory",
                 factory_related_name="concept",
@@ -125,12 +99,7 @@ class ConceptFactory(factory.django.DjangoModelFactory):
 
 
 class ConceptLabelFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`ConceptLabel`, auto-creating its owning concept.
-
-    Defaults to a German (``de``) preferred label: a non-default-language
-    preferred label is a standalone row, whereas the default language's preferred
-    label lives on :attr:`Concept.label` and may not be duplicated here.
-    """
+    """Build a saved German preferred :class:`ConceptLabel` on an auto-created concept."""
 
     class Meta:
         model = ConceptLabel
@@ -142,10 +111,7 @@ class ConceptLabelFactory(factory.django.DjangoModelFactory):
 
 
 class ConceptNoteFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`ConceptNote`, auto-creating its owning concept.
-
-    Defaults to an English (``en``) definition — the primary documentary note.
-    """
+    """Build a saved English definition :class:`ConceptNote` on an auto-created concept."""
 
     class Meta:
         model = ConceptNote
@@ -157,13 +123,7 @@ class ConceptNoteFactory(factory.django.DjangoModelFactory):
 
 
 class ConceptRelationFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`ConceptRelation` between two concepts in one vocabulary.
-
-    ``source`` and ``target`` are auto-created in the *same* scheme — a relation is
-    intra-vocabulary — via ``SelfAttribute`` so the cross-vocabulary guard never trips.
-    ``kind`` defaults to ``BROADER`` (``source`` is the narrower/child); pass
-    ``kind=ConceptRelation.Kind.RELATED`` for a symmetric association.
-    """
+    """Build a saved broader :class:`ConceptRelation` between two concepts of one scheme."""
 
     class Meta:
         model = ConceptRelation
@@ -179,9 +139,13 @@ def relation_graph(scheme=None):
     """Build a small navigable graph in one vocabulary and return its concepts.
 
     A broader/narrower pair (``child`` under ``parent``) and a separate related pair
-    (``left`` and ``right``), all in one scheme, built through the validated write helpers
-    (``add_broader``/``add_related``). Returns a dict of the pieces so a test can assert
-    on the graph in a couple of lines.
+    (``left`` and ``right``), built through ``add_broader`` and ``add_related``.
+
+    Args:
+        scheme: The scheme to build the graph in. A new one is created when omitted.
+
+    Returns:
+        A dict with keys ``scheme``, ``parent``, ``child``, ``left`` and ``right``.
     """
     scheme = scheme or ConceptSchemeFactory()
     parent = ConceptFactory(scheme=scheme)
@@ -200,13 +164,7 @@ def relation_graph(scheme=None):
 
 
 class CollectionFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`Collection`, auto-creating its owning scheme.
-
-    ``name`` drives the derived, per-scheme-unique slug via a sequence so repeated
-    calls never collide. Unordered by default; pass ``ordered=True`` for an ordered
-    collection. The opt-in ``external`` trait gives the collection a fixed,
-    plausible externally assigned ``static_uri`` (FS-005).
-    """
+    """Build a saved :class:`Collection`, auto-creating its owning scheme."""
 
     class Meta:
         model = Collection
@@ -223,12 +181,7 @@ class CollectionFactory(factory.django.DjangoModelFactory):
 
 
 class CollectionMemberFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`CollectionMember` joining a collection to a concept.
-
-    ``collection`` and ``concept`` are auto-created in the *same* scheme — a
-    membership is intra-vocabulary — via ``SelfAttribute`` so the cross-vocabulary
-    guard never trips.
-    """
+    """Build a saved :class:`CollectionMember` joining a collection to a concept of its scheme."""
 
     class Meta:
         model = CollectionMember
@@ -242,18 +195,21 @@ class CollectionMemberFactory(factory.django.DjangoModelFactory):
 def collection_with_members(
     scheme=None, labels=("Granite", "Basalt", "Gabbro"), ordered=False, name=None
 ):
-    """Build a collection populated with concepts and return ``(collection, members)``.
+    """Build a collection populated with concepts and return it with its members.
 
     The concepts are created in the collection's own scheme and added through
-    :meth:`Collection.add` (so validation and, for an ordered collection, positions are
-    honoured). ``members`` is the list in the order they were added — for an ordered
-    collection this is the sequence :meth:`Collection.members` reads back. Lets a test
-    assert on a populated (or ordered) collection in a couple of lines.
+    :meth:`Collection.add`, so validation and, for an ordered collection, positions apply.
 
-    ``name`` is left to :class:`CollectionFactory`'s own sequence by default; pass it
-    explicitly when a test needs a specific, predictable slug (FS-016 US-1) — a
-    consuming model's ``collection=`` restriction names one, and the field cannot be
-    pointed at whatever slug a sequence happened to produce.
+    Args:
+        scheme: The scheme to build in. A new one is created when omitted.
+        labels: The label of each concept to create, in the order they are added.
+        ordered: Build an ordered collection.
+        name: The collection's name. Leave it out for the factory's own sequence, and pass
+            it when a consuming model's ``collection=`` restriction has to name its slug.
+
+    Returns:
+        A ``(collection, members)`` tuple, ``members`` being the concepts in the order
+        they were added.
     """
     scheme = scheme or ConceptSchemeFactory()
     collection = CollectionFactory(
@@ -266,11 +222,7 @@ def collection_with_members(
 
 
 class SpecimenFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Specimen` (T002), whose
-    ``rock_type`` is required — auto-created via a plain :class:`ConceptFactory`
-    concept, since :class:`ConceptField` places no constraint on a concept's
-    own scheme slug beyond what a consuming record's ``full_clean()`` checks.
-    """
+    """Build a saved :class:`~tests.testapp.models.Specimen` with a required concept."""
 
     class Meta:
         model = Specimen
@@ -280,10 +232,7 @@ class SpecimenFactory(factory.django.DjangoModelFactory):
 
 
 class LocalityFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Locality` (US-3, T008), the
-    parent side of the inline relationship :class:`SpecimenFactory` (below)
-    attaches to via its own ``locality``. ``primary_mineral`` is optional and
-    left unset by default, for the same reason as :class:`DepositFactory`."""
+    """Build a saved :class:`~tests.testapp.models.Locality`."""
 
     class Meta:
         model = Locality
@@ -292,9 +241,7 @@ class LocalityFactory(factory.django.DjangoModelFactory):
 
 
 class SampleFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Sample` (T002). ``mineral``
-    is optional and left unset by default — pass a concept explicitly where a
-    test needs one attached."""
+    """Build a saved :class:`~tests.testapp.models.Sample` with no concept attached."""
 
     class Meta:
         model = Sample
@@ -303,9 +250,7 @@ class SampleFactory(factory.django.DjangoModelFactory):
 
 
 class ArtifactFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Artifact` (T002) — the model
-    whose own ``get_mineral_label()`` T011's collision guard must leave alone.
-    ``mineral`` is optional and left unset by default."""
+    """Build a saved :class:`~tests.testapp.models.Artifact` with no concept attached."""
 
     class Meta:
         model = Artifact
@@ -314,10 +259,7 @@ class ArtifactFactory(factory.django.DjangoModelFactory):
 
 
 class DepositFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Deposit` (FS-010 T003).
-    ``rock_types`` is a many-valued relation and cannot be set at
-    construction — attach concepts with ``.add()`` after the instance
-    exists, as :class:`~tests.testapp.models.Deposit`'s own tests do."""
+    """Build a saved :class:`~tests.testapp.models.Deposit` with no concepts attached."""
 
     class Meta:
         model = Deposit
@@ -326,10 +268,7 @@ class DepositFactory(factory.django.DjangoModelFactory):
 
 
 class SurveyFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Survey` (FS-010 T003), whose
-    two ``ConceptsField``s (``primary_minerals``, ``secondary_minerals``) are
-    both left unset by default, for the same reason as
-    :class:`DepositFactory`."""
+    """Build a saved :class:`~tests.testapp.models.Survey` with no concepts attached."""
 
     class Meta:
         model = Survey
@@ -338,9 +277,7 @@ class SurveyFactory(factory.django.DjangoModelFactory):
 
 
 class OutcropFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Outcrop` (FS-010 T001).
-    ``minerals`` is optional and left unset by default, for the same reason
-    as :class:`DepositFactory`."""
+    """Build a saved :class:`~tests.testapp.models.Outcrop` with no concepts attached."""
 
     class Meta:
         model = Outcrop
@@ -349,9 +286,7 @@ class OutcropFactory(factory.django.DjangoModelFactory):
 
 
 class RockSampleFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.RockSample` (FS-010 T001).
-    ``primary_mineral`` (``ConceptField``) and ``associated_minerals``
-    (``ConceptsField``) are both optional and left unset by default."""
+    """Build a saved :class:`~tests.testapp.models.RockSample` with no concepts attached."""
 
     class Meta:
         model = RockSample
@@ -360,8 +295,7 @@ class RockSampleFactory(factory.django.DjangoModelFactory):
 
 
 class FieldNoteFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.FieldNote` (FS-010 T001).
-    ``keywords`` is optional and left unset by default."""
+    """Build a saved :class:`~tests.testapp.models.FieldNote` with no concepts attached."""
 
     class Meta:
         model = FieldNote
@@ -370,8 +304,7 @@ class FieldNoteFactory(factory.django.DjangoModelFactory):
 
 
 class PhotographFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Photograph` (FS-010 T001).
-    ``keywords`` is optional and left unset by default."""
+    """Build a saved :class:`~tests.testapp.models.Photograph` with no concepts attached."""
 
     class Meta:
         model = Photograph
@@ -380,9 +313,7 @@ class PhotographFactory(factory.django.DjangoModelFactory):
 
 
 class BoreholeFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Borehole` (#111) — the
-    ``ConceptField`` naming two vocabularies. ``dominant_material`` is optional
-    and left unset by default."""
+    """Build a saved :class:`~tests.testapp.models.Borehole` with no concept attached."""
 
     class Meta:
         model = Borehole
@@ -391,9 +322,7 @@ class BoreholeFactory(factory.django.DjangoModelFactory):
 
 
 class SketchFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.Sketch` (#111) — the
-    ``ConceptField`` naming no vocabulary. ``subject`` is optional and left
-    unset by default."""
+    """Build a saved :class:`~tests.testapp.models.Sketch` with no concept attached."""
 
     class Meta:
         model = Sketch
@@ -402,9 +331,7 @@ class SketchFactory(factory.django.DjangoModelFactory):
 
 
 class CoreSampleFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.CoreSample` (FS-016 US-1).
-    ``rock_type`` is optional and left unset by default — pass a concept
-    explicitly where a test needs one attached."""
+    """Build a saved :class:`~tests.testapp.models.CoreSample` with no concept attached."""
 
     class Meta:
         model = CoreSample
@@ -413,10 +340,7 @@ class CoreSampleFactory(factory.django.DjangoModelFactory):
 
 
 class DrillCoreFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.DrillCore` (FS-016 US-1,
-    T012). ``rock_types`` is a many-valued relation and cannot be set at
-    construction — attach concepts with ``.add()`` after the instance
-    exists."""
+    """Build a saved :class:`~tests.testapp.models.DrillCore` with no concepts attached."""
 
     class Meta:
         model = DrillCore
@@ -425,9 +349,7 @@ class DrillCoreFactory(factory.django.DjangoModelFactory):
 
 
 class ChipSampleFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.ChipSample` (FS-016 US-2).
-    ``rock_type`` is optional and left unset by default — pass a concept
-    explicitly where a test needs one attached."""
+    """Build a saved :class:`~tests.testapp.models.ChipSample` with no concept attached."""
 
     class Meta:
         model = ChipSample
@@ -436,10 +358,7 @@ class ChipSampleFactory(factory.django.DjangoModelFactory):
 
 
 class ChipTrayFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.ChipTray` (FS-016 US-2).
-    ``rock_types`` is a many-valued relation and cannot be set at
-    construction — attach concepts with ``.add()`` after the instance
-    exists."""
+    """Build a saved :class:`~tests.testapp.models.ChipTray` with no concepts attached."""
 
     class Meta:
         model = ChipTray
@@ -448,9 +367,7 @@ class ChipTrayFactory(factory.django.DjangoModelFactory):
 
 
 class BranchSampleFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.BranchSample` (FS-016
-    US-3). ``rock_type`` is optional and left unset by default — pass a
-    concept explicitly where a test needs one attached."""
+    """Build a saved :class:`~tests.testapp.models.BranchSample` with no concept attached."""
 
     class Meta:
         model = BranchSample
@@ -459,10 +376,7 @@ class BranchSampleFactory(factory.django.DjangoModelFactory):
 
 
 class BranchTrayFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.BranchTray` (FS-016
-    US-3). ``rock_types`` is a many-valued relation and cannot be set at
-    construction — attach concepts with ``.add()`` after the instance
-    exists."""
+    """Build a saved :class:`~tests.testapp.models.BranchTray` with no concepts attached."""
 
     class Meta:
         model = BranchTray

@@ -1,8 +1,4 @@
-"""``controlled_vocabularies.exchange.languages`` — resolving a published
-language tag to a configured language (tasks.md Phase 0, T001/T021).
-
-Grows one task at a time, mirroring the module (Article XIV).
-"""
+"""Tests for controlled_vocabularies.exchange.languages."""
 
 from controlled_vocabularies.exchange.languages import (
     LanguageMatcher,
@@ -11,10 +7,6 @@ from controlled_vocabularies.exchange.languages import (
 
 
 class TestLanguageResolution:
-    """T001 — the resolution result carries the winning code and derives
-    ``is_exact`` from it rather than storing it separately, so the pair can
-    never disagree with itself (tasks.md T001)."""
-
     def test_is_exact_true_when_configured_language_matches_the_published_tag(self):
         resolution = LanguageResolution(
             published_tag="en-gb", configured_language="en-gb"
@@ -37,11 +29,6 @@ class TestLanguageResolution:
 
 
 class TestLanguageMatcherResolve:
-    """T001 — ``LanguageMatcher.resolve`` implements FR-001/FR-002/D3/D15: an
-    exact match always wins, else the least specific configured language
-    sharing the tag's base, else no match; comparison is case-insensitive and
-    the returned code is exactly as declared in ``settings.LANGUAGES``."""
-
     def test_exact_match_wins(self):
         matcher = LanguageMatcher(["en", "en-gb"], {})
         resolution = matcher.resolve("en-gb")
@@ -49,8 +36,6 @@ class TestLanguageMatcherResolve:
         assert resolution.is_exact is True
 
     def test_exact_match_is_never_displaced_by_a_more_predominant_variant(self):
-        # en-us is published far more often, but en-gb is the exact match for
-        # this tag and FR-002 says exact always wins.
         matcher = LanguageMatcher(["en", "en-gb"], {"en-us": 100, "en-gb": 1})
         resolution = matcher.resolve("en-gb")
         assert resolution.configured_language == "en-gb"
@@ -58,7 +43,6 @@ class TestLanguageMatcherResolve:
     def test_case_mismatch_is_still_an_exact_match_and_returns_the_declared_spelling(
         self,
     ):
-        # A configured en-GB (as a project might declare it) receiving a file's en-gb.
         matcher = LanguageMatcher(["en-GB"], {})
         resolution = matcher.resolve("en-gb")
         assert resolution.configured_language == "en-GB", (
@@ -75,8 +59,6 @@ class TestLanguageMatcherResolve:
     def test_general_to_specific_orphan_goes_to_the_least_specific_configured_candidate(
         self,
     ):
-        # A site configured for both en and en-gb receives an en-us value: neither
-        # matches exactly, so the least specific — en — receives it (D3).
         matcher = LanguageMatcher(["en", "en-gb"], {})
         resolution = matcher.resolve("en-us")
         assert resolution.configured_language == "en"
@@ -91,8 +73,7 @@ class TestLanguageMatcherResolve:
     def test_two_equally_specific_candidates_neither_exact_tie_break_by_lower_code(
         self,
     ):
-        # Django's own 99-language default's one ambiguous base: zh-hans / zh-hant,
-        # both one subtag deep, neither an exact match for a bare "zh" tag (D15).
+        # zh-hans and zh-hant are the one ambiguous base in Django's default LANGUAGES.
         matcher = LanguageMatcher(["zh-hant", "zh-hans"], {})
         resolution = matcher.resolve("zh")
         assert resolution.configured_language == "zh-hans"
@@ -100,7 +81,6 @@ class TestLanguageMatcherResolve:
     def test_two_equally_specific_candidates_resolution_is_stable_across_configured_order(
         self,
     ):
-        # D15: resolution must not depend on the order configured_languages is given in.
         first = LanguageMatcher(["zh-hant", "zh-hans"], {}).resolve("zh")
         second = LanguageMatcher(["zh-hans", "zh-hant"], {}).resolve("zh")
         assert first.configured_language == second.configured_language == "zh-hans"
@@ -118,9 +98,8 @@ class TestLanguageMatcherResolve:
         assert resolution.is_exact is False
 
     def test_sga_regression_a_language_django_ships_no_catalog_for_still_resolves(self):
-        # research.md R1: django.utils.translation.get_supported_language_variant
-        # refuses sga outright because Django ships no translation catalog for it.
-        # The matcher must not depend on Django's catalogs at all.
+        # Django refuses `sga` outright (it ships no translation catalog for it), so the
+        # matcher must not depend on Django's catalogs.
         matcher = LanguageMatcher(["sga"], {})
         resolution = matcher.resolve("sga")
         assert resolution.configured_language == "sga"
@@ -128,10 +107,6 @@ class TestLanguageMatcherResolve:
 
 
 class TestLanguageMatcherFromSettings:
-    """T002 — the matcher's default construction reads ``settings.LANGUAGES``,
-    replacing ``skos.py``'s own ``configured_language_codes()`` (plan.md
-    "The eight comparisons")."""
-
     def test_from_settings_reads_configured_languages_from_django_settings(
         self, settings
     ):
@@ -142,17 +117,11 @@ class TestLanguageMatcherFromSettings:
         assert matcher.resolve("fr").configured_language is None
 
     def test_from_settings_is_constructible_with_no_graph_in_sight(self):
-        # T002: constructible from a plain dict, nothing rdflib-shaped required.
         matcher = LanguageMatcher.from_settings({"en": 3, "de": 1})
         assert isinstance(matcher, LanguageMatcher)
 
 
 class TestLanguageMatcherResolveWinner:
-    """T021 — the winner rule, once: exact-match-first, then predominance,
-    then the lexicographic tie-break within one tag (FR-002, FR-003, S3R
-    SPEC-001). Both ``preferred_label_in`` and ``import_labels`` read this
-    method rather than each computing their own winner."""
-
     def test_exact_match_wins_over_a_more_predominant_variant(self):
         matcher = LanguageMatcher(["en"], {"en-gb": 100, "en": 1})
         winner, losers = matcher.resolve_winner(
@@ -170,8 +139,7 @@ class TestLanguageMatcherResolveWinner:
         assert losers == [("en-us", "Color")]
 
     def test_predominant_variant_the_site_does_not_hold_decides_nothing(self):
-        # fr is overwhelmingly predominant in the file but is not one of the
-        # candidates competing for this configured slot — it must not leak in.
+        # fr is far more predominant, but it is not competing for this configured slot.
         matcher = LanguageMatcher(["en"], {"fr": 1000, "en-gb": 5, "en-us": 2})
         winner, _losers = matcher.resolve_winner(
             "en", [("en-us", "Color"), ("en-gb", "Colour")]
@@ -193,9 +161,6 @@ class TestLanguageMatcherResolveWinner:
         assert winner == ("en-gb", "Colour")
 
     def test_one_candidate_set_yields_one_winner_deterministically(self):
-        # The property both preferred_label_in and import_labels depend on
-        # (T021): calling this twice on the same candidates never disagrees
-        # with itself.
         matcher = LanguageMatcher(["en"], {"en-gb": 5, "en-us": 2})
         candidates = [("en-us", "Color"), ("en-gb", "Colour")]
         first_winner, _ = matcher.resolve_winner("en", candidates)
@@ -211,11 +176,8 @@ class TestLanguageMatcherResolveWinner:
     def test_tag_counts_lookup_is_case_folded_so_a_recased_candidate_tag_still_finds_its_count(
         self,
     ):
-        # CORR-003/SEC-003: RFC 5646 and RDF 1.1 both define re-casing a language
-        # tag as meaningless, but the raw lookup split one population's vote
-        # across cases — a candidate tag published in a different case than the
-        # tally's own key must still find its count. counts is keyed lowercase,
-        # as SkosGraph.preferred_label_tag_counts now produces it.
+        # Language tags are case-insensitive (RFC 5646), and the counts are keyed
+        # lowercase, so a re-cased candidate tag must still find its count.
         matcher = LanguageMatcher(["en"], {"en-gb": 16, "en-us": 8})
         winner, _losers = matcher.resolve_winner(
             "en", [("en-us", "Color"), ("EN-GB", "Colour")]

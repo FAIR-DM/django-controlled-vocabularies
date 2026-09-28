@@ -156,7 +156,7 @@ Every string this feature puts in front of a person is translatable, the README 
 
 1. **Given** the feature's user-visible strings, **When** the source is inspected, **Then** each is wrapped for translation with named placeholders, per Article XII, and any template loads and uses the translation tags.
 2. **Given** the shipped documentation, **When** the README is read, **Then** it shows the route include, what search-as-you-type does for both fields, what the endpoint exposes, and how a project that must restrict access does so.
-3. **Given** the test suite, **When** the modules are located, **Then** they mirror the source tree per Article XIV and reuse the consuming models and fixtures the delivered fields left shared.
+3. **Given** the test suite, **When** the modules are located, **Then** they mirror the source tree per testing standard §4 and reuse the consuming models and fixtures the delivered fields left shared.
 4. **Given** a new runtime dependency, **When** the dependency checks run, **Then** it is declared alongside the code that imports it and its justification is recorded, per Article VII.
 
 ---

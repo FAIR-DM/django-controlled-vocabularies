@@ -1,8 +1,5 @@
-"""Empty URLconf for ``tests.settings_core``.
+"""Empty URLconf for tests.settings_core."""
 
-The core-only settings module must stay free of the ui app's URLs — this is what the fresh-
-subprocess core-only boot test (``tests/test_ui/test_boot.py``) resolves ``ROOT_URLCONF``
-against.
-"""
-
+# The core-only boot test resolves ROOT_URLCONF against this, so it must stay free of
+# the ui URLs.
 urlpatterns = []

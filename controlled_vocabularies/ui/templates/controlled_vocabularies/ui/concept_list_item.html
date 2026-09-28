@@ -1,12 +1,7 @@
 {% comment %}
-  015-read-single-record T019, FR-015: the concept's own page now exists, so the row
-  leads to it. The row renders in an isolated context holding only the object
-  (`render_list_item` builds a fresh context per row, never the surrounding page's),
-  so the address is reversed from `object.scheme` and `object.slug` alone — the same
-  reason `VocabularyDetailView`'s queryset select_relates "scheme" (views.py), so this
-  read costs no query beyond the row's own. `title` is given as a slot, not the card's
-  `title` attribute, which renders as escaped text and so cannot carry an anchor
-  (conceptscheme_list_item.html's own T004 comment makes the same point).
+  Rendered in an isolated context holding only the object, so the link is reversed from
+  `object.scheme`, which VocabularyDetailView select_relates. `title` is a slot for the reason
+  given in conceptscheme_list_item.html.
 {% endcomment %}
 <c-card>
   <c-slot name="title">

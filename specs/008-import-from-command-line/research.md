@@ -142,10 +142,10 @@ the constraint `report.py`'s module docstring states for this feature. Nothing i
 ## R7 — Where the code and its tests belong
 
 Django resolves management commands from `<app>/management/commands/<name>.py`, so the path is
-fixed by the framework. Article XIV mirrors the source tree, giving
+fixed by the framework. testing standard §4 mirrors the source tree, giving
 `tests/test_management/test_commands/test_<name>.py` with `__init__.py` at each level.
 
-Article XV exempts management-command entry points from its cohesion rule, so `Command` stays the
+Article XIV exempts management-command entry points from its cohesion rule, so `Command` stays the
 framework's shape. The rendering and the source resolution are not entry points and do carry
 subjects of their own, so each is a class.
 

@@ -1,12 +1,4 @@
-"""Views for :mod:`controlled_vocabularies` (T002, T003, FR-002, FR-005, FR-012).
-
-One route serves both the FK and M2M concept fields, since both target the same
-``Concept`` model. The multi-name search and the allowlists that close the
-filter/order surface are later tasks. Result shaping is this task's: a result
-carries exactly the identifier, the preferred label and the vocabulary a concept
-belongs to (FR-005, FR-012) — not the editorial notes or hidden/alternative
-labels the concept also holds.
-"""
+"""The autocomplete endpoint behind the concept search control."""
 
 from typing import TYPE_CHECKING
 
@@ -21,14 +13,11 @@ from .fields import ConceptFieldMixin
 from .models import Collection, CollectionMember, Concept, ConceptLabel
 
 if TYPE_CHECKING:
-    # Matches the base view's own guarded import (autocompletes.py) — this
-    # override's return type must satisfy the same contract.
+    # Guarded the same way as the base view's import of it.
     from django_tomselect._types import PaginatedResponse
 
-#: The label kinds a typed string matches against, in the active language
-#: (FR-004, plan.md A4). The default-language preferred label — every
-#: concept's own ``label`` column — is matched separately, unconditional on
-#: the active language.
+#: Label kinds a typed string matches in the active language. The default-language ``label``
+#: column is matched separately, whatever the active language.
 _SEARCHED_LABEL_KINDS = [
     ConceptLabel.Kind.PREFERRED,
     ConceptLabel.Kind.ALTERNATIVE,
@@ -49,18 +38,10 @@ class ConceptAutocompleteView(AutocompleteModelView):
     virtual_fields = ["display_label", "vocabulary"]
 
     def search(self, queryset: QuerySet, query: str) -> QuerySet:
-        """Match ``query`` against a concept's names (FR-004, plan.md A4).
-
-        Replaces the base ``search_lookups`` mechanism, left empty because it
-        expresses one flat list of ORM lookups and cannot express "the active
-        language's labels, of three kinds, or the default-language column".
-        ``query`` is exactly what the base view's ``get_queryset()`` already
-        extracted from the request (``autocompletes.py:396``) — nothing else
-        is read off the request here (decisions.md D8). ``icontains`` gives
-        case-insensitivity portably and folds no accents (decisions.md D4).
-        ``.distinct()`` is what makes a concept matching on several of its
-        labels appear once (FR-004).
-        """
+        """Match the query against a concept's names in the active language and its default label."""
+        # Replaces search_lookups, a flat list of lookups that cannot say "active-language labels
+        # of three kinds, or the default-language column". distinct() keeps a concept that
+        # matches several labels to one row (FS-011).
         if not query:
             return queryset
         active_language = get_language() or settings.LANGUAGE_CODE
@@ -74,36 +55,20 @@ class ConceptAutocompleteView(AutocompleteModelView):
         ).distinct()
 
     def hook_queryset(self, queryset):
-        """Attach what ``prepare_results()`` needs, then narrow to what the
-        requested field declaration allows (T006, FR-006, plan.md A6 path
-        one) — both before filtering, searching and ordering run, at the
-        library's documented extension point rather than an override of
-        ``get_queryset()``: ``select_related("scheme")`` for the vocabulary
-        name, ``prefetch_related("labels")`` because ``display_label()``
-        walks ``self.labels.all()`` and a bounded page would otherwise cost a
-        query per row (R5).
-        """
+        """Preload what results need, then narrow to the requested field declaration's restriction."""
+        # display_label() walks the labels, so without the prefetch a page costs a query per row.
         queryset = queryset.select_related("scheme").prefetch_related("labels")
         return self._restrict_to_declaration(queryset)
 
     def _resolve_declared_field(self) -> ConceptFieldMixin | None:
-        """Resolve the ``field=`` reference the request names to the concept
-        field declaration it identifies, or ``None`` when it does not
-        resolve (FR-006, decisions.md D11).
+        """Return the concept field the request's ``field=`` reference names.
 
-        ``field`` is a ``<app_label>.<model>.<field_name>`` reference the
-        control's widget appends (plan.md A6 path one); it identifies which
-        declaration is searching and carries no restriction of its own —
-        altering it can only name a different declaration, whose own
-        restriction then applies. Resolution happens through Django's app
-        registry, exactly as it does when Django itself loads a string
-        ``to``; nothing here reads a vocabulary, a collection, an ordering,
-        or anything else directly off the request.
+        The reference identifies a declaration and carries no restriction of its own, so
+        altering it can only name a different declaration, whose restriction then applies.
 
-        Shared by :meth:`_restrict_to_declaration` (T006, filtering) and
-        :meth:`order_queryset` (T022, ordering) — both need exactly the same
-        declaration, resolved the same way, rather than parsing the
-        reference twice.
+        Returns:
+            The field, or ``None`` when the reference is absent, does not resolve or names
+            a field that is not a concept field.
         """
         reference = self.request.GET.get("field")
         if not reference:
@@ -119,55 +84,25 @@ class ConceptAutocompleteView(AutocompleteModelView):
         return field
 
     def _restrict_to_declaration(self, queryset: QuerySet) -> QuerySet:
-        """Narrow ``queryset`` to what the field declaration the request
-        names allows (FR-006, decisions.md D11).
+        """Narrow a queryset to what the requested field declaration admits.
 
-        A reference that fails to resolve, names a field that is not one of
-        this package's concept fields, or is absent, returns
-        ``Concept.objects.none()`` — an ordinary empty page, HTTP 200,
-        identical in shape to a search that matched nothing. No exception
-        escapes, so a missing model and an existing-but-wrong field are
-        indistinguishable from outside (plan.md A6 point 3).
+        Args:
+            queryset: The concepts to narrow.
+
+        Returns:
+            The narrowed queryset, or an empty one when the declaration does not resolve,
+            which is indistinguishable from a search that matched nothing.
         """
         field = self._resolve_declared_field()
         if field is None:
             return queryset.none()
-        # ConceptFieldMixin is a plain mixin, not itself a RelatedField, so
-        # get_limit_choices_to() (from ForeignKey/ManyToManyField, which
-        # ConceptField/ConceptsField also inherit) is invisible to mypy after
-        # narrowing on the mixin alone.
+        # The mixin is not a RelatedField, so mypy cannot see get_limit_choices_to() after narrowing.
         return queryset.complex_filter(field.get_limit_choices_to())  # type: ignore[attr-defined]
 
     def order_queryset(self, queryset: QuerySet) -> QuerySet:
-        """Apply an ordered collection's own member sequence, and only while
-        the search box is empty (T022, FR-010, plan.md A5, decisions.md D8,
-        research.md R6).
-
-        This overrides the hook the base view's own ``get_queryset()``
-        actually calls (``django_tomselect/autocompletes.py:399``,
-        ``order_queryset()`` at line 685). The design notes for this story
-        name the method ``apply_ordering()``; the installed
-        ``django-tomselect`` exposes no method by that name, so an override
-        written under it would sit dead and never run. ``order_queryset()``
-        is the real seam and reads exactly the way the design intended:
-        overridden outright, one condition, one annotation.
-
-        The collection's order applies when, and only when, both hold: the
-        request carries no search term (``self.query``, set in ``setup()``
-        before this runs — never read again here), and the field
-        declaration's restriction is a collection the curator marked
-        ``ordered``. Everything else — no restriction, an unordered
-        collection, an unresolved declaration, a typed query — falls
-        through to ``super()`` and the inherited ``("label", "pk")``: a
-        typed query wants relevance, not the curator's browsing sequence.
-
-        The position is read through a ``Subquery`` annotation keyed on the
-        declaration's own collection and vocabulary slugs, never through a
-        ``collection_memberships__`` lookup: a concept may belong to more
-        than one collection, and that lookup joins ``CollectionMember`` onto
-        a queryset this view reaches with ``complex_filter()`` bare —
-        duplicate rows, silently (research.md R3).
-        """
+        """Order by an ordered collection's own sequence while the search box is empty."""
+        # order_queryset() is the hook the base get_queryset() calls; the library has no
+        # apply_ordering(). A typed query wants relevance, not the curator's browsing sequence.
         if self.query:
             return super().order_queryset(queryset)
 
@@ -182,6 +117,9 @@ class ConceptAutocompleteView(AutocompleteModelView):
         if not is_ordered_collection:
             return super().order_queryset(queryset)
 
+        # A subquery rather than a collection_memberships__ join: a concept can belong to several
+        # collections, and the join would duplicate rows in a queryset filtered with a bare
+        # complex_filter() (FS-016).
         position = Subquery(
             CollectionMember.objects.filter(
                 concept=OuterRef("pk"),
@@ -189,35 +127,14 @@ class ConceptAutocompleteView(AutocompleteModelView):
                 collection__scheme__slug=vocabulary,
             ).values("position")[:1]
         )
-        # ``QuerySet.annotate()``'s stub returns ``Self``, which mypy cannot
-        # resolve past ``Any`` when ``queryset`` is a bare, unparametrised
-        # ``QuerySet`` parameter rather than a manager's own result — an
-        # explicit variable annotation gives ``order_by()`` a concrete type
-        # to resolve ``Self`` against, rather than suppressing the check.
+        # Annotated so mypy can resolve the ``Self`` that QuerySet.annotate() returns.
         annotated: QuerySet = queryset.annotate(_collection_position=position)
         return annotated.order_by("_collection_position", "pk")
 
     def paginate_queryset(self, queryset: QuerySet) -> "PaginatedResponse":
-        """Bounded and stable past the end (FR-007, plan.md A7).
-
-        ``page_size``, the inherited ``MAX_PAGE_SIZE`` clamp (applied in
-        ``setup()`` before this runs) and the total ordering
-        (``ordering = ("label", "pk")`` above) are unchanged and stay
-        inherited. Only the one branch ``plan.md`` A7 names is replaced: the
-        base catches ``EmptyPage`` and returns page 1
-        (``autocompletes.py:743``), so a request past the end silently
-        re-serves the beginning. Here it returns an ordinary empty page
-        saying no more exist — the same shape a search that matched nothing
-        already returns.
-
-        The base does the paginating and this reads its answer, rather than
-        reimplementing it. Copying the base's body to change one branch would
-        fork thirty lines of somebody else's code, and the fork would go on
-        looking correct after the original changed. The one cost is that a
-        request past the end pays for the page-1 results the base prepared
-        before this discards them, which is the price of exactly one ordinary
-        first-page request, on the rarest path the endpoint has.
-        """
+        """Return an empty last page for a page number past the end instead of page 1."""
+        # Reads the base's answer rather than copying its body, which would fork code that goes on
+        # looking correct after the original changes. The base returns page 1 past the end.
         response = super().paginate_queryset(queryset)
         try:
             page_number = max(1, int(self.page))
@@ -235,15 +152,9 @@ class ConceptAutocompleteView(AutocompleteModelView):
         }
 
     def prepare_results(self, results):
-        """Shape each result down to exactly what FR-012 permits (FR-005): the
-        identifier, the preferred label — ``display_label()``, active-language
-        with default-language fallback — and the vocabulary's name. Overridden
-        outright rather than through ``hook_prepare_results()``: ``display_label``
-        and ``vocabulary`` are ``virtual_fields`` with no queryset annotation
-        behind them, so the base implementation's ``.values()`` field extraction
-        has nothing to build on here, and letting it run first would put
-        permission/URL keys in a response FR-012 says must carry only these three.
-        """
+        """Shape each result to its identifier, display label and vocabulary name only."""
+        # Overridden outright: display_label and vocabulary are virtual fields with no queryset
+        # annotation behind them, and the base would add permission and URL keys.
         return [
             {
                 "id": concept.pk,

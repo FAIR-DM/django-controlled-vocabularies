@@ -1,135 +1,10 @@
-"""Tests for ``controlled_vocabularies.fields``.
-
-Phase F covers ``ConceptField`` construction and ``deconstruct()``, unbound to
-any consuming model — no model declares the field yet, so every test here
-builds the field directly rather than through a model instance. The bound
-behaviour (declaring it on a model, saving, reading back) is US-1's (T004),
-and the ``validate()`` override's behavioural proof — raise, then read
-``.messages`` and find the vocabulary named — is US-2's T005, against a real
-test-app model. Neither is in scope here: with ``to`` the string
-``"controlled_vocabularies.Concept"`` (not the imported class — see
-``fields.py``'s module docstring for why), ``remote_field.model`` only
-resolves once the field is attached to a model class, so an unbound field
-cannot run ``validate()`` at all.
-
-- ``TestConceptFieldConstruction`` — the fixed kwargs, the two construction-time
-  rejections, that building the field issues no query (FR-003's mechanism),
-  and that ``error_messages["invalid"]`` carries the named placeholder
-  ``validate()`` needs (proved bound in T005).
-- ``TestConceptFieldMigrations`` — a model carrying the field migrates from
-  zero and stays ``makemigrations --check`` clean, which is what the string
-  ``to`` and ``deconstruct()`` together exist to make possible.
-- ``TestConceptFieldFactories`` and ``TestConceptVocabularyFixtures`` — the
-  test-app factories and the two scheme fixtures ``conftest.py`` carries for
-  #87, #88 and #89 build the shape their docstrings promise.
-- ``TestConceptFieldDeconstruct`` — ``deconstruct()`` strips the three kwargs
-  this field fixes and adds ``vocabulary``, so a field built from the emitted
-  path/kwargs round-trips (T003, moved into Phase F because
-  ``ModelState.from_model()`` clones every field through ``deconstruct()``,
-  so T002's test app cannot migrate without it).
-- ``TestConceptFieldRoundTrip`` — T004 (US-1): declaring the field on a real
-  model, saving, and reading back a concept survives a save/reload; the
-  optional field validates and saves with nothing attached; and using the
-  field this way stays ``makemigrations --check`` clean, the regression guard
-  against ``deconstruct()`` rotting.
-- ``TestConceptFieldOrdinaryOptions`` — T004 (US-1): the field's ordinary
-  ``ForeignKey`` options — ``related_name``, ``null``/``blank``,
-  ``verbose_name``, ``help_text``, the automatic index — behave exactly as
-  they would on a plain ``ForeignKey``, asserted directly on the bound field
-  rather than only through a save/reload round trip.
-- ``TestConceptFieldValidation`` — T005 (US-2): ``full_clean()`` on a record
-  holding a concept from another vocabulary raises ``ValidationError``, and
-  *reading* ``.messages`` shows the vocabulary named — the behavioural proof
-  T001's ``validate()`` override exists for, only reachable against a real,
-  bound model. A concept from the correct vocabulary passes; an optional
-  field with nothing attached passes.
-- ``TestConceptFieldFormChoices`` — T006 (US-2): a ``ModelForm`` generated
-  from a consuming model offers only the named vocabulary's concepts as
-  choices, and a submission carrying another vocabulary's concept is
-  rejected rather than saved — proof that ``ForeignKey.formfield()`` passes
-  ``limit_choices_to`` through, since nothing in this package's own source
-  states that guarantee.
-- ``TestConceptFieldDeleteGuard`` — T007 (US-3): no new code — ``PROTECT``
-  was fixed on the field in T001. This class is the proof FR-007 needs: a
-  referenced concept survives both a single-instance and a bulk queryset
-  delete, the scheme holding it survives too (the cascade from scheme to
-  concept meets the protection on the way down), an unreferenced concept
-  deletes normally, and deleting the referencing record leaves the concept
-  in place.
-- ``TestConceptsFieldWritePathVocabularyCheck`` — FS-010 T005 (US-2): the
-  ``pre_add`` receiver connected in ``ConceptsField.contribute_to_class``
-  refuses a concept from an unnamed vocabulary at the point the relation is
-  written (D2), not only at model validation. Driven entirely through
-  :class:`~tests.testapp.models.Deposit`'s real relation manager — never
-  against the receiver directly, since a direct call would pass even if
-  Django's ``bulk_create`` fast path were skipping ``m2m_changed`` entirely
-  (R6), which is precisely the failure this task guards against.
-- ``TestConceptsFieldFormChoices`` — FS-010 T006 (US-2): no new code —
-  ``limit_choices_to`` from T002 already restricts a ``ModelForm``'s
-  ``ModelMultipleChoiceField`` queryset and rejects an out-of-vocabulary
-  submission, the same way T006 (FS-009) already proved for ``ConceptField``.
-- ``TestConceptsFieldDeleteGuard`` — FS-010 T007 (US-3): no new code —
-  ``PROTECT`` on the membership model's foreign key to ``Concept`` (T003)
-  already refuses any delete path that would strand a reference. This class
-  is the proof, the ``ConceptsField`` counterpart of
-  ``TestConceptFieldDeleteGuard``: a held concept survives both a
-  single-instance and a bulk queryset delete, the scheme holding it survives
-  too, an unheld concept deletes normally, and deleting the consuming record
-  removes only its membership rows and leaves every concept in place (D5).
-- ``TestConceptsFieldLabelAndUriAccessors`` — FS-010 T008 (US-4, FR-008,
-  FR-009): ``contribute_to_class()`` gives the consuming model
-  ``get_<name>_labels()`` and ``get_<name>_uris()``, plural, named the way
-  ``ConceptField``'s own singular accessors are (T011's precedent). Labels
-  delegate to ``Concept.display_label()`` per attached concept, in the
-  active language with fallback to the vocabulary's default; URIs return
-  each concept's own ``uri`` unchanged. Both return an empty result rather
-  than raising for a record holding nothing, including an unsaved one —
-  the many-to-many manager raises ``ValueError`` the moment it is touched
-  before a primary key exists. The ``setattr`` is guarded exactly like
-  ``ConceptField``'s.
-- ``TestConceptsFieldSeveralVocabulariesWritePath`` and
-  ``TestConceptsFieldSeveralVocabulariesFormChoices`` — FS-010 T012 (US-8,
-  FR-002, FR-005, FR-006, D9): the several-vocabulary shape against
-  :class:`~tests.testapp.models.FieldNote` — a concept from either named
-  vocabulary attaches, a concept from a third is refused with both expected
-  vocabularies named in the message, and a form built from the model offers
-  only the two named vocabularies' concepts.
-- ``TestConceptsFieldNoVocabularyWritePath``,
-  ``TestConceptsFieldNoVocabularyFormChoices`` and
-  ``TestConceptsFieldNoVocabularyDeleteGuard`` — FS-010 T012 (US-8, FR-002,
-  FR-005, FR-006, FR-007, D9): the no-vocabulary shape against
-  :class:`~tests.testapp.models.Photograph` — concepts from several distinct
-  vocabularies all attach in one write with none refused, a form built from
-  the model offers every concept in the database, and the delete guard holds
-  without a restriction to enforce, proving the unconstrained shape is a real
-  member of the family rather than a plain many-to-many wearing the same
-  name. The receiver-absence assertion this shape also needs already lives
-  on ``TestConceptsFieldWritePathVocabularyCheck`` (T005) and the several-
-  vocabulary system-check coverage already lives on
-  ``TestCheckConceptsFieldVocabularies`` (T010, ``test_checks.py``) — neither
-  is duplicated here.
-- ``TestSharedRestrictedHelpText`` — T023 (US-7, FR-013): a restricted field
-  with no ``help_text`` of its own describes itself as restricted within its
-  vocabulary, one static default per field shared by all three axes, never
-  one interpolating the restriction; an unrestricted field and a consumer's
-  own ``help_text`` are both unaffected.
-- ``TestRestrictionErrorMessagesAreTranslatable``,
-  ``TestWriteGuardRefusalsAreTranslatable``,
-  ``TestW005MessagesAreStaticWithNamedPlaceholders`` and
-  ``TestDeclarationRuleTypeErrorsStayUntranslated`` — T024 (US-7, Article
-  XII): every curator-facing string this feature added — the three
-  ``invalid_restricted*`` messages, the many-valued write guard's three
-  refusals, and W005's three messages and hints — is a static msgid with
-  named placeholders, checked as lazy proxies rather than by content alone.
-  The last class asserts the opposite direction: T002's and T003's
-  declaration-rule ``TypeError``s stay plain, untranslated strings, on
-  purpose (research.md R7).
-"""
+"""Tests for controlled_vocabularies.fields."""
 
 import ast
 import inspect
 import signal
 import warnings
+from pathlib import Path
 
 import pytest
 from django import forms
@@ -144,6 +19,7 @@ from django.utils.functional import Promise
 from django.utils.module_loading import import_string
 
 from controlled_vocabularies import checks as checks_module
+from controlled_vocabularies import fields as fields_module
 from controlled_vocabularies.fields import (
     ConceptField,
     ConceptFieldMixin,
@@ -171,6 +47,7 @@ from tests.factories import (
     SurveyFactory,
     collection_with_members,
 )
+from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import (
     Artifact,
     Borehole,
@@ -192,17 +69,6 @@ from tests.testapp.models import (
 
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestSharedVocabularyContract:
-    """#111 — the two fields agree on what ``vocabulary`` accepts and what it
-    means, asserted against both from one place.
-
-    The defect #111 reported was the two fields disagreeing, and the reason
-    they could was that each implemented the contract itself. They now inherit
-    it from :class:`ConceptFieldMixin`. This class is the guard against a
-    future change reintroducing the divergence: every assertion runs against
-    both fields, so a shape supported on one and not the other fails here
-    rather than reaching a consumer.
-    """
-
     def test_inherits_the_shared_contract(self, field_class):
         assert issubclass(field_class, ConceptFieldMixin)
 
@@ -266,29 +132,12 @@ class TestSharedVocabularyContract:
         assert rebuilt.get_limit_choices_to() == field.get_limit_choices_to()
 
     def test_clone_rebuilds_an_equivalent_field(self, field_class):
-        """``clone()`` is what ``ModelState.from_model()`` calls on every local
-        field, so a contract that does not survive it breaks every
-        ``makemigrations`` and every test-database build."""
         field = field_class(vocabulary=["rock-type", "mineral"])
         assert field.clone().vocabulary == ("rock-type", "mineral")
 
 
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestSharedRestrictionArguments:
-    """T001 (FR-001, FR-003, decisions.md D4) — both fields accept the three
-    restriction arguments — ``collection``, ``concepts``, ``branch`` — each
-    defaulting to ``None`` and normalised by the same rule
-    ``_normalise_vocabulary`` already applies to a vocabulary slug: a
-    non-empty string, or a ``TypeError`` naming the class. ``concepts``
-    additionally collapses duplicates and refuses an empty list.
-
-    Nothing resolves yet (plan.md A1): a restricted field still behaves
-    exactly like an unrestricted one until a later story teaches
-    ``get_limit_choices_to()`` to read these attributes. Every field built
-    here names exactly one vocabulary so FR-005 (T002) never fires and this
-    class tests normalisation alone.
-    """
-
     def test_collection_defaults_to_none(self, field_class):
         field = field_class(vocabulary="rock-type")
         assert field.collection is None
@@ -340,42 +189,20 @@ class TestSharedRestrictionArguments:
             field_class(vocabulary="rock-type", concepts=["granite", ""])
 
     def test_concepts_rejects_an_empty_list(self, field_class):
-        """FR-003, decisions.md D4 — a restriction that offers nothing while
-        reading as restricted is not what a consumer writing it meant."""
         with pytest.raises(TypeError, match=field_class.__name__):
             field_class(vocabulary="rock-type", concepts=[])
 
     def test_concepts_accepts_a_single_slug_without_splitting_it(self, field_class):
-        """``collection`` and ``branch`` both take a bare slug, so a consumer
-        will write one for ``concepts`` too. It has to become a one-element
-        restriction, the shape ``vocabulary`` already accepts — iterating the
-        string instead yields a slug per character, which every check here
-        would pass."""
+        # Iterating the string would yield a slug per character, which every check here
+        # would pass.
         field = field_class(vocabulary="rock-type", concepts="granite")
         assert field.concepts == ("granite",)
 
 
+# Both defaults stay static gettext_lazy strings: % on a lazy proxy evaluates it
+# immediately.
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestSharedRestrictedHelpText:
-    """T023 (US-7, FR-013) — a restricted field with no ``help_text`` of its
-    own describes itself as restricted within its vocabulary, distinct from
-    the unrestricted default both fields already carried. One axis at a
-    time, since ``TestSharedRestrictionArguments`` already proves the three
-    normalise the same way; what's new here is what each does to the
-    default ``help_text``.
-
-    Both defaults stay static ``gettext_lazy`` strings, asserted by identity
-    against the class attribute rather than by content: ``%`` applied to a
-    ``gettext_lazy()`` proxy evaluates it immediately, which would defeat the
-    laziness the default exists to keep, exactly as ``ConceptFieldMixin``'s
-    own annotation on ``default_help_text`` explains. The
-    ``test_help_text_does_not_vary_with_the_restrictions_target`` case is the
-    regression guard for that: it fails the moment someone later
-    interpolates ``self.collection``/``self.concepts``/``self.branch`` into
-    either default, because two different targets on the same axis would
-    then stop reading identically.
-    """
-
     def test_an_unrestricted_field_keeps_the_unrestricted_default(self, field_class):
         field = field_class(vocabulary="rock-type")
         assert field.help_text == field_class.default_help_text
@@ -402,10 +229,6 @@ class TestSharedRestrictedHelpText:
         assert isinstance(field.help_text, Promise)
 
     def test_help_text_does_not_vary_with_the_restrictions_target(self, field_class):
-        """A test that fails if someone later interpolates the restriction
-        into the default: the default names no target at all, so two
-        declarations restricted to different collections must read
-        byte-identical ``help_text``."""
         first = field_class(vocabulary="rock-type", collection="core-samples")
         second = field_class(vocabulary="rock-type", collection="all-samples")
         assert str(first.help_text) == str(second.help_text)
@@ -423,10 +246,6 @@ class TestSharedRestrictedHelpText:
 
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestSharedRestrictionRequiresOneVocabulary:
-    """T002 (FR-005) — a restriction needs exactly one named vocabulary,
-    checked after ``_normalise_vocabulary`` has run so "several" and "none"
-    are one condition rather than two branches (plan.md A1)."""
-
     def test_a_restriction_naming_no_vocabulary_is_refused(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
             field_class(branch="igneous")
@@ -440,9 +259,6 @@ class TestSharedRestrictionRequiresOneVocabulary:
         assert field.collection == "core-samples"
 
     def test_no_restriction_naming_no_vocabulary_is_unaffected(self, field_class):
-        """FR-014 — a declaration using none of the three restrictions behaves
-        exactly as it did before this feature existed, including naming no
-        vocabulary at all."""
         field = field_class()
         assert field.vocabulary == ()
 
@@ -453,12 +269,9 @@ class TestSharedRestrictionRequiresOneVocabulary:
         assert field.vocabulary == ("rock-type", "mineral")
 
 
+# An intersection and a union are equally plausible, so no reading is chosen.
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestSharedRestrictionExclusivity:
-    """T003 (FR-006, decisions.md D1) — at most one of collection/concepts/
-    branch. Two or more has no single defensible reading — an intersection
-    and a union are equally plausible — so no reading is chosen."""
-
     def test_collection_and_concepts_together_are_refused(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
             field_class(
@@ -487,12 +300,6 @@ class TestSharedRestrictionExclusivity:
 
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestSharedRestrictionDeconstruct:
-    """T004 (FR-011, FR-014, plan.md A7) — a restriction survives
-    ``deconstruct()`` and rebuilds. Emitted only when set, so a declaration
-    using none produces byte-identical output to before this feature
-    (already covered by ``TestSharedVocabularyContract``); this class covers
-    the restricted case, one axis at a time."""
-
     def test_collection_is_emitted_and_survives_the_round_trip(self, field_class):
         field = field_class(vocabulary="rock-type", collection="core-samples")
         _name, path, args, kwargs = field.deconstruct()
@@ -537,17 +344,11 @@ class TestSharedRestrictionDeconstruct:
     def test_a_restricted_fields_deconstructed_kwargs_carry_no_limit_choices_to(
         self, field_class
     ):
-        """Guards the unconditional ``kwargs.pop("limit_choices_to", None)``
-        that keeps T005's callable out of migration output — a later change
-        to that pop should fail here, not in a generated migration."""
         field = field_class(vocabulary="rock-type", collection="core-samples")
         _name, _path, _args, kwargs = field.deconstruct()
         assert "limit_choices_to" not in kwargs
 
     def test_clone_rebuilds_a_restricted_field(self, field_class):
-        """``clone()`` is what ``ModelState.from_model()`` calls on every
-        local field, so a contract that does not survive it breaks every
-        ``makemigrations`` and every test-database build."""
         field = field_class(vocabulary="rock-type", branch="igneous")
         cloned = field.clone()
         assert cloned.branch == "igneous"
@@ -555,12 +356,6 @@ class TestSharedRestrictionDeconstruct:
 
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestSharedLimitChoicesToCallable:
-    """T005 (FR-007, research.md R2) — ``limit_choices_to`` becomes a
-    callable returning today's vocabulary ``Q``, installed as the seam later
-    stories resolve a restriction through. This task changes no observable
-    behaviour: every existing field test in this module still proves it,
-    unmodified."""
-
     def test_get_limit_choices_to_returns_the_vocabulary_q(self, field_class):
         field = field_class(vocabulary="rock-type")
         assert field.get_limit_choices_to() == Q(scheme__slug__in=("rock-type",))
@@ -571,15 +366,11 @@ class TestSharedLimitChoicesToCallable:
 
     @pytest.mark.django_db
     def test_construction_issues_no_query(self, field_class):
-        """FR-007 — the callable is installed, never invoked, while the
-        declaration is only being read."""
         with CaptureQueriesContext(connection) as ctx:
             field_class(vocabulary="rock-type")
         assert len(ctx.captured_queries) == 0
 
     def test_no_vocabulary_named_sets_no_restriction_at_all(self, field_class):
-        """Not a callable returning an empty Q that matches everything —
-        nothing is set, exactly as before this feature."""
         field = field_class()
         assert field.get_limit_choices_to() == {}
         assert field.remote_field.limit_choices_to == {}
@@ -588,16 +379,6 @@ class TestSharedLimitChoicesToCallable:
     def test_a_restriction_present_now_narrows_beyond_the_bare_vocabulary_q(
         self, field_class
     ):
-        """T006 (US-1) is the "later story" this method's own name once
-        promised would teach the axis — it no longer resolves to only the
-        vocabulary ``Q`` once ``collection`` is set. ``Q`` objects wrapping a
-        subquery are not ``==``-comparable across two independently built
-        instances (the embedded ``QuerySet`` compares by identity, not
-        value), so this is checked against real rows rather than by
-        structural equality — the same reason ``TestCollectionRestrictionResolves``
-        below asserts by membership. See ``decisions.md`` for why this
-        pre-existing test's assertion changed rather than being left to fail
-        as the feature that already predicted it landed."""
         scheme = ConceptSchemeFactory(name="Rock Type")
         collection, members = collection_with_members(
             scheme=scheme, labels=("Granite",)
@@ -611,24 +392,11 @@ class TestSharedLimitChoicesToCallable:
         assert outsider not in resolved
 
 
+# Q objects wrapping a subquery compare by identity, so every test evaluates the
+# resolved Q against real rows instead of comparing Qs.
 @pytest.mark.django_db
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestCollectionRestrictionResolves:
-    """T006 (US-1, FR-002, plan.md A2) — the callable from T005 additionally
-    returns a ``pk__in`` subquery over ``CollectionMember`` when ``collection``
-    is set. Both halves of the resolved ``Q`` matter (research.md R3): the
-    vocabulary term is never dropped, so a same-named collection in another
-    vocabulary cannot widen the field, and the membership term is a
-    subquery, never a ``collection_memberships__…`` join, so it cannot
-    duplicate rows for a concept that belongs to more than one collection.
-
-    Two independently resolved ``Q``s wrapping a subquery are not
-    ``==``-comparable (the embedded ``QuerySet`` compares by identity), so
-    every assertion here evaluates the resolved ``Q`` against real rows via
-    ``Concept.objects.complex_filter()`` — the same bare call this package's
-    own widget and search endpoint make (research.md R3), rather than
-    inspecting the ``Q``'s structure."""
-
     def test_resolves_to_exactly_the_collection_members(self, field_class):
         scheme = ConceptSchemeFactory(name="Rock Type")
         collection, members = collection_with_members(
@@ -664,9 +432,6 @@ class TestCollectionRestrictionResolves:
         assert mineral_concept not in resolved
 
     def test_a_concept_in_a_second_collection_too_is_not_duplicated(self, field_class):
-        """The row-duplication research.md R3 exists to guard against: a
-        member of both the restricted collection and a second one must
-        still resolve once."""
         scheme = ConceptSchemeFactory(name="Rock Type")
         collection, members = collection_with_members(
             scheme=scheme, labels=("Granite",)
@@ -680,15 +445,11 @@ class TestCollectionRestrictionResolves:
         assert list(resolved.values_list("pk", flat=True)) == [members[0].pk]
 
 
+# limit_choices_to is re-resolved on every read, so a restriction cached at
+# construction fails here.
 @pytest.mark.django_db
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestCollectionRestrictionResolvesLive:
-    """T010 (US-1, FR-002's "resolved live") — no cache to invalidate: T005
-    made ``limit_choices_to`` a callable, re-resolved on every read, so a
-    membership change reaches the field with nothing to invalidate and
-    nothing to restart. This test is what stops a later "optimisation" that
-    resolves the restriction once and holds onto it."""
-
     def test_a_concept_added_to_the_collection_after_construction_appears_on_the_next_read(
         self, field_class
     ):
@@ -711,15 +472,6 @@ class TestCollectionRestrictionResolvesLive:
 @pytest.mark.django_db
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestConceptsRestrictionResolves:
-    """T013 (US-2, FR-003, plan.md A2) — the callable from T005 gains its
-    third and final term: ``Q(slug__in=self.concepts)`` when ``concepts`` is
-    set. The one axis needing no subquery — research.md R3's row-duplication
-    concern does not arise for a plain column filter, so this is checked
-    against real rows the same way the collection axis is, but for
-    consistency with the rest of this module rather than out of necessity:
-    a bare ``Q`` *is* ``==``-comparable, unlike the collection axis's
-    subquery-wrapped one."""
-
     def test_resolves_to_exactly_the_listed_concepts(self, field_class):
         scheme = ConceptSchemeFactory(name="Rock Type")
         granite = ConceptFactory(scheme=scheme, label="Granite")
@@ -759,17 +511,9 @@ class TestConceptsRestrictionResolves:
         assert list(resolved) == [granite]
 
 
+# A BROADER row's source is the narrower concept and its target the broader one, so
+# walking down matches target and collects source.
 class TestBranchClosure:
-    """T015 (US-3, plan.md A3, research.md R5) — the branch axis's downward
-    closure, unit-tested directly against ``_branch_closure()`` rather than
-    through a field: the concept named ``branch`` within ``vocabulary``,
-    plus everything narrower than it at any depth. Iterative widening over
-    the stored ``broader`` edges, in the direction ``models.py:1161-1174``
-    fixes: a ``BROADER`` row's ``source`` is the narrower concept and its
-    ``target`` the broader one, so walking downward means matching
-    ``target`` and collecting ``source`` — the opposite of what an inverted
-    walk would do."""
-
     @pytest.mark.django_db
     def test_a_three_level_tree_returns_root_plus_children_plus_grandchildren(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -818,17 +562,11 @@ class TestBranchClosure:
 
 
 class TestBranchClosureCycles:
-    """T016 (FR-004, SC-006, decisions.md D5) — a two-edge cycle, built with
-    two ordinary ``add_broader()`` calls exactly as ``decisions.md`` D5
-    describes, still terminates and yields each concept exactly once. The
-    relation model refuses a self-relation and a mirror-order *related*
-    duplicate, but not a reversed *broader* edge (``models.py:1209-1211``),
-    so this is the shortest cycle storable through the public API — nothing
-    contrived needed to reach it. Bounded by an alarm so a regression in the
-    seen-set logic fails this test rather than hanging the whole suite."""
-
     @pytest.mark.django_db
     def test_a_two_edge_cycle_terminates_and_yields_each_concept_once(self):
+        # A reversed broader edge is storable (only self-relations are refused), so
+        # this is the shortest cycle. The alarm turns a hang in the seen-set logic
+        # into a failure.
         scheme = ConceptSchemeFactory(name="Rock Type")
         alpha = ConceptFactory(scheme=scheme, label="Alpha")
         beta = ConceptFactory(scheme=scheme, label="Beta")
@@ -852,13 +590,6 @@ class TestBranchClosureCycles:
 @pytest.mark.django_db
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestBranchRestrictionResolves:
-    """T018 (US-3, FR-004, plan.md A2) — the callable from T005 gains its
-    third and final term: ``Q(pk__in=<the closure from T015>)`` when
-    ``branch`` is set. As with the collection axis (research.md R3), the
-    closure is a ``pk__in`` subquery, never a join, and the vocabulary term
-    is never dropped — a same-slugged concept in another vocabulary cannot
-    be reached as a root."""
-
     def test_resolves_to_exactly_the_closure(self, field_class):
         scheme = ConceptSchemeFactory(name="Rock Type")
         root = ConceptFactory(scheme=scheme, label="Igneous")
@@ -891,10 +622,6 @@ class TestBranchRestrictionResolves:
 @pytest.mark.django_db
 @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
 class TestBranchRestrictionResolvesLive:
-    """T018 — no cache to invalidate, the same guarantee
-    ``TestCollectionRestrictionResolvesLive`` proves for the collection axis:
-    a concept added below the root at any depth appears on the next read."""
-
     def test_a_concept_added_below_the_root_after_construction_appears_on_the_next_read(
         self, field_class
     ):
@@ -913,8 +640,6 @@ class TestBranchRestrictionResolvesLive:
 
 
 class TestConceptFieldConstruction:
-    """FR-001, FR-002, FR-007, FR-010 — the kwargs a consumer does not supply."""
-
     def test_fixes_to_concept(self):
         field = ConceptField(vocabulary="rock-type")
         assert field.remote_field.model == "controlled_vocabularies.Concept"
@@ -936,16 +661,12 @@ class TestConceptFieldConstruction:
         )
 
     def test_omitted_vocabulary_normalises_to_empty_and_sets_no_restriction(self):
-        """The shape #111 aligns with ``ConceptsField``: naming no vocabulary is
-        a supported declaration, not an error, and sets no restriction at all
-        rather than one that happens to match everything."""
         field = ConceptField()
         assert field.vocabulary == ()
         assert field.get_limit_choices_to() == {}
 
     @pytest.mark.django_db
     def test_construction_issues_no_queries(self):
-        """FR-003's mechanism: the ``Q`` is constructed, never evaluated."""
         with CaptureQueriesContext(connection) as ctx:
             ConceptField(vocabulary="rock-type")
         assert len(ctx.captured_queries) == 0
@@ -955,9 +676,8 @@ class TestConceptFieldConstruction:
             ConceptField(vocabulary="rock-type", on_delete=PROTECT)
 
     def test_rejects_consumer_supplied_limit_choices_to(self):
-        # The vocabulary constraint IS limit_choices_to, so accepting a
-        # consumer's would silently discard either theirs or the constraint.
-        # Refused loudly, the same way on_delete is.
+        # The vocabulary constraint IS limit_choices_to, so accepting a consumer's
+        # would silently discard either theirs or the constraint.
         with pytest.raises(TypeError, match="limit_choices_to"):
             ConceptField(vocabulary="rock-type", limit_choices_to=Q(label="Granite"))
 
@@ -966,9 +686,6 @@ class TestConceptFieldConstruction:
             ConceptField(vocabulary=["rock-type", 7])
 
     def test_rejects_an_empty_slug(self):
-        """An empty string is not a slug any scheme can carry, so a field
-        declaring one would offer no choices at all while looking restricted.
-        Refused for both fields rather than normalised away."""
         with pytest.raises(TypeError, match="ConceptField"):
             ConceptField(vocabulary="")
 
@@ -986,23 +703,13 @@ class TestConceptFieldConstruction:
         assert "%(vocabulary)s" in field.error_messages["invalid"]
 
     def test_error_messages_carry_a_second_message_for_the_unrestricted_shape(self):
-        """A field naming no vocabulary has no vocabulary to name in a refusal,
-        so the message that would interpolate one is not the message it uses."""
         field = ConceptField()
         assert "%(vocabulary)s" not in field.error_messages["invalid_unrestricted"]
 
 
+# Field.clone() rebuilds a field from deconstruct(), and ModelState.from_model()
+# clones every field, so migrations and test-database builds fail without it.
 class TestConceptFieldDeconstruct:
-    """T003 — without this, ``Field.clone()`` (``db/models/fields/__init__.py``,
-    ``self.__class__(*args, **kwargs)`` built from ``self.deconstruct()``) cannot
-    rebuild the field: ``ForeignKey``/``RelatedField.deconstruct()`` would emit
-    ``to``, ``on_delete`` and ``limit_choices_to`` but never ``vocabulary``, and
-    ``__init__`` requires the latter and rejects the former. ``ModelState.from_model()``
-    calls ``clone()`` on every local field, so every one of ``makemigrations``,
-    ``makemigrations --check``, ``migrate`` and pytest-django's own test-database
-    build would raise before writing anything — precisely what T002 hit.
-    """
-
     def test_deconstruct_omits_the_three_fixed_kwargs(self):
         field = ConceptField(vocabulary="rock-type")
         _name, _path, _args, kwargs = field.deconstruct()
@@ -1019,12 +726,8 @@ class TestConceptFieldDeconstruct:
         "vocabulary", [None, "rock-type", ["rock-type", "mineral"]]
     )
     def test_round_trip_rebuilds_an_equivalent_field(self, vocabulary):
-        """Deconstruct, rebuild from the emitted path and kwargs — exactly what
-        ``Field.clone()`` and a replayed migration file both do — and the
-        rebuilt field carries the same vocabulary, the same ``limit_choices_to``,
-        and ``PROTECT``. Run over all three shapes, since a migration written
-        before #111 records ``vocabulary`` as a bare string and has to keep
-        replaying."""
+        # A migration written before #111 records vocabulary as a bare string and has to
+        # keep replaying.
         field = ConceptField(vocabulary=vocabulary)
         _name, path, args, kwargs = field.deconstruct()
         field_class = import_string(path)
@@ -1034,19 +737,12 @@ class TestConceptFieldDeconstruct:
         assert rebuilt.remote_field.on_delete is PROTECT
 
     def test_clone_rebuilds_without_error(self):
-        """``clone()`` is exactly what ``ModelState.from_model()`` calls on every
-        local field (``db/migrations/state.py``) — the failure T002 actually hit."""
         field = ConceptField(vocabulary="rock-type")
         cloned = field.clone()
         assert cloned.vocabulary == ("rock-type",)
 
 
 class TestConceptsFieldConstruction:
-    """FS-010 T002 (FR-001, FR-002, FR-003, FR-011) — ``vocabulary`` is optional
-    and takes three shapes, normalised once in ``__init__`` to a tuple of
-    slugs; the two kwargs a consumer does not supply (``limit_choices_to``,
-    ``through``); construction issues no query."""
-
     def test_single_slug_normalises_to_a_one_element_tuple(self):
         field = ConceptsField(vocabulary="rock-type")
         assert field.vocabulary == ("rock-type",)
@@ -1069,8 +765,6 @@ class TestConceptsFieldConstruction:
 
     @pytest.mark.django_db
     def test_construction_issues_no_queries(self):
-        """FR-003's mechanism, for all three shapes: the ``Q`` is constructed,
-        never evaluated, and an omitted vocabulary sets nothing to evaluate."""
         with CaptureQueriesContext(connection) as ctx:
             ConceptsField(vocabulary="rock-type")
             ConceptsField(vocabulary=["gcmd", "agu-index"])
@@ -1082,8 +776,7 @@ class TestConceptsFieldConstruction:
             ConceptsField(vocabulary="rock-type", limit_choices_to=Q(label="Granite"))
 
     def test_rejects_consumer_supplied_through(self):
-        # A consumer-supplied through model would silently drop T003's delete
-        # guarantee, the same reasoning that refuses on_delete on ConceptField.
+        # A consumer-supplied through model would silently drop the PROTECT guard.
         with pytest.raises(TypeError, match="through"):
             ConceptsField(
                 vocabulary="rock-type", through="controlled_vocabularies.Concept"
@@ -1094,9 +787,6 @@ class TestConceptsFieldConstruction:
             ConceptsField(vocabulary=["mineral", 42])
 
     def test_rejects_an_empty_slug(self):
-        """Refused rather than normalised away, for both fields: a declaration
-        carrying one would restrict to a slug no scheme can hold and offer no
-        choices at all, while reading as a restricted field."""
         with pytest.raises(TypeError, match="ConceptsField"):
             ConceptsField(vocabulary=["mineral", ""])
 
@@ -1111,11 +801,6 @@ class TestConceptsFieldConstruction:
 
 
 class TestConceptsFieldDeconstruct:
-    """FS-010 T002 — ``deconstruct()`` strips ``to`` and ``limit_choices_to``
-    and records ``vocabulary`` instead, for the same ``Field.clone()`` reason
-    documented on :class:`~controlled_vocabularies.fields.ConceptField`.
-    ``through`` is never emitted (T003) so there is nothing to strip."""
-
     def test_deconstruct_omits_to_and_limit_choices_to(self):
         field = ConceptsField(vocabulary="rock-type")
         _name, _path, _args, kwargs = field.deconstruct()
@@ -1130,9 +815,6 @@ class TestConceptsFieldDeconstruct:
 
     @pytest.mark.parametrize("vocabulary", ["rock-type", ["gcmd", "agu-index"], None])
     def test_round_trip_rebuilds_an_equivalent_field(self, vocabulary):
-        """Deconstruct, rebuild from the emitted path and kwargs — exactly what
-        ``Field.clone()`` and a replayed migration file both do — for each of
-        the three shapes."""
         field = ConceptsField(vocabulary=vocabulary)
         _name, path, args, kwargs = field.deconstruct()
         field_class = import_string(path)
@@ -1147,15 +829,6 @@ class TestConceptsFieldDeconstruct:
 
 
 class TestConceptsFieldMembershipModel:
-    """FS-010 T003 (FR-007, FR-011, US-3, R4, R6) — ``contribute_to_class``
-    skips ``ManyToManyField``'s own through generation and substitutes one
-    whose foreign key to ``Concept`` is ``PROTECT`` rather than ``CASCADE``,
-    following Django's own ``create_many_to_many_intermediary_model`` closely
-    otherwise. Against :class:`~tests.testapp.models.Deposit` (one
-    ``ConceptsField``) and :class:`~tests.testapp.models.Survey` (two, both
-    ``related_name="+"``), never against the generation helper in isolation.
-    """
-
     def test_membership_model_is_named_owner_fieldname(self):
         field = Deposit._meta.get_field("rock_types")
         assert field.remote_field.through._meta.object_name == "Deposit_rock_types"
@@ -1171,10 +844,7 @@ class TestConceptsFieldMembershipModel:
         assert owner_fk.remote_field.on_delete is CASCADE
 
     def test_deconstruct_still_emits_no_through_once_bound(self):
-        """Unbound, T002 already proves this by never setting ``through`` at
-        all. Bound, ``through`` is real and ``Meta.auto_created`` is what
-        keeps ``ManyToManyField.deconstruct()`` from emitting it — this is
-        the test that would fail if that attribute were ever dropped."""
+        # Meta.auto_created keeps ManyToManyField.deconstruct() from emitting it.
         field = Deposit._meta.get_field("rock_types")
         _name, _path, _args, kwargs = field.deconstruct()
         assert "through" not in kwargs
@@ -1189,10 +859,6 @@ class TestConceptsFieldMembershipModel:
         )
 
     def test_two_hidden_related_names_are_rewritten_distinctly(self):
-        """Without the hidden ``related_name`` rewrite this task replicates
-        before its ``super(ManyToManyField, self).contribute_to_class()``
-        call, both fields would keep the literal ``related_name="+"`` — proved
-        failing directly below by the reverse-query-name-clash check."""
         primary = Survey._meta.get_field("primary_minerals")
         secondary = Survey._meta.get_field("secondary_minerals")
         assert primary.remote_field.related_name != "+"
@@ -1205,12 +871,9 @@ class TestConceptsFieldMembershipModel:
 
     @isolate_apps("tests.testapp")
     def test_declaring_two_concepts_fields_on_one_model_warns_of_nothing(self):
-        """ARC-001 (design review) — the MRO skip
-        (``super(ManyToManyField, self).contribute_to_class(...)``) must skip
-        ``ManyToManyField``'s own through generation, not merely call it and
-        then generate again: doing both registers the through model under the
-        same name twice and Django warns ``Model ... was already
-        registered``, on every consuming declaration."""
+        # Skipping ManyToManyField's through generation must skip it, not call it and
+        # then generate again: that registers the through model twice and Django
+        # warns "was already registered".
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
 
@@ -1227,9 +890,6 @@ class TestConceptsFieldMembershipModel:
 
 
 class TestConceptsFieldMigrations:
-    """FS-010 T003 — ``Deposit`` and ``Survey`` migrate cleanly with the
-    generated membership models, and stay ``makemigrations --check`` clean."""
-
     @pytest.mark.django_db
     def test_models_are_queryable(self):
         assert Deposit.objects.count() == 0
@@ -1241,16 +901,8 @@ class TestConceptsFieldMigrations:
 
 
 class TestConceptsFieldConsumingModels:
-    """FS-010 T001 (FR-001, US-1 through US-8) — the remaining four consuming
-    models: optional with a ``related_name``, both field types on one model,
-    two named vocabularies, and no vocabulary named. ``Deposit`` and
-    ``Survey`` (T003) round out the six `tasks.md` T001 lists."""
-
     @pytest.mark.django_db
     def test_all_six_models_are_queryable(self):
-        """Proof the extended migration applied — pytest-django builds the
-        test database from every installed app's migrations, from zero, for
-        the whole session."""
         assert Deposit.objects.count() == 0
         assert Survey.objects.count() == 0
         assert Outcrop.objects.count() == 0
@@ -1284,9 +936,6 @@ class TestConceptsFieldConsumingModels:
 
     @pytest.mark.django_db
     def test_both_field_types_on_one_model_coexist_without_clashing(self):
-        """The collision case `plan.md`'s Risks section refuses to assume
-        away: a ``ConceptField`` and a ``ConceptsField`` against the same
-        vocabulary, declared on the same model, read and write independently."""
         scheme = ConceptSchemeFactory(name="Mineral")
         primary = ConceptFactory(scheme=scheme)
         associated = ConceptFactory(scheme=scheme)
@@ -1335,8 +984,6 @@ class TestConceptsFieldConsumingModels:
     def test_every_concepts_field_has_translatable_help_text_and_a_verbose_name(
         self, model, field_name
     ):
-        """Article XII — ``help_text`` is mandatory and translatable; every
-        declaration above also supplies an explicit ``verbose_name``."""
         field = model._meta.get_field(field_name)
         assert isinstance(field.help_text, Promise)
         assert str(field.help_text)
@@ -1344,16 +991,6 @@ class TestConceptsFieldConsumingModels:
 
 
 class TestConceptsFieldAttachAndReadBack:
-    """FS-010 T004 (FR-001, US-1, D1, D4) — attaching, reading back, and the
-    reverse accessor, against :class:`~tests.testapp.models.Deposit` and
-    :class:`~tests.testapp.models.Outcrop`. With T002 and T003 already in
-    place, this is assertion rather than construction: the duplicate-attach
-    case is Django's own ``m2m_changed`` ``pre_add`` behaviour (``pk_set``
-    already excludes an already-attached concept, research.md R3), asserted
-    here rather than built. No test in this class asserts an order — D1 makes
-    the attached set unordered, so every multi-concept comparison is a set
-    comparison."""
-
     @pytest.mark.django_db
     def test_two_attached_concepts_are_returned_and_no_third(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -1406,18 +1043,6 @@ class TestConceptsFieldAttachAndReadBack:
 
 
 class TestConceptsFieldWritePathVocabularyCheck:
-    """FS-010 T005 (US-2, FR-005, D2, R1, R3, R6) — the ``pre_add`` receiver
-    connected in ``contribute_to_class`` refuses a concept from an unnamed
-    vocabulary at the moment the relation is written, not only at
-    validation (D2). Every test drives :class:`~tests.testapp.models.Deposit`'s
-    real relation manager — never the receiver directly, because a direct
-    call would pass even if Django's ``bulk_create`` fast path were skipping
-    ``m2m_changed`` entirely, which is exactly the failure this task guards
-    against (R6). The several-vocabulary and no-vocabulary write-path shapes
-    belong to T012; the one assertion below about a no-vocabulary field is
-    about whether a receiver is connected at all, not about its write-path
-    behaviour."""
-
     @pytest.mark.django_db
     def test_add_of_a_concept_from_an_unnamed_vocabulary_is_refused_and_the_set_is_unchanged(
         self,
@@ -1426,11 +1051,9 @@ class TestConceptsFieldWritePathVocabularyCheck:
         other_concept = ConceptFactory(scheme=other_scheme)
         deposit = DepositFactory()
 
-        # ManyRelatedManager.add() runs inside transaction.atomic(savepoint=False),
-        # so a propagating exception poisons pytest-django's own enclosing
-        # transaction unless the call is given its own savepoint to roll
-        # back to — the documented pattern for asserting a raise from inside
-        # an atomic block.
+        # ManyRelatedManager.add() runs in transaction.atomic(savepoint=False), so a
+        # raise poisons the test's own transaction unless the call has a savepoint
+        # of its own to roll back to.
         with pytest.raises(ValidationError), transaction.atomic():
             deposit.rock_types.add(other_concept)
 
@@ -1461,7 +1084,6 @@ class TestConceptsFieldWritePathVocabularyCheck:
         with pytest.raises(ValidationError), transaction.atomic():
             deposit.rock_types.set([kept, other_concept])
 
-        # Asserted after the failed write, not merely that it raised (US-2 acceptance).
         assert set(deposit.rock_types.all()) == {kept}
 
     @pytest.mark.django_db
@@ -1479,11 +1101,9 @@ class TestConceptsFieldWritePathVocabularyCheck:
     def test_the_default_reverse_accessor_refuses_a_concept_from_an_unnamed_vocabulary(
         self,
     ):
-        # Django gives every relation a live reverse accessor unless the
-        # declaration hides it, so this path reaches the same through model
-        # as deposit.rock_types.add() and has to be refused on the same
-        # terms. Deposit.rock_types names no related_name, so the accessor
-        # here is Django's default one.
+        # Django gives every relation a live reverse accessor unless the declaration
+        # hides it, so this path reaches the same through model and must be refused
+        # on the same terms. Deposit.rock_types names no related_name.
         other_scheme = ConceptSchemeFactory(name="Mineral")
         other_concept = ConceptFactory(scheme=other_scheme)
         deposit = DepositFactory()
@@ -1523,16 +1143,6 @@ class TestConceptsFieldWritePathVocabularyCheck:
 
 
 class TestConceptsFieldCollectionRestrictionWritePath:
-    """T012 (US-1, plan.md A4, research.md R4) — the one enforcement path
-    that does not read ``limit_choices_to``: the ``m2m_changed`` receiver is
-    re-expressed against the resolved restriction and bound with the field
-    itself rather than with ``vocabulary``, so the collection axis reaches
-    this guard exactly as it reaches the other three paths. Driven entirely
-    through :class:`~tests.testapp.models.DrillCore`'s real relation
-    manager, the collection-restricted counterpart of
-    ``TestConceptsFieldWritePathVocabularyCheck`` — which this task must
-    leave passing unmodified alongside these."""
-
     @pytest.mark.django_db
     def test_forward_add_of_a_non_member_is_refused_and_the_set_is_unchanged(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -1599,7 +1209,6 @@ class TestConceptsFieldCollectionRestrictionWritePath:
         with pytest.raises(ValidationError), transaction.atomic():
             drill_core.rock_types.set([members[1], outsider])
 
-        # Asserted after the failed write, not merely that it raised (D2's whole-write refusal).
         assert set(drill_core.rock_types.all()) == {members[0]}
 
     @pytest.mark.django_db
@@ -1616,14 +1225,6 @@ class TestConceptsFieldCollectionRestrictionWritePath:
 
 
 class TestConceptsFieldConceptsRestrictionWritePath:
-    """T013 (US-2, plan.md A4) — the many-valued write guard needs no
-    further change of its own: it already reads ``field.get_limit_choices_to()``
-    (T012), and ``TestConceptsRestrictionResolves`` above proves that method
-    now resolves the concepts axis too, so this class is the end-to-end
-    proof rather than new enforcement code. Driven entirely through
-    :class:`~tests.testapp.models.ChipTray`'s real relation manager, the
-    concepts-axis counterpart of ``TestConceptsFieldCollectionRestrictionWritePath``."""
-
     @pytest.mark.django_db
     def test_forward_add_of_an_unlisted_concept_is_refused_and_the_set_is_unchanged(
         self,
@@ -1641,10 +1242,8 @@ class TestConceptsFieldConceptsRestrictionWritePath:
 
     @pytest.mark.django_db
     def test_the_refusal_names_the_permitted_concepts(self):
-        # The concepts-axis counterpart of
-        # ``TestConceptsFieldCollectionRestrictionWritePath.test_the_refusal_names_the_collection``:
-        # naming the wider vocabulary would say nothing about why a
-        # same-vocabulary concept was rejected.
+        # Naming the wider vocabulary would say nothing about why a same-vocabulary
+        # concept was rejected.
         scheme = ConceptSchemeFactory(name="Rock Type")
         outsider = ConceptFactory(scheme=scheme, label="Marble")
         chip_tray = ChipTrayFactory()
@@ -1690,7 +1289,6 @@ class TestConceptsFieldConceptsRestrictionWritePath:
         with pytest.raises(ValidationError), transaction.atomic():
             chip_tray.rock_types.set([basalt, outsider])
 
-        # Asserted after the failed write, not merely that it raised (D2's whole-write refusal).
         assert set(chip_tray.rock_types.all()) == {granite}
 
     @pytest.mark.django_db
@@ -1706,14 +1304,6 @@ class TestConceptsFieldConceptsRestrictionWritePath:
 
 
 class TestConceptsFieldBranchRestrictionWritePath:
-    """T017 (US-3, plan.md A4) — the many-valued write guard needs no
-    further change of its own beyond naming the axis in its message: it
-    already reads ``field.get_limit_choices_to()`` (T012), and
-    ``TestBranchRestrictionResolves`` above proves that method now resolves
-    the branch axis too. Driven entirely through
-    :class:`~tests.testapp.models.BranchTray`'s real relation manager, the
-    branch-axis counterpart of ``TestConceptsFieldConceptsRestrictionWritePath``."""
-
     @pytest.mark.django_db
     def test_forward_add_of_a_sibling_branch_concept_is_refused_and_the_set_is_unchanged(
         self,
@@ -1786,7 +1376,6 @@ class TestConceptsFieldBranchRestrictionWritePath:
         with pytest.raises(ValidationError), transaction.atomic():
             branch_tray.rock_types.set([second_child, outsider])
 
-        # Asserted after the failed write, not merely that it raised (D2's whole-write refusal).
         assert set(branch_tray.rock_types.all()) == {child}
 
     @pytest.mark.django_db
@@ -1805,14 +1394,6 @@ class TestConceptsFieldBranchRestrictionWritePath:
 
 
 class TestConceptsFieldSeveralVocabulariesWritePath:
-    """FS-010 T012 (US-8, FR-002, FR-005, D9) — a field naming several
-    vocabularies accepts a concept from either, and refuses one from a third,
-    naming both expected vocabularies in the refusal. Driven through
-    :class:`~tests.testapp.models.FieldNote`'s real relation manager, the
-    several-vocabulary counterpart of
-    ``TestConceptsFieldWritePathVocabularyCheck``'s single-vocabulary proof
-    against ``Deposit``."""
-
     @pytest.mark.django_db
     def test_a_concept_from_either_named_vocabulary_attaches(self):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
@@ -1833,11 +1414,6 @@ class TestConceptsFieldSeveralVocabulariesWritePath:
         other_concept = ConceptFactory(scheme=other_scheme)
         field_note = FieldNoteFactory()
 
-        # ManyRelatedManager.add() runs inside transaction.atomic(savepoint=False),
-        # so a propagating exception poisons pytest-django's own enclosing
-        # transaction unless the call is given its own savepoint to roll
-        # back to (D11) — the same pattern
-        # ``TestConceptsFieldWritePathVocabularyCheck`` already uses.
         with pytest.raises(ValidationError) as excinfo, transaction.atomic():
             field_note.keywords.add(other_concept)
 
@@ -1848,14 +1424,6 @@ class TestConceptsFieldSeveralVocabulariesWritePath:
 
 
 class TestConceptsFieldNoVocabularyWritePath:
-    """FS-010 T012 (US-8, FR-002, FR-005, D9) — the extension
-    ``TestConceptsFieldConsumingModels.test_field_naming_no_vocabulary_still_attaches_a_concept_from_any_scheme``
-    (T001) does not make: attaching concepts drawn from *several distinct*
-    vocabularies in one write to a field naming none, none refused. The
-    receiver-absence assertion this shape also needs already lives on
-    ``TestConceptsFieldWritePathVocabularyCheck.test_a_field_naming_no_vocabulary_connects_no_receiver_for_its_through_model``
-    and is not repeated here."""
-
     @pytest.mark.django_db
     def test_concepts_from_several_distinct_vocabularies_all_attach_and_none_is_refused(
         self,
@@ -1878,11 +1446,7 @@ class TestConceptsFieldNoVocabularyWritePath:
 
 
 class DepositForm(forms.ModelForm):
-    """Test-only — the plain ``ModelForm`` Django would auto-generate from
-    ``Deposit``, used by T006 to prove ``limit_choices_to`` reaches a
-    ``ConceptsField``'s ``ModelMultipleChoiceField`` choices and submission
-    validation, the same way ``SpecimenForm`` already proves it for
-    ``ConceptField`` (T006, FS-009)."""
+    """Plain ``ModelForm`` over ``Deposit``."""
 
     class Meta:
         model = Deposit
@@ -1890,11 +1454,6 @@ class DepositForm(forms.ModelForm):
 
 
 class TestConceptsFieldFormChoices:
-    """FS-010 T006 (US-2, FR-006, R1) — also no new code:
-    ``ManyToManyField.formfield()`` passes ``limit_choices_to`` through to
-    ``ModelMultipleChoiceField`` exactly as ``ForeignKey.formfield()`` does
-    for ``ConceptField``. This class is the proof."""
-
     @pytest.mark.django_db
     def test_form_field_offers_only_the_named_vocabularys_concepts(self):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
@@ -1935,11 +1494,7 @@ class TestConceptsFieldFormChoices:
 
 
 class FieldNoteForm(forms.ModelForm):
-    """Test-only — the plain ``ModelForm`` Django would auto-generate from
-    ``FieldNote``, used by ``TestConceptsFieldSeveralVocabulariesFormChoices``
-    to prove ``limit_choices_to`` reaches a several-vocabulary
-    ``ConceptsField``'s ``ModelMultipleChoiceField`` choices, the way
-    ``DepositForm`` already proves it for a single-vocabulary field."""
+    """Plain ``ModelForm`` over ``FieldNote``."""
 
     class Meta:
         model = FieldNote
@@ -1947,10 +1502,6 @@ class FieldNoteForm(forms.ModelForm):
 
 
 class TestConceptsFieldSeveralVocabulariesFormChoices:
-    """FS-010 T012 (US-8, FR-006, D9) — a form built from a model carrying a
-    field naming several vocabularies offers the concepts of both and no
-    others."""
-
     @pytest.mark.django_db
     def test_form_field_offers_the_concepts_of_both_named_vocabularies_and_no_others(
         self,
@@ -1971,11 +1522,7 @@ class TestConceptsFieldSeveralVocabulariesFormChoices:
 
 
 class PhotographForm(forms.ModelForm):
-    """Test-only — the plain ``ModelForm`` Django would auto-generate from
-    ``Photograph``, used by ``TestConceptsFieldNoVocabularyFormChoices`` to
-    prove a field naming no vocabulary sets no ``limit_choices_to`` at all,
-    so its form field offers every concept in the database rather than an
-    empty or partial set."""
+    """Plain ``ModelForm`` over ``Photograph``."""
 
     class Meta:
         model = Photograph
@@ -1983,9 +1530,6 @@ class PhotographForm(forms.ModelForm):
 
 
 class TestConceptsFieldNoVocabularyFormChoices:
-    """FS-010 T012 (US-8, FR-006, D9) — a form built from a model carrying a
-    field naming no vocabulary offers every concept in the database."""
-
     @pytest.mark.django_db
     def test_form_field_offers_every_concept_in_the_database(self):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2000,12 +1544,6 @@ class TestConceptsFieldNoVocabularyFormChoices:
 
 
 class TestConceptsFieldDeleteGuard:
-    """T007 (US-3, FR-007, D5, R4) — no new code: T003 already generates the
-    membership model with ``PROTECT`` on its foreign key to ``Concept`` and
-    ``CASCADE`` on the one to the owner. This class is the proof, against a
-    real :class:`~tests.testapp.models.Deposit` and real deletes, never a
-    mocked collector."""
-
     @pytest.mark.django_db
     def test_deleting_a_held_concept_is_refused(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2022,11 +1560,6 @@ class TestConceptsFieldDeleteGuard:
 
     @pytest.mark.django_db
     def test_bulk_queryset_delete_of_a_held_concept_is_refused(self):
-        """The protection lives in the relation rather than in model
-        validation, so a bulk ``QuerySet.delete()`` is refused exactly like a
-        single-instance delete — the queryset path builds the same collector,
-        since ``can_fast_delete`` returns ``False`` whenever a related
-        ``on_delete`` is not ``DO_NOTHING``, rather than skipping it."""
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
         deposit = DepositFactory()
@@ -2040,9 +1573,8 @@ class TestConceptsFieldDeleteGuard:
 
     @pytest.mark.django_db
     def test_deleting_the_scheme_holding_a_held_concept_is_refused(self):
-        """``Concept.scheme`` cascades, so deleting the scheme tries to
-        cascade-delete the concept — and meets the same ``PROTECT`` on the
-        way down. Nothing in the vocabulary is removed."""
+        # Concept.scheme cascades, so deleting the scheme tries to cascade-delete the
+        # concept and meets the same PROTECT on the way down.
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
         deposit = DepositFactory()
@@ -2067,8 +1599,6 @@ class TestConceptsFieldDeleteGuard:
     def test_deleting_the_consuming_record_removes_only_its_memberships_and_every_concept_survives(
         self,
     ):
-        """D5 — deleting a consuming record keeps its concepts. The owning
-        foreign key is ``CASCADE``, so only the membership rows go."""
         scheme = ConceptSchemeFactory(name="Rock Type")
         first = ConceptFactory(scheme=scheme)
         second = ConceptFactory(scheme=scheme)
@@ -2099,13 +1629,6 @@ class TestConceptsFieldDeleteGuard:
 
 
 class TestConceptsFieldNoVocabularyDeleteGuard:
-    """FS-010 T012 (US-8, FR-007, D9) — a concept held by a field naming no
-    vocabulary is still refused a delete: the ``PROTECT`` on the generated
-    through model's foreign key to ``Concept`` (T003) does not depend on the
-    restriction, only on the field being a ``ConceptsField`` at all. This is
-    the assertion that proves the unconstrained shape is a real member of
-    the family rather than a plain many-to-many wearing the same name."""
-
     @pytest.mark.django_db
     def test_deleting_a_concept_held_by_a_field_naming_no_vocabulary_is_refused(self):
         scheme = ConceptSchemeFactory(name="Anything")
@@ -2122,22 +1645,6 @@ class TestConceptsFieldNoVocabularyDeleteGuard:
 
 
 class TestConceptsFieldLabelAndUriAccessors:
-    """FS-010 T008 (US-4, FR-008, FR-009) — ``contribute_to_class()`` gives
-    the consuming model ``get_<name>_labels()`` and ``get_<name>_uris()``,
-    plural, one entry per attached concept, named the way
-    ``ConceptField``'s own singular ``get_<name>_label()``/
-    ``get_<name>_uri()`` are (``TestConceptFieldLabelAndUriAccessors``'s
-    precedent). Labels delegate to ``Concept.display_label()``, which
-    already resolves the active language with fallback to the vocabulary's
-    default — nothing here reimplements that. URIs are each concept's own
-    ``uri``, unchanged. Both return an empty result rather than raising for
-    a record holding nothing, and the ``setattr`` is guarded so a model
-    that already defines one of these names keeps its own. Exercised
-    against :class:`~tests.testapp.models.Photograph`'s ``keywords`` field,
-    the one ``ConceptsField`` naming no vocabulary, so the ``multilingual_scheme``
-    and ``single_language_scheme`` fixtures' concepts can be attached
-    without tripping T005's write-path vocabulary check."""
-
     @pytest.mark.django_db
     def test_labels_accessor_returns_the_active_languages_label_for_each_attached_concept(
         self, multilingual_scheme
@@ -2190,10 +1697,8 @@ class TestConceptsFieldLabelAndUriAccessors:
     def test_both_accessors_return_an_empty_list_on_an_unsaved_record_rather_than_raising(
         self,
     ):
-        # Touching a many-to-many manager before the instance has a primary
-        # key raises ValueError; both accessors promise an empty result
-        # instead (FR-008, FR-009), the ConceptsField counterpart of
-        # TestConceptFieldLabelAndUriAccessors's unsaved-required-field case.
+        # Touching a many-to-many manager before the instance has a primary key
+        # raises ValueError; both accessors return an empty list instead.
         deposit = Deposit(name="not yet surveyed")
 
         assert deposit.get_rock_types_labels() == []
@@ -2218,34 +1723,16 @@ class TestConceptsFieldLabelAndUriAccessors:
 
 
 class OutcropForm(forms.ModelForm):
-    """Test-only — the plain ``ModelForm`` Django would auto-generate from
-    ``Outcrop``, used by ``TestConceptsFieldRequiredSet`` to prove the
-    optional half of FR-010's form behaviour: ``blank=True`` leaves
-    ``ModelMultipleChoiceField`` non-required, so an empty selection is a
-    valid submission, the counterpart of ``DepositForm``'s required half."""
+    """Plain ``ModelForm`` over ``Outcrop``."""
 
     class Meta:
         model = Outcrop
         fields = ["name", "minerals"]
 
 
+# Survey's two required fields trigger one install of the full_clean wrapper between
+# them, so a wrapper closed over the triggering field would leave the other unenforced.
 class TestConceptsFieldRequiredSet:
-    """FS-010 T009 (US-5, FR-010, D3, D8, R2, R5) — ``full_clean()`` refuses a
-    required ``ConceptsField`` left holding no concepts. ``clean_fields()``
-    never looks at ``_meta.many_to_many`` (R2), so the rule has no hook
-    without ``ConceptsField`` installing one onto the consuming class's own
-    ``full_clean``, once per class (D8). The installed wrapper resolves
-    every required ``ConceptsField`` on the *instance's* class from
-    ``_meta.get_fields()`` at call time, never the one field instance that
-    triggered the install — :class:`~tests.testapp.models.Survey`'s two
-    required fields only trigger one install between them, so a wrapper
-    closed over the triggering field would leave the other silently
-    unenforced, which the three ``test_two_required_fields_*`` tests below
-    exist to catch. An unsaved record is skipped outright, because touching
-    a many-to-many manager before the instance has a primary key raises
-    ``ValueError`` rather than ``ValidationError`` (R5), and the wrapped
-    ``full_clean``'s own errors survive rather than being replaced."""
-
     @pytest.mark.django_db
     def test_an_optional_field_with_an_empty_set_validates(self):
         outcrop = OutcropFactory()
@@ -2259,11 +1746,9 @@ class TestConceptsFieldRequiredSet:
         with pytest.raises(ValidationError) as excinfo:
             deposit.full_clean()
 
-        assert "rock_types" in excinfo.value.message_dict
-        assert any(
-            "rock types" in message
-            for message in excinfo.value.message_dict["rock_types"]
-        )
+        assert [error.code for error in excinfo.value.error_dict["rock_types"]] == [
+            "required"
+        ]
 
     @pytest.mark.django_db
     def test_two_required_fields_both_empty_report_both(self):
@@ -2308,10 +1793,8 @@ class TestConceptsFieldRequiredSet:
         assert "primary_minerals" not in excinfo.value.message_dict
 
     def test_an_unsaved_instance_passes_full_clean_without_raising_value_error(self):
-        # Touching Deposit.rock_types before the instance has a primary key
-        # raises ValueError, which full_clean() does not catch (R5); the
-        # required-set check must not reach it, and a record's memberships
-        # cannot exist before the record does (D3).
+        # Touching Deposit.rock_types before the instance has a primary key raises
+        # ValueError, which full_clean() does not catch, so the check must not reach it.
         deposit = Deposit(name="not yet surveyed")
 
         deposit.full_clean()
@@ -2344,11 +1827,9 @@ class TestConceptsFieldRequiredSet:
     def test_a_saved_records_valid_submission_is_accepted_though_its_relation_is_still_empty(
         self,
     ):
-        # #124: ModelForm._post_clean() calls instance.full_clean() before
-        # save_m2m() attaches anything, so a saved record's relation is still
-        # empty in the database at the moment this package's installed check
-        # runs. The check must not read that stale state as a refusal of a
-        # submission that would have populated it.
+        # #124: ModelForm calls instance.full_clean() before save_m2m(), so a saved
+        # record's relation is still empty when the installed check runs. It must not
+        # read that as a refusal of a submission that would have populated it.
         scheme = ConceptSchemeFactory(name="Rock Type", slug="rock-type")
         concept = ConceptFactory(scheme=scheme)
         deposit = DepositFactory()
@@ -2398,7 +1879,6 @@ class TestConceptsFieldRequiredSet:
 
         assert Parent.__dict__["full_clean"]._concepts_field_required_set_check
         assert "full_clean" not in Child.__dict__
-        # And the inherited wrapper does cover the subclass's own field.
         assert {
             field.name
             for field in Child._meta.get_fields()
@@ -2410,39 +1890,20 @@ class TestConceptsFieldRequiredSet:
 
 
 class TestConceptFieldMigrations:
-    """T002 — the app migrates from zero, and stays ``makemigrations --check`` clean."""
-
     @pytest.mark.django_db
     def test_models_are_queryable(self):
-        """Tables exist and are queryable — proof the app's own migration
-        applied. pytest-django builds the test database from every installed
-        app's migrations, run from zero, for the whole session; a query
-        against any of these three tables fails outright if it did not."""
         assert Specimen.objects.count() == 0
         assert Sample.objects.count() == 0
         assert Artifact.objects.count() == 0
 
     @pytest.mark.django_db
     def test_makemigrations_check_is_clean(self):
-        """No undeclared model changes: exits normally rather than raising
-        ``SystemExit(1)``, which is ``makemigrations --check``'s failure mode
-        when it detects an unmade migration."""
         call_command("makemigrations", "--check", "--dry-run", verbosity=0)
 
 
 class TestConceptFieldCollectionRestrictionMigrations:
-    """T011 (US-1, plan.md A7) — a collection-restricted declaration in the
-    test app (:class:`~tests.testapp.models.CoreSample`,
-    :class:`~tests.testapp.models.DrillCore`) migrates from zero and stays
-    ``makemigrations --check`` clean — the same command the story's own
-    rituals gate on, run across all apps rather than scoped to one."""
-
     @pytest.mark.django_db
     def test_models_are_queryable(self):
-        """Tables exist and are queryable — proof the restricted
-        declarations' migration applied, rebuilding the field from the
-        ``collection`` kwarg ``deconstruct()`` emits (T004) rather than
-        raising."""
         assert CoreSample.objects.count() == 0
         assert DrillCore.objects.count() == 0
 
@@ -2452,9 +1913,6 @@ class TestConceptFieldCollectionRestrictionMigrations:
 
 
 class TestConceptFieldFactories:
-    """The three model factories T002 adds, and the two #111 adds for the
-    several- and no-vocabulary shapes, build valid, saved records."""
-
     @pytest.mark.django_db
     def test_borehole_factory_leaves_the_optional_field_unset_by_default(self):
         borehole = BoreholeFactory()
@@ -2487,7 +1945,6 @@ class TestConceptFieldFactories:
 
     @pytest.mark.django_db
     def test_artifact_keeps_its_own_get_mineral_label(self):
-        """The pre-existing definition T011's collision guard must leave alone."""
         artifact = ArtifactFactory()
         assert (
             artifact.get_mineral_label() == "this artifact's own label, not the field's"
@@ -2495,8 +1952,6 @@ class TestConceptFieldFactories:
 
 
 class TestConceptVocabularyFixtures:
-    """The scheme/concept fixtures ``conftest.py`` now carries for #87, #88, #89."""
-
     @pytest.mark.django_db
     def test_multilingual_scheme_has_one_concept_with_a_second_language_label(
         self, multilingual_scheme
@@ -2519,11 +1974,6 @@ class TestConceptVocabularyFixtures:
 
 
 class TestConceptFieldRoundTrip:
-    """T004 (US-1) — end-to-end usage of the field the way a consuming project
-    would use it: a concept from the named vocabulary survives a save/reload,
-    an optional field with nothing attached validates and saves, and using the
-    field this way stays ``makemigrations --check`` clean."""
-
     @pytest.mark.django_db
     def test_saving_and_reloading_returns_the_same_concept(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2546,9 +1996,6 @@ class TestConceptFieldRoundTrip:
 
     @pytest.mark.django_db
     def test_makemigrations_check_stays_clean_after_declaring_and_saving(self):
-        """Regression guard for ``deconstruct()`` (T003): using the field
-        end-to-end must not surface an undeclared model change beyond what
-        Phase F already committed."""
         ConceptFactory()
         SpecimenFactory()
 
@@ -2556,10 +2003,6 @@ class TestConceptFieldRoundTrip:
 
 
 class TestConceptFieldOrdinaryOptions:
-    """T004 (US-1) — the field's ordinary ``ForeignKey`` options behave
-    exactly as they would on a plain ``ForeignKey``, asserted directly on the
-    bound field rather than only through a save/reload round trip."""
-
     def test_related_name_produces_the_reverse_accessor(self):
         field = Sample._meta.get_field("mineral")
         assert field.remote_field.get_accessor_name() == "samples"
@@ -2574,23 +2017,12 @@ class TestConceptFieldOrdinaryOptions:
         assert field.null is True
         assert field.blank is True
 
-    def test_verbose_name_and_help_text_are_what_was_declared(self):
-        field = Specimen._meta.get_field("rock_type")
-        assert field.verbose_name == "rock type"
-        assert str(field.help_text) == "The rock type this specimen is classified as."
-
     def test_the_fks_index_is_present(self):
         field = Specimen._meta.get_field("rock_type")
         assert field.db_index is True
 
 
 class TestConceptFieldValidation:
-    """T005 (US-2) — no new constraint code: ``ForeignKey.validate()`` already
-    applies ``limit_choices_to`` before checking existence. What this class
-    proves is the behavioural chain T001's ``validate()`` override exists
-    for — raise, then *read* ``.messages`` and find the vocabulary named —
-    which an unbound field (T001's own tests) cannot reach."""
-
     @pytest.mark.django_db
     def test_full_clean_rejects_a_concept_from_another_vocabulary(self):
         other_scheme = ConceptSchemeFactory(name="Mineral")
@@ -2618,10 +2050,9 @@ class TestConceptFieldValidation:
 
     @pytest.mark.django_db
     def test_the_re_raise_keeps_the_foreign_keys_own_params(self):
-        # error_messages is an ordinary field kwarg, and a consumer's message
-        # may use any placeholder a plain ForeignKey supplies. The override
-        # adds `vocabulary` to those params; it must not replace them, or
-        # reading .messages raises KeyError at form-render time.
+        # error_messages is an ordinary field kwarg, so a consumer's message may use
+        # any placeholder a plain ForeignKey supplies. The override adds `vocabulary`
+        # to those params and must not replace them, or .messages raises KeyError.
         field = Specimen._meta.get_field("rock_type")
         original = field.error_messages["invalid"]
         field.error_messages["invalid"] = (
@@ -2640,16 +2071,6 @@ class TestConceptFieldValidation:
 
 
 class TestConceptFieldCollectionRestrictionValidation:
-    """T007 (US-1, FR-008 for the single-value field) — no new constraint
-    code: ``ForeignKey.validate()`` already applies ``limit_choices_to``
-    (research.md R1), and T006 taught the resolved ``Q`` the collection
-    axis. What this class proves is the behavioural chain end to end,
-    through :class:`~tests.testapp.models.CoreSample`'s real ``rock_type``
-    field: a member of the declared collection validates, and a concept
-    from the same vocabulary but outside the collection is refused. The
-    message naming the collection is T008's, not this task's — asserted
-    there, not here."""
-
     @pytest.mark.django_db
     def test_a_collection_member_validates(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2672,16 +2093,6 @@ class TestConceptFieldCollectionRestrictionValidation:
 
 
 class TestConceptFieldCollectionRestrictionRefusalMessage:
-    """T008 — extends the existing re-raise (``fields.py:230-270``, now
-    choosing between three message ids rather than two): a field restricted
-    to a collection names the collection, as one static msgid with a single
-    named placeholder (Article XII), not one that varies with the
-    restriction's contents. A consumer's own ``error_messages`` override
-    still works and the ``ForeignKey``'s own ``params`` are still carried
-    through, the same guarantee ``TestConceptFieldValidation.
-    test_the_re_raise_keeps_the_foreign_keys_own_params`` already proves for
-    the vocabulary-only case."""
-
     @pytest.mark.django_db
     def test_the_refusal_names_the_collection(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2718,16 +2129,6 @@ class TestConceptFieldCollectionRestrictionRefusalMessage:
 
 
 class TestConceptFieldConceptsRestrictionValidation:
-    """T013 (US-2, FR-008 for the single-value field) — the concepts axis's
-    counterpart to T007: no new constraint code, since ``ForeignKey.validate()``
-    already applies ``limit_choices_to`` and this task taught the resolved
-    ``Q`` the concepts axis. Proves the behavioural chain end to end through
-    :class:`~tests.testapp.models.ChipSample`'s real ``rock_type`` field,
-    restricted to "granite" and "basalt": a listed concept validates, and a
-    concept from the same vocabulary but not on the list is refused. The
-    message naming the permitted concepts is the next class's, not this
-    task's — asserted there, not here."""
-
     @pytest.mark.django_db
     def test_a_listed_concept_validates(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2747,14 +2148,6 @@ class TestConceptFieldConceptsRestrictionValidation:
 
 
 class TestConceptFieldConceptsRestrictionRefusalMessage:
-    """T013 — extends the same re-raise with a fourth message id: a field
-    restricted to an explicit concept list names the permitted concepts, as
-    one static msgid with a single named placeholder (Article XII), not one
-    that varies with the restriction's contents — the same shape T008
-    established for the collection axis. A consumer's own ``error_messages``
-    override still works and the ``ForeignKey``'s own ``params`` are still
-    carried through."""
-
     @pytest.mark.django_db
     def test_the_refusal_names_the_permitted_concepts(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2790,16 +2183,6 @@ class TestConceptFieldConceptsRestrictionRefusalMessage:
 
 
 class TestConceptFieldBranchRestrictionValidation:
-    """T017 (US-3, FR-008 for the single-value field) — no new constraint
-    code: ``ForeignKey.validate()`` already applies ``limit_choices_to``
-    (research.md R1), and T018 taught the resolved ``Q`` the branch axis.
-    Proves the behavioural chain end to end through
-    :class:`~tests.testapp.models.BranchSample`'s real ``rock_type`` field,
-    restricted to the "igneous" branch: the root itself validates, a
-    grandchild validates, a sibling branch is refused, and the concept the
-    root sits *below* is refused. The last two are the ones an inverted
-    walk (T015) passes anyway, so neither is optional."""
-
     @pytest.mark.django_db
     def test_the_root_itself_validates(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2834,8 +2217,7 @@ class TestConceptFieldBranchRestrictionValidation:
 
     @pytest.mark.django_db
     def test_the_concept_the_root_sits_below_is_refused(self):
-        # An inverted walk (T015) would pass this refusal too, which is
-        # exactly why tasks.md marks it non-optional.
+        # A closure walked in the wrong direction would admit the ancestor.
         scheme = ConceptSchemeFactory(name="Rock Type")
         root = ConceptFactory(scheme=scheme, label="Igneous")
         ancestor = ConceptFactory(scheme=scheme, label="Rock")
@@ -2847,14 +2229,6 @@ class TestConceptFieldBranchRestrictionValidation:
 
 
 class TestConceptFieldBranchRestrictionRefusalMessage:
-    """T017 — extends the same re-raise with a fifth message id
-    (``decisions.md`` D11's naming pattern, ``invalid_restricted_<axis>``):
-    a field restricted to a branch names the branch root, as one static
-    msgid with a single named placeholder (Article XII), the same shape
-    T008 and T013 established. A consumer's own ``error_messages`` override
-    still works and the ``ForeignKey``'s own ``params`` are still carried
-    through."""
-
     @pytest.mark.django_db
     def test_the_refusal_names_the_branch_root(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2889,10 +2263,7 @@ class TestConceptFieldBranchRestrictionRefusalMessage:
 
 
 class SpecimenForm(forms.ModelForm):
-    """Test-only — the plain ``ModelForm`` Django would auto-generate from
-    ``Specimen``, used by T006 to prove ``limit_choices_to`` reaches a form's
-    field choices and submission validation without this package adding any
-    form-layer code of its own."""
+    """Plain ``ModelForm`` over ``Specimen``."""
 
     class Meta:
         model = Specimen
@@ -2900,9 +2271,6 @@ class SpecimenForm(forms.ModelForm):
 
 
 class TestConceptFieldFormChoices:
-    """T006 (US-2) — also no new code: ``ForeignKey.formfield()`` passes
-    ``limit_choices_to`` through. This class is the proof FR-006 needs."""
-
     @pytest.mark.django_db
     def test_form_field_offers_only_the_named_vocabularys_concepts(self):
         rock_scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2931,10 +2299,6 @@ class TestConceptFieldFormChoices:
 
 
 class TestConceptFieldDeleteGuard:
-    """T007 (US-3) — no new code: ``on_delete=PROTECT`` (T001) already refuses
-    any delete path that would strand a reference. This class is the proof
-    FR-007 needs."""
-
     @pytest.mark.django_db
     def test_deleting_a_referenced_concept_is_refused(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -2949,9 +2313,6 @@ class TestConceptFieldDeleteGuard:
 
     @pytest.mark.django_db
     def test_bulk_queryset_delete_of_a_referenced_concept_is_refused(self):
-        """The protection lives in the relation rather than in model
-        validation, so a bulk ``QuerySet.delete()`` is refused exactly like a
-        single-instance delete."""
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
         specimen = SpecimenFactory(rock_type=concept)
@@ -2964,9 +2325,6 @@ class TestConceptFieldDeleteGuard:
 
     @pytest.mark.django_db
     def test_deleting_the_scheme_holding_a_referenced_concept_is_refused(self):
-        """``Concept.scheme`` cascades, so deleting the scheme tries to
-        cascade-delete the concept — and meets the same ``PROTECT`` on the
-        way down. Nothing in the scheme is removed."""
         scheme = ConceptSchemeFactory(name="Rock Type")
         concept = ConceptFactory(scheme=scheme)
         specimen = SpecimenFactory(rock_type=concept)
@@ -2998,14 +2356,6 @@ class TestConceptFieldDeleteGuard:
 
 
 class TestConceptFieldLabelAndUriAccessors:
-    """T011 (US-5) — FR-008/FR-009: ``contribute_to_class()`` gives the
-    consuming model ``get_<field>_label()`` and ``get_<field>_uri()``, named
-    the way Django's own ``get_FOO_display()`` is. The label accessor
-    delegates to T010's ``Concept.display_label()``; the URI accessor returns
-    the concept's own ``uri`` unchanged. Both return ``None`` rather than
-    raising when nothing is attached, and the ``setattr`` is guarded so a
-    model that already defines one of these names keeps its own."""
-
     @pytest.mark.django_db
     def test_label_accessor_returns_the_active_languages_preferred_label(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -3061,9 +2411,7 @@ class TestConceptFieldLabelAndUriAccessors:
 
 
 class BoreholeForm(forms.ModelForm):
-    """Test-only — the plain ``ModelForm`` Django would auto-generate from
-    :class:`~tests.testapp.models.Borehole`, for the several-vocabulary shape
-    #111 added to ``ConceptField``."""
+    """Plain ``ModelForm`` over ``Borehole``."""
 
     class Meta:
         model = Borehole
@@ -3071,9 +2419,7 @@ class BoreholeForm(forms.ModelForm):
 
 
 class SketchForm(forms.ModelForm):
-    """Test-only — the plain ``ModelForm`` Django would auto-generate from
-    :class:`~tests.testapp.models.Sketch`, for the no-vocabulary shape #111
-    added to ``ConceptField``."""
+    """Plain ``ModelForm`` over ``Sketch``."""
 
     class Meta:
         model = Sketch
@@ -3081,12 +2427,6 @@ class SketchForm(forms.ModelForm):
 
 
 class TestConceptFieldSeveralVocabularies:
-    """#111 — a ``ConceptField`` naming two vocabularies accepts a concept from
-    either and refuses one from a third, naming both expected vocabularies in
-    the refusal. The ``ConceptsField`` counterpart is
-    ``TestConceptsFieldSeveralVocabulariesWritePath``.
-    """
-
     @pytest.mark.django_db
     def test_a_concept_from_either_named_vocabulary_validates(self):
         rock_concept = ConceptFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
@@ -3122,13 +2462,6 @@ class TestConceptFieldSeveralVocabularies:
 
 
 class TestConceptFieldNoVocabulary:
-    """#111 — a ``ConceptField`` naming no vocabulary restricts nothing, and
-    keeps everything else the field is worth declaring for: the reference
-    cannot be deleted out from under the record, and the label and identifier
-    still read back. The ``ConceptsField`` counterpart is
-    ``TestConceptsFieldNoVocabularyWritePath``.
-    """
-
     @pytest.mark.django_db
     def test_a_concept_from_any_vocabulary_validates(self):
         first = ConceptFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
@@ -3151,10 +2484,8 @@ class TestConceptFieldNoVocabulary:
     def test_a_missing_concept_is_still_refused_without_naming_an_empty_vocabulary(
         self,
     ):
-        """``ForeignKey.validate()`` still refuses a primary key no concept
-        carries. Reading ``.messages`` is the assertion that matters: the
-        vocabulary-naming message would raise ``KeyError`` here, and a message
-        naming ``''`` would be worse than useless."""
+        # The vocabulary-naming message would raise KeyError here, and one naming ''
+        # would be worse than useless.
         sketch = Sketch(name="Dangling", subject_id=987654)
 
         with pytest.raises(ValidationError) as excinfo:
@@ -3181,34 +2512,8 @@ class TestConceptFieldNoVocabulary:
         assert sketch.get_subject_uri() == concept.uri
 
 
-# --- T024 (US-7, Article XII) — every curator-facing string this feature added is translatable ---
-#
-# Four classes below split the two directions T024 asserts. The first three cover the strings a
-# curator actually reads: the three ``invalid_restricted*`` error messages (``TestConceptField*
-# RefusalMessage`` above already prove their *content*; these prove they are lazy proxies with
-# named placeholders, not incidentally-correct plain strings), the many-valued write guard's three
-# refusals, and W005's three messages and hints. The fourth proves the opposite: T002's and T003's
-# declaration-rule ``TypeError``s stay plain, untranslated strings, on purpose (research.md R7) —
-# they are developer-facing diagnostics raised while a declaration is only being read, matching
-# every existing refusal ``ConceptFieldMixin`` already raises the same way, and nothing renders
-# them for an end user. That last point is exactly why the direction needs its own test: wrapping
-# one in ``_()`` would not visibly break anything, so a later "consistency" pass could do it by
-# accident and nothing here would tell it not to without this class.
-
-
+# Read off field.error_messages, where nothing has interpolated the msgid yet.
 class TestRestrictionErrorMessagesAreTranslatable:
-    """T024 — the three restriction-axis entries in ``ConceptField``'s
-    ``default_error_messages`` (T008, T013, T017) are ``gettext_lazy``
-    proxies carrying a single named placeholder, the same shape ``invalid``
-    already uses. Read directly off ``field.error_messages`` rather than off
-    a raised exception: a ``ValidationError``'s own ``__iter__`` does
-    ``message %= params`` on a *local* variable and never touches
-    ``error.message`` itself (``django/core/exceptions.py``), so the dict
-    entry is the one place this is checked before anything has interpolated
-    it. ``ConceptsField`` carries no ``error_messages`` dict of its own —
-    its refusals are the write guard's, covered by the next class.
-    """
-
     @pytest.mark.parametrize(
         "message_id",
         [
@@ -3228,18 +2533,6 @@ class TestRestrictionErrorMessagesAreTranslatable:
 
 
 class TestWriteGuardRefusalsAreTranslatable:
-    """T024 — the many-valued write guard's three refusals
-    (``_refuse_concepts_the_restriction_does_not_admit``) are each a
-    ``gettext_lazy`` call, not an f-string built per raise. Unlike the class
-    above, these are never stored on the field, only raised, so each is
-    triggered for real through :class:`~tests.testapp.models.DrillCore`,
-    :class:`~tests.testapp.models.ChipTray` and
-    :class:`~tests.testapp.models.BranchTray`'s own write paths (the same
-    fixtures ``TestConceptsField*RestrictionWritePath`` already drive), and
-    the caught ``ValidationError``'s own ``.message`` — untouched by
-    ``.messages``, for the reason given above — is asserted directly.
-    """
-
     @pytest.mark.django_db
     def test_the_collection_axis_refusal_is_a_lazy_proxy_with_named_placeholders(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -3283,17 +2576,17 @@ class TestWriteGuardRefusalsAreTranslatable:
 
 
 def _translation_call_string_literals(func) -> list[str]:
-    """Every string this ``func`` passes straight to ``_()``/``gettext_lazy()``.
+    """Return every string ``func`` passes straight to ``_()`` or ``gettext_lazy()``.
 
-    Reads the function's own source rather than calling it: ``checks.py``'s
-    ``message % {...}`` interpolates a ``gettext_lazy()`` proxy immediately
-    (the same ``%`` behaviour ``fields.py:97-114``'s annotation warns
-    ``default_help_text`` against), so by the time a warning is produced the
-    lazy proxy is already gone, replaced by an ordinary ``str`` that carries
-    no trace of having started translatable. Reading the source is the one
-    place that distinction still exists (``TestFieldsChecksI18nSweep`` in
-    ``test_standards.py`` takes the same approach for the whole module, for
-    the same reason).
+    Reads the function's source rather than calling it: ``checks.py`` interpolates
+    the lazy proxy with ``%`` immediately, so a rendered warning carries no trace
+    of having been translatable.
+
+    Args:
+        func: The function whose source is inspected.
+
+    Returns:
+        The string literals, in source order.
     """
     tree = ast.parse(inspect.getsource(func))
     literals = []
@@ -3314,33 +2607,6 @@ def _translation_call_string_literals(func) -> list[str]:
 
 
 class TestW005MessagesAreStaticWithNamedPlaceholders:
-    """T024 — W005's three messages (one per restriction axis) and their
-    hints are each a single ``_()`` call with only named placeholders, never
-    one assembled per call. Checked against the function's own source
-    (:func:`_translation_call_string_literals`) rather than a rendered
-    warning, for the reason given there.
-    """
-
-    def test_every_message_and_hint_is_a_translation_call(self):
-        literals = _translation_call_string_literals(
-            checks_module.check_concept_field_restriction_targets
-        )
-
-        expected_messages = {
-            "%(model)s.%(field)s names collection '%(target)s', which does not exist in the "
-            "'%(vocabulary)s' vocabulary.",
-            "%(model)s.%(field)s names concept '%(target)s', which does not exist in the '%(vocabulary)s' vocabulary.",
-            "%(model)s.%(field)s names branch root '%(target)s', which does not exist in the "
-            "'%(vocabulary)s' vocabulary.",
-        }
-        expected_hints = {
-            "Create this collection, or correct the name.",
-            "Create this concept, or correct the name.",
-        }
-
-        assert expected_messages <= set(literals)
-        assert expected_hints <= set(literals)
-
     def test_none_of_them_carries_a_positional_placeholder(self):
         literals = _translation_call_string_literals(
             checks_module.check_concept_field_restriction_targets
@@ -3362,22 +2628,10 @@ class TestW005MessagesAreStaticWithNamedPlaceholders:
             assert "%(vocabulary)s" in message
 
 
+# Developer-facing diagnostics raised while a declaration is read, exempt under
+# Article XII. Wrapping one in _() would break nothing visible, so only a test stops a
+# later pass doing it.
 class TestDeclarationRuleTypeErrorsStayUntranslated:
-    """T024's other direction (research.md R7) — the declaration-rule
-    ``TypeError``s from T002 (FR-005, FR-006) and T003
-    (``_normalise_vocabulary``/``_normalise_restriction_slug``/
-    ``_normalise_concepts``) stay plain, untranslated ``str`` objects. They
-    are developer-facing diagnostics raised while a declaration is read, the
-    same class of message every pre-existing refusal in ``fields.py``
-    (``on_delete``, ``through``, ``limit_choices_to``) already raises
-    untranslated, and Article XII's translation requirement is explicit that
-    a developer-facing diagnostic is exempt. Asserted here, deliberately, so
-    a later pass making "every message translatable" its whole brief does
-    not wrap these too: nothing renders a ``TypeError`` for a curator or a
-    form-filler to read, so doing so would not visibly break anything and
-    would go unnoticed without a test naming the exact reverse expectation.
-    """
-
     @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
     def test_a_restriction_naming_no_vocabulary_raises_a_plain_string(
         self, field_class
@@ -3421,3 +2675,95 @@ class TestDeclarationRuleTypeErrorsStayUntranslated:
             ConceptsField(vocabulary="rock-type", through="whatever")
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str
+
+
+class TestFieldsI18nSweep:
+    def test_module_carries_no_bare_user_visible_literal(self):
+        source = Path(inspect.getfile(fields_module)).read_text()
+        visitor = visit_fields_checks_source(source)
+        assert visitor.bare_literals == [], (
+            f"{fields_module.__name__} passes a bare, untranslated literal to a user-visible sink: {visitor.bare_literals}"
+        )
+        assert visitor.positional_placeholders == [], (
+            f"{fields_module.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
+        )
+
+
+class TestFieldsChecksI18nVisitorCatchesAViolation:
+    def test_catches_a_bare_help_text_keyword_literal(self):
+        visitor = visit_fields_checks_source("ForeignKey(help_text='boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_verbose_name_keyword_literal(self):
+        visitor = visit_fields_checks_source("CharField(verbose_name='boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_help_text_default_via_kwargs_setdefault(self):
+        visitor = visit_fields_checks_source("kwargs.setdefault('help_text', 'boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_error_messages_dict_value(self):
+        visitor = visit_fields_checks_source("error_messages = {'invalid': 'boom'}\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_raised_as_a_validation_error(self):
+        visitor = visit_fields_checks_source("raise ValidationError('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_raised_as_improperly_configured(self):
+        visitor = visit_fields_checks_source("raise ImproperlyConfigured('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_positional_placeholder_passed_to_a_translation_call(self):
+        visitor = visit_fields_checks_source(
+            "from django.utils.translation import gettext_lazy as _\n_('%s changed')\n"
+        )
+        assert visitor.positional_placeholders == ["%s changed"]
+
+    def test_does_not_flag_a_named_placeholder_passed_to_a_translation_call(self):
+        visitor = visit_fields_checks_source(
+            "from django.utils.translation import gettext_lazy as _\n_('%(model)s changed')\n"
+        )
+        assert visitor.positional_placeholders == []
+
+    def test_catches_a_bare_literal_as_a_checks_warning(self):
+        visitor = visit_fields_checks_source("checks.Warning('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_as_a_checks_error(self):
+        visitor = visit_fields_checks_source("checks.Error('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_interpolated_message(self):
+        visitor = visit_fields_checks_source(
+            "checks.Warning('boom %(model)s' % {'model': m})\n"
+        )
+        assert visitor.bare_literals == ["boom %(model)s"]
+
+    def test_catches_a_bare_f_string_message(self):
+        visitor = visit_fields_checks_source("checks.Warning(f'boom {model}')\n")
+        assert visitor.bare_literals == ["f'boom {model}'"]
+
+    def test_catches_a_bare_hint_keyword_literal(self):
+        visitor = visit_fields_checks_source("checks.Warning(_('fine'), hint='boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_verbose_name_dict_literal_value(self):
+        visitor = visit_fields_checks_source(
+            "meta = {'verbose_name': 'boom', 'verbose_name_plural': 'booms', 'db_table': 'x'}\n"
+        )
+        assert visitor.bare_literals == ["boom", "booms"]
+
+    def test_does_not_flag_a_translated_sink(self):
+        visitor = visit_fields_checks_source(
+            "from django.utils.translation import gettext_lazy as _\n"
+            "kwargs.setdefault('help_text', _('fine'))\n"
+            "error_messages = {'invalid': _('fine')}\n"
+            "raise ValidationError(_('fine'))\n"
+            "raise ImproperlyConfigured(_('fine'))\n"
+            "checks.Warning(_('fine %(model)s') % {'model': m}, hint=_('fine'))\n"
+            "meta = {'verbose_name': _('fine') % {'x': 1}, 'db_table': 'x'}\n"
+        )
+        assert visitor.bare_literals == []
+        assert visitor.positional_placeholders == []

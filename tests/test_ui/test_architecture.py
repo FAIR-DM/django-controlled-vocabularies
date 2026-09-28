@@ -1,10 +1,4 @@
-"""Tests proving the core imports nothing from the opt-in ui front end (T004).
-
-The subject is every module under ``controlled_vocabularies/`` outside ``controlled_vocabularies/
-ui/``, not a single source module — there is no ``controlled_vocabularies/ui/architecture.py`` to
-mirror against, so this file is one of the standing non-mirror exceptions
-(``[tool.forge.conformance] non-mirror-paths``, T001).
-"""
+"""Tests that the core imports nothing from the opt-in ui front end."""
 
 import ast
 from pathlib import Path
@@ -25,6 +19,11 @@ FORBIDDEN_ROOTS = (
 
 
 def core_modules():
+    """List every Python module under the package root outside the ui subpackage.
+
+    Returns:
+        The module paths, sorted.
+    """
     return [
         path
         for path in sorted(PACKAGE_ROOT.rglob("*.py"))
@@ -33,10 +32,16 @@ def core_modules():
 
 
 def imported_names(path):
-    """Every dotted name this module's import statements name.
+    """Collect the dotted names a module's import statements name.
 
     Parsed rather than grepped, so a forbidden name inside a docstring or a comment cannot fail
     the test and a real import cannot hide from it.
+
+    Args:
+        path: The module to parse.
+
+    Returns:
+        Every imported module name and every ``module.name`` pair.
     """
     tree = ast.parse(path.read_text())
     names = set()
@@ -50,9 +55,6 @@ def imported_names(path):
 
 
 class TestCoreImportsNothingFromTheUIStack:
-    """FR-012's isolation — no core module names ``mvp``, its dependencies, or
-    ``controlled_vocabularies.ui``."""
-
     @pytest.mark.parametrize(
         "path",
         core_modules(),

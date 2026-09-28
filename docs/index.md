@@ -19,6 +19,13 @@ how to install it, and the shortest example that works. These pages are the manu
 - **[Importing a published vocabulary](importing.md)** — reading SKOS from a file or a URL, how
   languages are matched, what the import report tells you, and the management command.
 
+## Contributing
+
+- **[Testing standards](contributing/standards/testing.md)** — what gets a test, the test-first
+  cycle, how tests and fixtures are structured, and the coverage floors.
+- **[Code documentation standards](contributing/standards/code-documentation.md)** — docstrings,
+  component annotations and comments.
+
 ## Direction and decisions
 
 - **[Roadmap](ROADMAP.md)** — which release delivers what, and how versions are gated.

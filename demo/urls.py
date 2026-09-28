@@ -1,4 +1,4 @@
-"""URL configuration for the demo project (T015, FR-014, FR-015, FR-018)."""
+"""URL configuration for the demo project."""
 
 from django.contrib import admin
 from django.urls import include, path
@@ -7,15 +7,11 @@ from django.views.generic import RedirectView
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("browse/", include("controlled_vocabularies.ui.urls")),
-    # The package's own routes, which carry the endpoint behind the concept search control. A
-    # project that never mounts them is warned by the package's system checks, so a demo that
-    # never mounted them would model the configuration those checks exist to prevent.
+    # The endpoint behind the concept search control, which the package's system checks warn about
+    # when a project never mounts it.
     path("vocabularies/", include("controlled_vocabularies.urls")),
-    # django-mvp's mobile footer menu declares a "home" item pointing at a view named "home",
-    # and the shell renders that menu on every page. Without a route of that name,
-    # django-flex-menus writes a reversal failure to stderr on every render and serves a dead
-    # Home button, and the demo's own root address — the first thing anyone opening a server
-    # tries — returns 404 (FR-015).
+    # django-mvp's footer menu links to a view named "home". Without one, django-flex-menus logs a
+    # reversal failure on every render, and the root address returns 404.
     path(
         "",
         RedirectView.as_view(pattern_name="controlled_vocabularies_ui:vocabulary-list"),

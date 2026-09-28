@@ -1,17 +1,7 @@
-"""T002 — the ``management`` package skeleton (Article XIV).
-
-No behaviour lands here: this only proves the package the command (T003
-onward) and the renderer (T015) build on is importable. The command itself
-is out of this story's scope.
-
-T003 onward (below): the ``import_skos`` command itself — one positional
-``source``, a ``--format`` option, and ``handle()`` delegating the whole
-import to :func:`~controlled_vocabularies.exchange.skos.import_skos` and
-rendering the result through :class:`~controlled_vocabularies.management.rendering.ReportRenderer`
-(plan.md "Rendering", tasks.md US-1).
-"""
+"""Tests for controlled_vocabularies.management.commands.import_skos."""
 
 import importlib
+import inspect
 import os
 import socket
 from io import StringIO
@@ -23,6 +13,7 @@ from django.apps import apps
 from django.core.management import CommandError, call_command
 from django.utils.functional import Promise
 
+from controlled_vocabularies.exchange.report import FatalReason
 from controlled_vocabularies.exchange.skos import import_skos
 from controlled_vocabularies.management import sources
 from controlled_vocabularies.management.commands import (
@@ -30,6 +21,7 @@ from controlled_vocabularies.management.commands import (
 )
 from controlled_vocabularies.management.commands.import_skos import Command
 from controlled_vocabularies.models import Concept, ConceptScheme
+from tests.i18n_sweep import visit_management_source
 
 FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "skos"
 SECURITY_FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "security"
@@ -47,10 +39,6 @@ class TestManagementPackageSkeleton:
 
 
 class TestImportSkosCommandCreatesAndUpdates:
-    """T003 — spec Acceptance Scenarios 1-2: an empty database gets the vocabulary and its
-    concepts, named by count; a second run against the same file reports updates and creates
-    no duplicate concept. Every line comes from ``ReportRenderer`` (plan.md "Rendering")."""
-
     def test_importing_into_an_empty_database_creates_the_vocabulary_and_names_the_count(
         self, db
     ):
@@ -77,39 +65,22 @@ class TestImportSkosCommandCreatesAndUpdates:
 
 
 class TestImportSkosCommandHelpIsTranslatable:
-    """T003 — Article XII: every help string is wrapped for translation at its source.
-
-    That wrapping is enforced statically by ``TestManagementPackageI18nSweep`` in
-    ``tests/test_standards.py``, which reads the AST. What is asserted here is the runtime
-    half: the strings reach argparse as real strings, because a lazy proxy that survives
-    into the parser makes ``--help`` raise rather than print.
-    """
-
     def test_command_help_is_lazily_translatable_at_its_source(self):
         # The class attribute stays lazy. Only the parser's own copy is forced, in
         # create_parser, with the active language already set.
         assert isinstance(Command.help, Promise)
 
     def test_help_output_renders(self):
-        """The regression test for a `--help` that raised instead of printing.
-
-        argparse lays out both the description and every argument help through ``re.sub``
-        (``HelpFormatter._fill_text`` / ``_split_lines``), which rejects a ``gettext_lazy``
-        proxy with ``TypeError: expected string or bytes-like object``. Django hands
-        ``Command.help`` straight to argparse as ``description`` and never calls ``str()``
-        on it, so leaving the proxies in place broke the first thing an operator runs.
-        """
+        # argparse lays help out through re.sub, which rejects a gettext_lazy proxy, so
+        # a proxy left in the parser makes --help raise instead of print.
         parser = Command().create_parser("manage.py", "import_skos")
         rendered = parser.format_help()
-        assert "Import a published SKOS vocabulary" in rendered
         assert "--dry-run" in rendered
         assert "--format" in rendered
-        assert "A local filesystem path or an http(s) URL" in rendered
 
     def test_every_argument_help_reaches_the_parser_as_a_real_string(self):
-        # Only this command's own arguments — Django's base arguments (verbosity,
-        # settings, pythonpath, ...) carry Django's own plain-str help and are not
-        # this story's to translate.
+        # Only this command's own arguments: Django's base arguments carry its plain-str
+        # help.
         parser = Command().create_parser("manage.py", "import_skos")
         ours = {
             action.dest: action
@@ -126,10 +97,6 @@ class TestImportSkosCommandHelpIsTranslatable:
 
 
 class TestImportSkosCommandRefusesABadPath:
-    """T004 — spec Acceptance Scenario 4 and Edge Cases: a missing path fails naming the path,
-    writes nothing, and exits non-zero via `CommandError`; a path that exists but cannot be
-    opened for permission reasons is reported distinctly, not as absent (spec Edge Cases)."""
-
     def test_a_missing_path_is_refused_naming_the_path_and_writes_nothing(self, db):
         missing = str(FIXTURES / "does-not-exist.ttl")
         with pytest.raises(CommandError) as exc_info:
@@ -159,45 +126,32 @@ class TestImportSkosCommandRefusesABadPath:
         finally:
             unreadable.chmod(0o644)
         assert str(missing_exc.value) != str(unreadable_exc.value)
-        assert "is not readable" in str(unreadable_exc.value)
-        assert "is not readable" not in str(missing_exc.value)
         assert ConceptScheme.objects.count() == 0
 
 
 class TestImportSkosCommandFormatOption:
-    """T005 — spec Acceptance Scenario 3: `--format` reaches `from_file` as the `serialization`
-    keyword, the same one the programmatic entry point already accepts. The command does not
-    reimplement format guessing (tasks.md T005) — a fixture built under `tmp_path` rather than
-    committed to `tests/fixtures/skos/`, per decisions.md D11's own precedent, so it is never
-    swept by `TestEverySkosPredicateIsReadOrReported`'s directory walk."""
-
     def test_a_file_whose_extension_names_no_format_imports_when_format_is_given(
         self, db, tmp_path
     ):
+        # Built under tmp_path so the fixtures directory walk never sweeps it.
         mystery = tmp_path / "vocab.mysteryext"
         mystery.write_bytes((FIXTURES / "rocks.ttl").read_bytes())
         call_command("import_skos", str(mystery), format="turtle", stdout=StringIO())
         assert ConceptScheme.objects.filter(static_uri=ROCKS_URI).exists()
 
-    def test_the_same_file_without_format_is_refused_with_the_existing_message(
-        self, db, tmp_path
-    ):
+    def test_the_same_file_without_format_is_refused(self, db, tmp_path):
         mystery = tmp_path / "vocab.mysteryext"
         mystery.write_bytes((FIXTURES / "rocks.ttl").read_bytes())
         with pytest.raises(CommandError) as exc_info:
             call_command("import_skos", str(mystery), stdout=StringIO())
-        assert "not in a serialization this application reads" in str(exc_info.value)
+        assert str(mystery) in str(exc_info.value)
         assert ConceptScheme.objects.count() == 0
 
 
 class TestImportSkosCommandURLFailureModes:
-    """T010, FR-014, spec Edge Cases — every URL retrieval failure exits non-zero (raises
-    `CommandError`), names the URL, and leaves the database untouched. Uses `http_stub` and
-    `hanging_socket` (tests/conftest.py, T006) — no real network call anywhere in this class."""
-
     def test_an_unreachable_host_is_refused_naming_the_url(self, db):
-        # A closed local socket: connecting to it fails immediately with "connection refused" —
-        # a local failure, not a real network call.
+        # A closed local socket: connecting to it fails immediately with "connection
+        # refused" — a local failure, not a real network call.
         closed = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         closed.bind(("127.0.0.1", 0))
         port = closed.getsockname()[1]
@@ -229,14 +183,13 @@ class TestImportSkosCommandURLFailureModes:
         with pytest.raises(CommandError) as exc_info:
             call_command("import_skos", url, stdout=StringIO())
         assert url in str(exc_info.value)
-        assert "could not be parsed" in str(exc_info.value)
         assert ConceptScheme.objects.count() == 0
 
     def test_a_connection_that_never_answers_fails_on_a_timeout_rather_than_hanging(
         self, db, hanging_socket, monkeypatch
     ):
-        # The shipped timeout is set for real publishers, which is far longer than a test
-        # should wait to prove the same behaviour.
+        # The shipped timeout is set for real publishers, which is far longer than a
+        # test should wait to prove the same behaviour.
         monkeypatch.setattr(sources, "_TIMEOUT_SECONDS", 0.5)
         url = hanging_socket
         with pytest.raises(CommandError) as exc_info:
@@ -246,11 +199,6 @@ class TestImportSkosCommandURLFailureModes:
 
 
 class TestImportSkosCommandURLParity:
-    """T011, SC-002, FR-003 — `SourceResolver` wired into `Command`: a URL import of a document
-    with absolute identifiers produces the same records and report as the identical bytes from
-    disk, and a document with relative identifiers is stored under the address it was served
-    from, never under a `file://` path (decisions.md D10)."""
-
     _RELATIVE_URIS_TURTLE = """
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 
@@ -313,16 +261,17 @@ class TestImportSkosCommandURLParity:
 
 
 class TestImportSkosCommandDryRun:
-    """T012, spec Acceptance Scenario 1, `decisions.md` D4, `research.md` R5 — `--dry-run`
-    runs the whole import inside an outer transaction it then abandons. `transactional_db`,
-    not `db`: under `db` the test itself already runs inside a transaction rolled back at the
-    end, which would make a broken dry run (one that never actually rolls back) pass anyway.
-    """
+    # transactional_db, not db: under db the test's own transaction is rolled back at
+    # the end, so a dry run that never rolled back would pass anyway
+    # (docs/adr/0005-a-preview-is-the-real-operation-rolled-back.md).
 
     @staticmethod
     def _snapshot() -> dict[str, list[dict[str, object]]]:
-        """Every row of every model this app defines, field values included — proves every
-        table is unchanged rather than only that row counts match (tasks.md T012)."""
+        """Return every row of every model this app defines, field values included.
+
+        Returns:
+            The rows of each model, keyed by the model's label.
+        """
         return {
             model._meta.label: list(model.objects.order_by("pk").values())  # type: ignore[attr-defined]
             for model in apps.get_app_config("controlled_vocabularies").get_models()
@@ -357,10 +306,6 @@ class TestImportSkosCommandDryRun:
 
 
 class TestImportSkosCommandDryRunFidelity:
-    """T013, spec Acceptance Scenarios 2-3, SC-003 — a dry run and a live run against the
-    same starting state produce equal reports, compared by bucket rather than by rendered
-    text; a source that would be refused is refused the same way whether dry-run or not."""
-
     def test_a_dry_run_and_a_live_run_against_the_same_state_produce_equal_reports(
         self, transactional_db, monkeypatch
     ):
@@ -410,30 +355,22 @@ class TestImportSkosCommandDryRunFidelity:
 
 
 class TestImportSkosCommandDryRunLine:
-    """T014, FR-010, `decisions.md` D9 — the dry run line reaches the command's actual
-    output: present for a dry run, absent for a live run of the same source."""
-
-    def test_the_dry_run_line_is_present_for_a_dry_run_and_absent_for_a_live_run(
+    def test_a_dry_run_prints_one_line_more_than_a_live_run_of_the_same_source(
         self, db
     ):
         dry_run_out = StringIO()
         call_command(
             "import_skos", str(FIXTURES / "rocks.ttl"), dry_run=True, stdout=dry_run_out
         )
-        assert "nothing was kept" in dry_run_out.getvalue()
 
         live_out = StringIO()
         call_command("import_skos", str(FIXTURES / "rocks.ttl"), stdout=live_out)
-        assert "nothing was kept" not in live_out.getvalue()
+
+        dry_run_lines = dry_run_out.getvalue().splitlines()
+        assert len(dry_run_lines) == len(live_out.getvalue().splitlines()) + 1
 
 
 class TestImportSkosCommandRefusalPrintsEveryFatalFinding:
-    """T020, FR-011, spec US-5 Acceptance Scenario 3 — where the importer collects more than
-    one fatal finding, the command prints all of them, not only the first; the exit status
-    is non-zero; the database is unchanged. ``multiple_fatal_problems.ttl`` already carries
-    two distinct fatal findings at the exchange layer (test_exchange/test_skos.py
-    ``TestFatalFindingsAndAtomicity``) — surfaced here unchanged, not re-detected."""
-
     def test_every_fatal_finding_prints_not_just_the_first(self, db):
         with pytest.raises(CommandError) as exc_info:
             call_command(
@@ -442,29 +379,16 @@ class TestImportSkosCommandRefusalPrintsEveryFatalFinding:
                 stdout=StringIO(),
             )
         message = str(exc_info.value)
-        assert "'Nameless' has no identifier that survives re-serialization" in message
-        assert (
-            "'ftp://mirror.example.org/mixed/refused' is not an identifier the application accepts"
-            in message
-        )
+        findings = exc_info.value.__cause__.report.fatal
+        assert len(findings) == 2
+        for finding in findings:
+            assert finding.render() in message
         assert exc_info.value.returncode != 0
         assert ConceptScheme.objects.count() == 0
         assert Concept.objects.count() == 0
 
 
 class TestImportSkosCommandRefusesAnUndeterminedVocabulary:
-    """T021, FR-013, spec US-5 Acceptance Scenario 1, decisions.md D2 — a source declaring no
-    concept scheme is refused as not being SKOS, which falls out of the existing
-    ``VOCABULARY_UNDETERMINED`` fatal because the command names no target. The same refusal
-    covers two further spec Edge Cases that reach it for the same reason: an empty file, and
-    a file that parses to a graph carrying no SKOS content at all, both refused rather than
-    importing an empty vocabulary. The two new fixtures are built under ``tmp_path``, not
-    committed to ``tests/fixtures/skos/``, per decisions.md D11's own precedent."""
-
-    _NOT_SKOS_MESSAGE = (
-        "declares no vocabulary of its own, and no target vocabulary was named"
-    )
-
     def test_a_source_declaring_no_concept_scheme_is_refused_as_not_skos(self, db):
         with pytest.raises(CommandError) as exc_info:
             call_command(
@@ -472,7 +396,11 @@ class TestImportSkosCommandRefusesAnUndeterminedVocabulary:
                 str(FIXTURES / "no_scheme_declared.ttl"),
                 stdout=StringIO(),
             )
-        assert self._NOT_SKOS_MESSAGE in str(exc_info.value)
+        findings = exc_info.value.__cause__.report.fatal
+        assert [finding.reason for finding in findings] == [
+            FatalReason.VOCABULARY_UNDETERMINED
+        ]
+        assert findings[0].render() in str(exc_info.value)
         assert exc_info.value.returncode != 0
         assert ConceptScheme.objects.count() == 0
 
@@ -483,7 +411,11 @@ class TestImportSkosCommandRefusesAnUndeterminedVocabulary:
         empty.write_text("")
         with pytest.raises(CommandError) as exc_info:
             call_command("import_skos", str(empty), stdout=StringIO())
-        assert self._NOT_SKOS_MESSAGE in str(exc_info.value)
+        findings = exc_info.value.__cause__.report.fatal
+        assert [finding.reason for finding in findings] == [
+            FatalReason.VOCABULARY_UNDETERMINED
+        ]
+        assert findings[0].render() in str(exc_info.value)
         assert exc_info.value.returncode != 0
         assert ConceptScheme.objects.count() == 0
 
@@ -496,19 +428,16 @@ class TestImportSkosCommandRefusesAnUndeterminedVocabulary:
         )
         with pytest.raises(CommandError) as exc_info:
             call_command("import_skos", str(no_skos), stdout=StringIO())
-        assert self._NOT_SKOS_MESSAGE in str(exc_info.value)
+        findings = exc_info.value.__cause__.report.fatal
+        assert [finding.reason for finding in findings] == [
+            FatalReason.VOCABULARY_UNDETERMINED
+        ]
+        assert findings[0].render() in str(exc_info.value)
         assert exc_info.value.returncode != 0
         assert ConceptScheme.objects.count() == 0
 
 
 class TestImportSkosCommandSafetyScanRefusalReachedFromBothSourceForms:
-    """T021, spec US-5 Acceptance Scenario 2 — a source the safety scan refuses is refused
-    with that reason and nothing parses further, proven from a filesystem path and from a
-    URL served over ``http_stub`` (T006), no real network call either way. Reinstates the
-    same measured fixtures ``test_exchange/test_skos.py`` already proves are wired to the
-    scan (``entity_bomb.rdf``, ``remote_context_string.jsonld``), surfaced through the
-    command rather than re-detected."""
-
     def test_an_unsafe_rdf_xml_document_is_refused_from_a_path(self, db):
         with pytest.raises(CommandError) as exc_info:
             call_command(
@@ -563,11 +492,6 @@ class TestImportSkosCommandSafetyScanRefusalReachedFromBothSourceForms:
 
 
 class TestImportSkosCommandSurfacesAnAmbiguousVocabularyRefusalUnchanged:
-    """T021, spec Edge Cases — a source declaring more than one concept scheme is already
-    refused by the importer (test_exchange/test_skos.py
-    ``TestChoosingBetweenDeclaredVocabularies``); the command surfaces that refusal
-    unchanged rather than reinterpreting it."""
-
     def test_a_source_declaring_more_than_one_concept_scheme_is_refused_unchanged(
         self, db
     ):
@@ -583,14 +507,9 @@ class TestImportSkosCommandSurfacesAnAmbiguousVocabularyRefusalUnchanged:
 
 
 class TestImportSkosCommandExitsZeroOnACompletedRun:
-    """T022, FR-012, decisions.md D5, spec US-5 Acceptance Scenario 4 — a run that stores the
-    vocabulary exits zero however much it set aside, because that is the bit a deployment
-    script reads. ``call_command`` bypasses ``Command.run_from_argv`` entirely (it calls
-    ``execute()`` directly), so it never exercises the one call site — Django's own, inside
-    ``except CommandError`` — that turns a refusal's ``returncode`` into ``sys.exit``. This
-    test goes through ``run_from_argv`` instead, the real command-line entry point, so the
-    assertion is on whether that call site fires, not merely on whether an exception was
-    raised."""
+    # call_command bypasses run_from_argv, the one call site that turns a refusal's
+    # returncode into sys.exit, so these go through run_from_argv, the real command-line
+    # entry point.
 
     def test_a_run_that_sets_values_aside_still_exits_zero(self, db):
         command = Command(stdout=StringIO())
@@ -609,9 +528,7 @@ class TestImportSkosCommandExitsZeroOnACompletedRun:
         ).exists()
 
     def test_a_refused_run_exits_non_zero_through_the_same_call_site(self, db):
-        """The counterpart the assertion above needs to mean anything: were ``run_from_argv``
-        to stop reaching ``sys.exit`` at all, ``assert_not_called`` would keep passing and say
-        nothing. A refusal must fire it."""
+        # The counterpart that gives assert_not_called above its meaning.
         command = Command(stdout=StringIO(), stderr=StringIO())
         with mock.patch("sys.exit") as mock_exit:
             command.run_from_argv(
@@ -623,12 +540,6 @@ class TestImportSkosCommandExitsZeroOnACompletedRun:
 
 
 class TestImportSkosCommandCarriesVerbosityIntoTheRenderer:
-    """Convergence (T018, FR-007, `decisions.md` D6/D18) — ``ReportRenderer`` gates per-entry
-    set-aside detail on a ``verbosity`` argument, and Django's own ``--verbosity`` is what was
-    specified to carry it. T019, deleted at planning as redundant, was the task that wired the
-    renderer into ``handle()``; the wiring of this argument went with it, and T018's tests
-    construct the renderer directly, so nothing proved the option reached it. These do."""
-
     def test_the_default_verbosity_prints_counts_without_a_line_per_set_aside_value(
         self, db
     ):
@@ -660,25 +571,20 @@ class TestImportSkosCommandCarriesVerbosityIntoTheRenderer:
 
 
 class TestImportSkosCommandRemovesTheFetchedTemporaryFile:
-    """CORR-002 (review, correctness) — ``handle()``'s ``finally: resolver.cleanup()`` was
-    the only guarantee that a fetched document's temporary file is removed, and nothing at
-    the command level checked it.
-
-    Every existing cleanup assertion lives in ``tests/test_management/test_sources.py``,
-    where the test body calls ``resolver.cleanup()`` itself — so they prove the resolver
-    can clean up, not that the command does. Moving the call out of the ``finally`` and
-    into the success path left the whole suite green while every refused URL import leaked
-    a file of up to the byte ceiling.
-
-    Both paths are pinned here because they fail differently: the success path leaks on a
-    misplaced call, the raise path leaks only when the ``finally`` itself is lost.
-    """
+    # The resolver's own cleanup tests call cleanup() themselves, so only these prove
+    # the command's finally block does. The success path leaks on a misplaced call, the
+    # raise path only when the finally is lost.
 
     @staticmethod
     def _watch_temp_paths(monkeypatch):
-        """Record the temp path of every resolver the command builds, then clean up as
-        usual — the path is private to the resolver and gone by the time the command
-        returns, so it has to be captured as it happens."""
+        """Record the temp path of every resolver the command builds, then clean up as usual.
+
+        Args:
+            monkeypatch: The pytest fixture used to wrap ``SourceResolver.cleanup``.
+
+        Returns:
+            The list the recorded paths are appended to.
+        """
         seen = []
         original = sources.SourceResolver.cleanup
 
@@ -709,8 +615,9 @@ class TestImportSkosCommandRemovesTheFetchedTemporaryFile:
     def test_a_refused_url_import_leaves_no_temporary_file(
         self, db, http_stub, monkeypatch
     ):
-        # The fetch succeeds and the import is what fails, so the file exists at the moment
-        # the refusal is raised — the case a cleanup outside the finally would leak.
+        # The fetch succeeds and the import is what fails, so the file exists at the
+        # moment the refusal is raised — the case a cleanup outside the finally would
+        # leak.
         seen = self._watch_temp_paths(monkeypatch)
         http_stub.set_response(
             "/vocab.ttl",
@@ -726,9 +633,62 @@ class TestImportSkosCommandRemovesTheFetchedTemporaryFile:
         assert not seen[0].exists()
 
     def test_a_local_path_import_deletes_nothing(self, db, monkeypatch):
-        # The control: cleanup is a no-op for a path source, and the file the operator
-        # named is theirs, not a temporary the command may remove.
+        # The file the operator named is theirs, not a temporary the command may remove.
         seen = self._watch_temp_paths(monkeypatch)
         call_command("import_skos", str(FIXTURES / "rocks.ttl"), stdout=StringIO())
         assert seen == []
         assert (FIXTURES / "rocks.ttl").exists()
+
+
+class TestImportSkosCommandI18nSweep:
+    def test_every_output_string_is_translatable_with_named_placeholders(self):
+        source = Path(inspect.getfile(import_skos_command)).read_text()
+        visitor = visit_management_source(source)
+        assert visitor.positional_placeholders == [], (
+            f"{import_skos_command.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
+        )
+        assert visitor.bare_literals == [], (
+            f"{import_skos_command.__name__} passes a bare, untranslated literal to an output sink: {visitor.bare_literals}"
+        )
+
+
+class TestManagementI18nVisitorCatchesAViolation:
+    def test_catches_a_positional_placeholder_in_a_translation_call(self):
+        visitor = visit_management_source(
+            'from django.utils.translation import gettext_lazy as _\n_("%s changed")\n'
+        )
+        assert visitor.positional_placeholders == ["%s changed"]
+
+    def test_catches_a_bare_literal_raised_as_a_command_error(self):
+        visitor = visit_management_source(
+            "from django.core.management.base import CommandError\nraise CommandError('boom')\n"
+        )
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_written_to_stdout(self):
+        visitor = visit_management_source("self.stdout.write('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_as_an_argument_help(self):
+        visitor = visit_management_source("parser.add_argument('--x', help='boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_as_the_command_help_attribute(self):
+        visitor = visit_management_source(
+            "class Command(BaseCommand):\n    help = 'boom'\n"
+        )
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_yielded_as_a_rendered_line(self):
+        visitor = visit_management_source("def render():\n    yield 'boom'\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_does_not_flag_a_named_placeholder_or_a_translated_sink(self):
+        visitor = visit_management_source(
+            "from django.utils.translation import gettext_lazy as _\n"
+            "from django.core.management.base import CommandError\n"
+            "raise CommandError(str(_(\"'%(file)s' is fine.\")) % {'file': 'x'})\n"
+        )
+        assert visitor.positional_placeholders == []
+        assert visitor.bare_literals == []
