@@ -1,9 +1,7 @@
 {% load i18n %}
 {% comment %}
-  The name is the way into the vocabulary (T004, FR-013). Given as a slot rather than the
-  card's `title` attribute, which renders as escaped text and so cannot carry an anchor.
-  The row renders in an isolated context holding only the object, so the address is built
-  from the route's name and reaches for nothing else.
+  A slot rather than the card's `title` attribute, which is escaped text and cannot carry an anchor.
+  The row renders in an isolated context holding only the object, so the address comes from the route name.
 {% endcomment %}
 <c-card>
   <c-slot name="title">
@@ -18,23 +16,14 @@
   </c-slot>
   {% if object.description %}
     {% comment %}
-      Truncated in the template rather than clamped in CSS (decisions.md D14). A
-      `line-clamp-*` class would be the tidier answer, but this package ships no stylesheet
-      of its own and django-mvp's prebuilt one is generated from django-mvp's own templates
-      — a utility class that upstream does not already use is absent from the build, so the
-      class would render and do nothing, with no error to say so. A description running to
-      several paragraphs must not push every other vocabulary off the screen (spec.md Edge
-      Cases), and the filter holds that regardless of which stylesheet a project loads.
+      Truncated here rather than clamped in CSS: django-mvp's prebuilt stylesheet omits classes its own
+      templates do not use, so `line-clamp-*` would silently do nothing.
     {% endcomment %}
     <c-text size="sm" muted>{{ object.description|truncatewords:40 }}</c-text>
   {% endif %}
   {% if object.static_uri %}
-    {% comment %} The identifier is an outbound link (T003 reverses #140's D6): nothing is marked
-       safe and nothing is interpolated into any attribute besides href. It points at an
-       address this site does not control, hence rel="noopener". Which vocabularies show
-       an identifier at all here is unchanged from #140 (decisions.md D8) — a locally
-       authored vocabulary shows none on this page. A bare anchor, not the text component
-       used elsewhere in this row, which always renders a paragraph element. {% endcomment %}
+    {% comment %} An outbound link to an address this site does not control, hence rel="noopener". A bare
+       anchor, as the text component always renders a paragraph (#140). {% endcomment %}
     <a href="{{ object.static_uri }}" rel="noopener">{{ object.static_uri }}</a>
   {% endif %}
   <c-text size="xs" muted>

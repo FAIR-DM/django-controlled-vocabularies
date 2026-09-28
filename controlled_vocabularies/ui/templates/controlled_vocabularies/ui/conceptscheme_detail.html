@@ -7,33 +7,20 @@
     </div>
   {% endif %}
   <div class="vocabulary-provenance">
-    {% comment %} Both cases are stated, in the same words the list of vocabularies uses (FR-003).
-       Leaving the imported case to the absence of "Held here" would make a reader infer
-       provenance from the identifier's domain, which is the inference FR-003 removes. {% endcomment %}
+    {% comment %} Both cases are stated, so a reader does not infer provenance from the identifier's
+       domain (FS-013). {% endcomment %}
     {% if vocabulary.static_uri %}
       <c-text size="xs" muted>{% trans "Imported" %}</c-text>
     {% else %}
       <c-text size="xs" muted>{% trans "Held here" %}</c-text>
     {% endif %}
-    {% comment %} The identifier is an outbound link (T003 reverses #140's D6): nothing is marked
-       safe and nothing is interpolated into any attribute besides href {% endcomment %}
+    {% comment %} An outbound link: nothing is marked safe and only href takes an interpolated value (#140). {% endcomment %}
     <c-text size="xs" muted><c-link href="{{ vocabulary.uri }}" text="{{ vocabulary.uri }}" hover=True rel="noopener" /></c-text>
   </div>
   {% if collections %}
-    {% comment %} T019, decisions.md D5/D7: named, separate from the concept list, an ordered
-       one distinguishable from an unordered one. An ordinary loop, not django-mvp's
-       list component — it declares a row-template attribute it never reads and
-       renders whatever row template is already in the surrounding context, so
-       pointing it at a collection row would silently render concept rows instead
-       (plan.md item 5). A vocabulary holding none renders no section at all — this
-       whole block is absent, not present and empty. 015-read-single-record T020:
-       each entry now links to its own page — this page keeps `vocabulary` in
-       context throughout (unlike concept_list_item.html, this loop is not rendered
-       through render_list_item's isolated context), so the href is built from
-       `vocabulary.slug` and `collection.slug` alone, no query beyond the
-       already-loaded collections queryset. T027: composes django-mvp's own <c-link>
-       with hover=True, the same bare-anchor defect concept_detail.html's own
-       membership section had, fixed with the same component. {% endcomment %}
+    {% comment %} An ordinary loop, not django-mvp's list component, which renders whatever row template
+       is already in context and would show collections as concept rows. `vocabulary` stays in
+       context here, unlike in concept_list_item.html, so the link needs no extra query (FS-014). {% endcomment %}
     <div class="vocabulary-collections">
       <c-text size="sm" bold>{% trans "Collections" %}</c-text>
       <ul>
@@ -49,11 +36,8 @@
     </div>
   {% endif %}
   {% if search_term %}
-    {% comment %} The way back to the whole vocabulary (T015, FR-014): rendered here, in this
-       package's own template, never as markup inside the empty-state heading or
-       message — django-mvp's empty-state component autoescapes those strings with no
-       slot, so an anchor there would show as literal text and marking it safe would
-       emit the search term unescaped. {% endcomment %}
+    {% comment %} Not in the empty-state heading or message: django-mvp autoescapes those with no slot, so an
+       anchor there shows as literal text and marking it safe would emit the search term unescaped. {% endcomment %}
     <p>
       <a href="{% url 'controlled_vocabularies_ui:vocabulary-detail' vocabulary.slug %}">
         {% trans "Show every concept" %}

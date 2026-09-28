@@ -1,21 +1,12 @@
 {% extends "detail_view.html" %}
 {% load i18n %}
 {% comment %}
-  015-read-single-record T012: renders collection_property_rows()'s rows inside one
-  <dl>, through the T002 component — the same branch shape concept_detail.html uses
-  (a Python None substituted into {{ }} renders as the literal text "None", which
-  would make property_row.html's {% if short_form %} true for every plain-value row
-  too, so only the keys a row actually carries are passed). T028: a membership row's
-  entries is a list, not a string, so it is bound with cotton's dynamic attribute
-  syntax (:entries="row.entries") rather than interpolated with {{ }} — the same way
-  django-mvp's own breadcrumbs component binds :attrs.
+  Branches as concept_detail.html does. `entries` is a list, so it is bound with :entries rather
+  than interpolated, which would turn it into a string.
 {% endcomment %}
 {% block page.content %}
   {% comment %}
-    015-read-single-record T026, FR-008: the record's own identifier as an outbound
-    link, the same treatment concept_detail.html gives a concept's. Leads the page —
-    the first thing in page.content — rather than trailing beneath the definition
-    list (T007's original placement).
+    Leads the page, as in concept_detail.html.
   {% endcomment %}
   <c-text size="xs" muted><c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" /></c-text>
   <dl>
@@ -39,10 +30,8 @@
     {% endfor %}
   </dl>
   {% comment %}
-    015-read-single-record T013, FR-017: distinct wording, and no empty membership
-    row — the loop above already contributes none for a collection with no members
-    (collection_property_rows() simply has nothing to append), so this says so
-    explicitly rather than leaving the reader to infer it from an absence.
+    The loop above adds no member row for an empty collection, so this says so rather than leaving
+    the reader to infer it from an absence (FS-015).
   {% endcomment %}
   {% if not collection_has_members %}
     <c-text muted>{% trans "This collection holds no members." %}</c-text>

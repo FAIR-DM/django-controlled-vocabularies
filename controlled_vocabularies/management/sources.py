@@ -1,11 +1,4 @@
-"""Classifying and, for a URL, fetching a management-command source (T007-T009, plan.md
-"Source resolution", research.md R3/R4, decisions.md D3).
-
-:class:`SourceResolver` takes the raw ``source`` argument and answers what it is, before
-:class:`~controlled_vocabularies.management.commands.import_skos.Command` acts on it. A
-one-character parsed scheme is a Windows drive letter (``urlsplit("C:/vocab.ttl").scheme``
-is ``"c"``), not a network protocol, so it is not mistaken for one (research.md R3).
-"""
+"""Classifying a command source and fetching it when it is a URL (FS-008)."""
 
 from __future__ import annotations
 
@@ -31,56 +24,27 @@ from django.utils.translation import gettext_lazy as _
 
 _URL_PREFIXES = ("http://", "https://")
 
-# The three serializations this application reads (matches exchange/skos.py's own
-# _SUPPORTED_FORMATS), mapped from a response's Content-Type for the third rung of the
-# serialization ladder (T009, research.md R4). rdflib.util.guess_format knows nothing about
-# media types, so this mapping is the resolver's own.
+# rdflib.util.guess_format knows nothing about media types.
 _CONTENT_TYPE_SERIALIZATIONS = {
     "text/turtle": "turtle",
     "application/rdf+xml": "xml",
     "application/ld+json": "json-ld",
 }
 
-# One socket-read timeout and one byte ceiling, neither configurable (plan.md "Source
-# resolution"). The operator cannot see how long a publisher takes to answer or how much
-# it intends to send, so both bound what the remote server chooses rather than an operator
-# mistake (craft-security "always/ask/never" — DoS via an unbounded transfer). Both are set
-# against real published vocabularies rather than the test fixtures: a large vocabulary is
-# often generated per request, so first-byte latency of several seconds is ordinary, and the
-# widely-vendored thesauri run to tens of megabytes in RDF/XML. The values catch a server that
-# has stopped answering or does not intend to stop sending, not a slow or large publisher.
+# Neither is configurable: they bound what the remote server chooses, sized for real
+# published vocabularies (tens of megabytes, seconds to first byte), not for test fixtures
+# (docs/adr/0007-outbound-fetches-are-restricted-by-removing-handlers.md).
 _TIMEOUT_SECONDS = 30
 _CHUNK_SIZE = 64 * 1024
 _MAX_RESPONSE_BYTES = 50 * 1024 * 1024  # 50 MiB
 
-# The third bound, and the one the other two do not cover (SEC-703, decisions.md D21).
-# _TIMEOUT_SECONDS is a per-socket-read timeout and _MAX_RESPONSE_BYTES counts bytes, so a
-# server that answers continuously but slowly — one byte every few seconds — resets the read
-# timeout forever and never approaches the ceiling. Measured on the branch before this: a
-# stub trickling one byte per 20s was still being read after 65 seconds having transferred
-# 3 bytes, and would never have stopped. Generous against the same real vocabularies the
-# other two are sized against: 50 MiB inside ten minutes is 85 KiB/s, slower than any
-# publisher this command is pointed at, and it is a stop rather than a rate limit.
+# A server trickling one byte every few seconds resets the read timeout forever and never
+# nears the byte ceiling, so the transfer also has a total deadline (docs/adr/0007-outbound-fetches-are-restricted-by-removing-handlers.md).
 _MAX_TOTAL_SECONDS = 600  # 10 minutes
 
-# An opener carrying only the http/https handlers (T008, research.md R3): a handler
-# removed, not a check added. Python's default opener's HTTPRedirectHandler permits a
-# redirect onto ftp as well as http/https, and checking the final URL on the response
-# object happens only after urllib has already connected and pulled the body — this
-# opener has no handler for any other scheme, so it fails before a connection is attempted.
-#
-# Built via OpenerDirector().add_handler(...) rather than build_opener(...): build_opener
-# always merges its own default handlers (FTPHandler, FileHandler, DataHandler, ...) for
-# every protocol not explicitly overridden by an instance of the *same* default class, so
-# build_opener(HTTPHandler, HTTPSHandler, HTTPRedirectHandler, HTTPErrorProcessor) still
-# carries a live FTPHandler — confirmed by inspecting opener.handlers and by a redirect to
-# ftp://10.255.255.1/... actually reaching ftplib's connect and timing out on it, which is
-# the real network call this design exists to prevent (decisions.md D15). UnknownHandler is
-# added so a scheme with no registered handler raises URLError immediately rather than
-# OpenerDirector.open() silently returning None. HTTPDefaultErrorHandler is added for the
-# same reason: without it, HTTPErrorProcessor's own non-2xx handling has nothing registered
-# to call and OpenerDirector.open() returns None for a 404/500 instead of raising HTTPError
-# (found by this task's own failing test, T010).
+# Built by hand, not with build_opener, which merges FTPHandler and other default handlers
+# back in. UnknownHandler and HTTPDefaultErrorHandler make an unhandled scheme or a non-2xx
+# status raise instead of open() returning None (docs/adr/0007-outbound-fetches-are-restricted-by-removing-handlers.md).
 _opener = OpenerDirector()
 for _handler_class in (
     HTTPHandler,
@@ -95,9 +59,14 @@ for _handler_class in (
 
 @dataclass
 class ResolvedSource:
-    """What :class:`SourceResolver` hands the importer: a local path, plus the base URI
-    and serialization a fetched document carries (``None`` for a local path, which keeps
-    ``from_file``'s own defaults, T007-T009).
+    """What :class:`SourceResolver` hands the importer.
+
+    Attributes:
+        path: The local path to read.
+        base_uri: The address a fetched document was served from, or ``None`` for a local
+            path, which keeps ``from_file``'s own defaults.
+        serialization: The serialization to read it as, or ``None`` for a local path with
+            none named.
     """
 
     path: str
@@ -107,15 +76,27 @@ class ResolvedSource:
 
 @dataclass
 class Fetched:
+    """A document fetched to a temporary file.
+
+    Attributes:
+        path: The temporary file holding the body.
+        content_type: The response's media type, if it named one.
+        final_url: The address the document was served from, which differs from the one
+            typed whenever a redirect was followed.
+    """
+
     path: Path
     content_type: str | None
-    #: The address the document was actually served from, which differs from the one the
-    #: operator typed whenever a redirect was followed (CORR-001, decisions.md D20).
     final_url: str
 
 
 class SourceResolver:
-    """Classify ``source`` and, for a URL, fetch it into a local file (T007-T009)."""
+    """Classify a command's ``source`` and, for a URL, fetch it into a local file.
+
+    Args:
+        source: The raw ``source`` argument: a local path or an http(s) URL.
+        serialization: The serialization named with ``--format``, if any.
+    """
 
     def __init__(self, source: str, *, serialization: str | None = None) -> None:
         self.source = source
@@ -123,11 +104,17 @@ class SourceResolver:
         self._temp_path: Path | None = None
 
     def classify(self) -> str:
-        """Return ``"url"`` or ``"path"`` for :attr:`source` (T007, research.md R3).
+        """Classify :attr:`source` as a URL or a path.
 
-        A value beginning ``http://``/``https://``, case-insensitively, is a URL. Anything
-        else is a path unless its parsed scheme is longer than one character, which is
-        refused as an unsupported source.
+        A value starting ``http://`` or ``https://``, in any case, is a URL. Anything else is
+        a path, unless its parsed scheme is longer than one character. A one-character scheme
+        is a Windows drive letter such as ``C:``, not a protocol.
+
+        Returns:
+            ``"url"`` or ``"path"``.
+
+        Raises:
+            CommandError: The source names a scheme other than http or https.
         """
         if self.source.lower().startswith(_URL_PREFIXES):
             return "url"
@@ -144,11 +131,14 @@ class SourceResolver:
         )
 
     def resolve(self) -> ResolvedSource:
-        """Classify :attr:`source` and, for a URL, fetch it (T007-T009).
+        """Classify :attr:`source` and, for a URL, fetch it and settle its serialization.
 
-        The caller is responsible for calling :meth:`cleanup` once it is done with the
-        result, whether or not the import that follows succeeds (plan.md "Source
-        resolution").
+        The caller must call :meth:`cleanup` once done with the result, whether or not the
+        import that follows succeeds.
+
+        Returns:
+            The local path to import, with the base URI and serialization
+            a fetched document carries.
         """
         if self.classify() == "path":
             return ResolvedSource(
@@ -163,11 +153,16 @@ class SourceResolver:
         )
 
     def _retrieval_error(self, exc: OSError) -> CommandError:
-        """The one message for a retrieval that could not complete (T008, T010, FR-014).
+        """Build the one error for a retrieval that could not complete.
 
         Opening the connection and reading the body fail the same way from the operator's
-        side — an unreachable host, a non-2xx status, a timed-out read — so both raise
-        through here rather than each building the message itself.
+        side, so both raise through here.
+
+        Args:
+            exc: The underlying failure.
+
+        Returns:
+            The error to raise.
         """
         return CommandError(
             str(_("'%(source)s' could not be retrieved: %(error)s"))
@@ -175,8 +170,15 @@ class SourceResolver:
         )
 
     def _fetch(self) -> Fetched:
-        """Fetch :attr:`source` to a temporary file under a timeout and a byte ceiling
-        (T008, research.md R3).
+        """Fetch :attr:`source` to a temporary file under a timeout and a byte ceiling.
+
+        Returns:
+            The temporary file with the response's media type and final URL.
+
+        Raises:
+            CommandError: The response was too large or took too long.
+            self._retrieval_error: Opening the connection or reading the body failed, as a
+                ``CommandError`` built by :meth:`_retrieval_error`.
         """
         try:
             response = _opener.open(self.source, timeout=_TIMEOUT_SECONDS)
@@ -184,13 +186,8 @@ class SourceResolver:
             raise self._retrieval_error(exc) from exc
         with response:
             content_type = response.headers.get_content_type()
-            # The address the response actually came from, not the one asked for
-            # (CORR-001, decisions.md D20). A vocabulary is very often published behind a
-            # redirecting address — a PURL, a w3id, a "/latest" alias — and RFC 3986 §5.1.3
-            # makes the *final* URL the base a relative identifier resolves against. Taking
-            # the typed address instead stored every relative identifier under a URI its
-            # publisher never assigned, so a later import from the canonical address created
-            # a second copy of the whole vocabulary — the outcome D10 exists to prevent.
+            # The final URL is the base a relative identifier resolves against
+            # (RFC 3986 section 5.1.3, docs/adr/0006-a-document-identity-comes-from-where-it-was-published.md).
             final_url = response.url
             fd, name = tempfile.mkstemp()
             self._temp_path = Path(name)
@@ -229,18 +226,24 @@ class SourceResolver:
         )
 
     def _resolve_serialization(self, fetched: Fetched) -> str:
-        """Resolve a fetched document's serialization (T009, research.md R4): explicit
-        ``--format``, then the URL path's extension, then the response ``Content-Type``,
-        then a refusal naming what could not be determined. ``from_file``'s own extension
-        guess is never consulted for a fetched document — the value here is always passed
-        through explicitly, or the run is refused before it gets there.
+        """Settle a fetched document's serialization.
+
+        Order: explicit ``--format``, the URL path's extension, the response ``Content-Type``,
+        then a refusal. ``from_file``'s own extension guess is never consulted.
+
+        Args:
+            fetched: The fetched document.
+
+        Returns:
+            The serialization name to pass to rdflib.
+
+        Raises:
+            CommandError: None of the sources names a serialization.
         """
         if self.serialization:
             return self.serialization
-        # Guessed from the address the document was served from, for the same reason the
-        # base URI is (CORR-001, decisions.md D20): an extensionless PURL redirecting to a
-        # ".ttl" is the ordinary shape, and guessing from the typed address would fall
-        # through to Content-Type or a refusal for a source that names its format plainly.
+        # Guessed from the served address, not the typed one: an extensionless PURL often
+        # redirects to a ".ttl" (docs/adr/0006-a-document-identity-comes-from-where-it-was-published.md).
         guessed = rdflib.util.guess_format(urlsplit(fetched.final_url).path)
         if guessed:
             return guessed
@@ -258,8 +261,9 @@ class SourceResolver:
         )
 
     def cleanup(self) -> None:
-        """Remove the temporary file a fetch wrote, if any (T008). A no-op for a local
-        path source, and safe to call more than once.
+        """Remove the temporary file a fetch wrote, if any.
+
+        A no-op for a local path, and safe to call more than once.
         """
         if self._temp_path is not None:
             self._temp_path.unlink(missing_ok=True)

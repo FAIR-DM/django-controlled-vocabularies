@@ -1,23 +1,4 @@
-"""The guard's assertion script (T013-T017, FR-017, FR-019, User Story 3 scenarios 1, 3, 5, 9;
-015-read-single-record T024, FR-005, FR-010, FR-013, FR-014, SC-008).
-
-Speaks real HTTP against a running demo server. It follows the vocabulary list to one
-vocabulary's own page and searches inside it, then follows the authored vocabulary to one of its
-own concepts and one of its own collections, because those are the pages this feature ships. It
-asserts on the served response, never on the code that produced it, because the failure it
-exists to catch is the one every unit test passes through: a template that renders in a test
-client and not in a browser.
-
-The assertions themselves (:func:`check_list`, :func:`check_search`, :func:`check_vocabulary_page`,
-:func:`check_concept_search`, :func:`check_authored_vocabulary_page`, :func:`check_concept_page`,
-:func:`check_concept_page_in_a_second_language`, :func:`check_collection_page`) and the
-link-following helper (:func:`extract_vocabulary_url`) are separated from the HTTP transport
-(:func:`get`) so they can be exercised against an in-process response too
-(``tests/test_demo/test_smoke.py``) — "a broken assertion fails here rather than only in CI".
-
-Not a test module: standard library only, run directly against a live server, not under pytest
-(conventions; constitution Article VII).
-"""
+"""Assertion script that walks a running demo server over HTTP."""
 
 import re
 import sys
@@ -28,82 +9,77 @@ import urllib.request
 # page, including settings and the request environment, into a public CI log.
 BODY_EXCERPT_LIMIT = 500
 
-#: The demo's two seeded vocabularies and how many concepts each carries (demo/seed/*.ttl,
-#: demo/management/commands/seed_demo.py) — named here once rather than re-derived, since the
-#: walk's whole job is to notice when the served page stops agreeing with them.
+#: The seeded vocabularies and their concept counts (demo/seed/*.ttl), so the walk notices when
+#: the served page stops agreeing with the seed.
 IMPORTED_NAME = "DCMI Type Vocabulary"
 IMPORTED_CONCEPT_COUNT = 5
 AUTHORED_NAME = "Data Collection Methods"
 AUTHORED_CONCEPT_COUNT = 4
 
-#: A word that appears in the imported vocabulary's own name and nowhere in the authored one's
-#: name or description — narrow enough that a search for it proves the search narrowed rather
-#: than merely returned something.
+#: Appears in the imported vocabulary's name and nowhere in the authored one's, so a search for it
+#: proves the list narrowed rather than merely returned something.
 SEARCH_TERM = "DCMI"
 
-#: A concept the demo seeds into the imported vocabulary (demo/seed/dcmi_types.ttl, T016),
-#: named here to prove the vocabulary's own page lists a concept it actually holds.
 VOCABULARY_CONCEPT = "Dataset"
 
-#: Another concept in the same vocabulary — present on the unsearched page, and what a search
-#: narrowing correctly must exclude.
+#: Present on the unsearched page; a search that narrows correctly must exclude it.
 OTHER_VOCABULARY_CONCEPT = "Collection"
 
-#: The hidden label seeded onto VOCABULARY_CONCEPT (demo/seed/dcmi_types.ttl, T016): a
-#: plausible misspelling of the term itself, never shown on the page, findable only by search
-#: (User Story 3 scenario 3).
+#: A misspelling seeded as a hidden label of VOCABULARY_CONCEPT: never shown, findable only by search.
 HIDDEN_LABEL_SEARCH_TERM = "Datset"
 
-#: A concept in the authored vocabulary (demo/seed/research_methods.ttl, 015-read-single-record
-#: T024) whose own page the walk follows next — chosen because it carries every one of the
-#: things this feature's closing task added to the seed: a stored relation, membership in both
-#: seeded collections, and the German-only note that exercises FR-005's language fallback
-#: alongside its own English-only definition, on the one page.
+#: Chosen because its page carries a stored relation, membership in both seeded collections and a
+#: German-only note beside an English-only definition, which exercises the language fallback (FS-015).
 AUTHORED_CONCEPT = "Fieldwork"
 
-#: AUTHORED_CONCEPT's own short form (T003, T016: ``{scheme.slug}:{record.slug}``) — a
-#: record-valued row (an in-site relation, a collection's member) carries this as its
-#: link text, never the plain label AUTHORED_CONCEPT itself names.
+#: Record-valued rows link by short form (``{scheme.slug}:{record.slug}``), never by plain label.
 AUTHORED_CONCEPT_SHORT_FORM = "data-collection-methods:fieldwork"
 
-#: AUTHORED_CONCEPT's narrower concept (research_methods.ttl: "survey" carries
-#: ``skos:broader`` to "fieldwork") — shown on AUTHORED_CONCEPT's own page under
-#: ``skos:narrower``, derived rather than separately stated (FR-010), by its own short
-#: form rather than its plain label, for the same reason AUTHORED_CONCEPT_SHORT_FORM
-#: exists.
+#: The concept narrower than AUTHORED_CONCEPT (research_methods.ttl gives "survey" a
+#: ``skos:broader`` to "fieldwork"), shown on its page by short form and derived, not stated.
 AUTHORED_RELATED_CONCEPT_SHORT_FORM = "data-collection-methods:survey"
 
-#: One of the two collections research_methods.ttl already seeded (T020) that gathers
-#: AUTHORED_CONCEPT — named on AUTHORED_CONCEPT's own page, below its definition list
-#: (FR-014), and the walk's own destination for AUTHORED_CONCEPT's page (FR-013). Named
-#: there by its plain ``name`` (concept_detail.html's membership section is not a
-#: property_row, so it carries no short form of its own).
+#: A seeded collection gathering AUTHORED_CONCEPT, shown by its plain name because the concept
+#: page's membership section is not a property row and carries no short form.
 AUTHORED_COLLECTION = "Typical project workflow"
 
-#: The German-only note seeded onto AUTHORED_CONCEPT (research_methods.ttl,
-#: 015-read-single-record T024): shown when the page is read in German, never in the
-#: unseeded reading language the rest of this walk uses (FR-005).
+#: Seeded in German only, so it shows when the page is read in German and never otherwise.
 GERMAN_SCOPE_NOTE = "Erhoben durch unmittelbare Beobachtung oder Messung am Studienort."
 
-#: AUTHORED_CONCEPT's English-only definition — carries no German value of its own, so
-#: reading the same page in German falls back to this rather than showing nothing
-#: (FR-005, the other half of the fallback GERMAN_SCOPE_NOTE's own presence proves).
+#: Carries no German value, so reading the page in German falls back to it.
 ENGLISH_FALLBACK_DEFINITION = (
     "Data collected through direct observation or measurement at a study site."
 )
 
 
 class SmokeCheckFailed(Exception):
-    """The URL, status and a bounded body excerpt of a failed check (FR-017)."""
+    """Raised for a failed check, carrying the URL, status and a bounded body excerpt."""
 
 
 def fail(url, status, reason, body=""):
+    """Raise :class:`SmokeCheckFailed` for a failed check.
+
+    Args:
+        url: The address that was requested.
+        status: The HTTP status the server returned, or ``None`` when there was none.
+        reason: What was expected and did not happen.
+        body: The response body, cut to ``BODY_EXCERPT_LIMIT`` characters in the message.
+
+    Raises:
+        SmokeCheckFailed: Always.
+    """
     raise SmokeCheckFailed(f"{url} [{status}]: {reason}\n{body[:BODY_EXCERPT_LIMIT]}")
 
 
 def check_list(list_url, status, body):
-    """Both seeded vocabularies are named on the list and carry their concept counts
-    (FR-016, User Story 3 scenario 2).
+    """Check that both seeded vocabularies are listed with their concept counts.
+
+    Fails through :func:`fail` when it does not hold.
+
+    Args:
+        list_url: The address that was requested.
+        status: The HTTP status the server returned.
+        body: The response body.
     """
     if status != 200:
         fail(list_url, status, "the vocabulary list did not serve", body)
@@ -128,8 +104,14 @@ def check_list(list_url, status, body):
 
 
 def check_search(search_url, status, body):
-    """A search narrows the list to the vocabulary it matches and excludes the other
-    (User Story 3 scenario 5).
+    """Check that a search narrows the list to the vocabulary it matches.
+
+    Fails through :func:`fail` when it does not hold.
+
+    Args:
+        search_url: The address that was requested.
+        status: The HTTP status the server returned.
+        body: The response body.
     """
     if status != 200:
         fail(search_url, status, "a search did not serve", body)
@@ -150,8 +132,14 @@ def check_search(search_url, status, body):
 
 
 def check_vocabulary_page(vocabulary_url, status, body):
-    """The vocabulary's own page lists a concept it actually holds (FR-019, User Story 3
-    scenario 1).
+    """Check that a vocabulary's page lists a concept it holds.
+
+    Fails through :func:`fail` when it does not hold.
+
+    Args:
+        vocabulary_url: The address that was requested.
+        status: The HTTP status the server returned.
+        body: The response body.
     """
     if status != 200:
         fail(vocabulary_url, status, "the vocabulary's page did not serve", body)
@@ -165,8 +153,14 @@ def check_vocabulary_page(vocabulary_url, status, body):
 
 
 def check_concept_search(search_url, status, body):
-    """A search inside the vocabulary narrows to the concept it matches, including one found
-    only through its hidden label (FR-019, User Story 3 scenarios 3, 9).
+    """Check that a search inside a vocabulary finds a concept through its hidden label.
+
+    Fails through :func:`fail` when it does not hold.
+
+    Args:
+        search_url: The address that was requested.
+        status: The HTTP status the server returned.
+        body: The response body.
     """
     if status != 200:
         fail(search_url, status, "a concept search did not serve", body)
@@ -188,8 +182,14 @@ def check_concept_search(search_url, status, body):
 
 
 def check_authored_vocabulary_page(vocabulary_url, status, body):
-    """The authored vocabulary's own page lists the concept the walk follows next
-    (015-read-single-record T024).
+    """Check that the authored vocabulary's page lists the concept the walk follows next.
+
+    Fails through :func:`fail` when it does not hold.
+
+    Args:
+        vocabulary_url: The address that was requested.
+        status: The HTTP status the server returned.
+        body: The response body.
     """
     if status != 200:
         fail(
@@ -205,8 +205,14 @@ def check_authored_vocabulary_page(vocabulary_url, status, body):
 
 
 def check_concept_page(concept_url, status, body):
-    """A concept's own page shows its relation and the collections that gather it
-    (015-read-single-record T024, FR-010, FR-014).
+    """Check that a concept's page shows its narrower concept and the collection that gathers it.
+
+    Fails through :func:`fail` when it does not hold.
+
+    Args:
+        concept_url: The address that was requested.
+        status: The HTTP status the server returned.
+        body: The response body.
     """
     if status != 200:
         fail(concept_url, status, "the concept's page did not serve", body)
@@ -228,9 +234,14 @@ def check_concept_page(concept_url, status, body):
 
 
 def check_concept_page_in_a_second_language(concept_url, status, body):
-    """Read in German, the same page shows a value carried only in German directly, and
-    falls back to English for a value carried only there (015-read-single-record T024,
-    FR-005).
+    """Check that a concept's page in German shows its German note and falls back to English elsewhere.
+
+    Fails through :func:`fail` when it does not hold.
+
+    Args:
+        concept_url: The address that was requested.
+        status: The HTTP status the server returned.
+        body: The response body.
     """
     if status != 200:
         fail(concept_url, status, "the concept's page did not serve in German", body)
@@ -251,8 +262,14 @@ def check_concept_page_in_a_second_language(concept_url, status, body):
 
 
 def check_collection_page(collection_url, status, body):
-    """A collection's own page shows a concept it gathers (015-read-single-record T024,
-    FR-013).
+    """Check that a collection's page shows a concept it gathers.
+
+    Fails through :func:`fail` when it does not hold.
+
+    Args:
+        collection_url: The address that was requested.
+        status: The HTTP status the server returned.
+        body: The response body.
     """
     if status != 200:
         fail(collection_url, status, "the collection's page did not serve", body)
@@ -266,15 +283,19 @@ def check_collection_page(collection_url, status, body):
 
 
 def extract_vocabulary_url(list_body, name):
-    """The href of the anchor naming ``name`` on rendered markup — the way the walk
-    follows the list to a vocabulary's own page, and equally how it follows a
-    vocabulary's own page to one of its concepts or one of its collections
-    (015-read-single-record T024): every one of those rows is a plain ``<a>`` naming
-    the record and nothing else.
+    """Return the address of the link naming a record on rendered markup.
 
-    A small regex, not an HTML-parser dependency: this module runs against a live server with
-    no test-only packages installed (module docstring), so it reads the same served markup a
-    browser would rather than depending on one more thing that could itself be missing.
+    Fails through :func:`fail` when no link matches.
+
+    A regex rather than an HTML parser: this module runs against a live server with
+    no test-only packages installed.
+
+    Args:
+        list_body: The rendered page to search.
+        name: The link text to find.
+
+    Returns:
+        The link's ``href``.
     """
     match = re.search(
         rf'<a\s+href="([^"]+)"[^>]*>\s*{re.escape(name)}\s*</a>', list_body
@@ -290,12 +311,20 @@ def extract_vocabulary_url(list_body, name):
 
 
 def get(url, headers=None):
-    """GET ``url`` and return ``(status, body)``, failing on a connection error (FR-017).
+    """Request a page over HTTP.
 
-    ``headers`` (015-read-single-record T024) lets the walk ask for a page in a reading
-    language other than the demo's own default — ``Accept-Language``, the same header a
-    real browser sends, rather than a URL parameter this package's routes carry no
-    concept of.
+    Fails through :func:`fail` when the server cannot be reached.
+
+    Args:
+        url: The address to request.
+        headers: Extra request headers, such as ``Accept-Language``.
+
+    Returns:
+        The status and decoded body. An HTTP error status is returned, not raised.
+
+    Raises:
+        urllib.error.URLError: Re-raised after :func:`fail`, which always raises first, so callers see
+            :class:`SmokeCheckFailed`.
     """
     request = urllib.request.Request(url, headers=headers or {})  # noqa: S310 — http(s) only, built from argv
     try:
@@ -309,11 +338,12 @@ def get(url, headers=None):
 
 
 def walk(base_url):
-    """Request the list, search it, follow it to the imported vocabulary's page and search
-    inside it — including a search matching only a hidden label (User Story 3 scenarios 1, 3,
-    5, 9) — then follow the authored vocabulary to one of its own concepts and one of its own
-    collections, reading the concept's page once in the demo's own default language and once
-    in German (015-read-single-record T024, FR-005, FR-010, FR-013, FR-014).
+    """Walk the list, a vocabulary, a search inside it, a concept in two languages and a collection.
+
+    Fails through :func:`fail` at the first page that does not serve or lacks what the seed provides.
+
+    Args:
+        base_url: The address of the running demo server.
     """
     base_url = base_url.rstrip("/")
     list_url = f"{base_url}/browse/"
@@ -351,6 +381,14 @@ def walk(base_url):
 
 
 def main(argv):
+    """Run the walk and report the outcome.
+
+    Args:
+        argv: Command-line arguments; the second, if given, is the server's base URL.
+
+    Returns:
+        The process exit status: 0 on success, 1 on a failed check.
+    """
     base_url = argv[1] if len(argv) > 1 else "http://127.0.0.1:8000"
     try:
         walk(base_url)

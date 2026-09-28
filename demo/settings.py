@@ -1,16 +1,11 @@
-"""Django settings for the demo / dev server (T015, FR-014, FR-015, FR-018).
-
-Written out in full rather than imported from the test settings: a reader comparing this
-against README.md's "Finding a vocabulary" section should find the same wiring twice, and a
-settings module that imports the tests' would teach nobody anything and would drag test-only
-choices — an in-memory database, a fixed URI base — into the thing meant to look like a real
-project (plan.md Complexity Tracking).
-"""
+"""Django settings for the demo development server."""
 
 import os
 import sys
 from pathlib import Path
 
+# Written out in full rather than imported from the test settings, whose in-memory database and
+# fixed URI base would not look like a real project.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # django.setup() imports every INSTALLED_APPS entry before any management command runs, so a
@@ -26,7 +21,7 @@ except ImportError:
     )
     sys.exit(1)
 
-SECRET_KEY = "django-insecure-demo-secret-key-do-not-use-in-production"  # noqa: S105 — obviously throwaway, demo only (FR-018)
+SECRET_KEY = "django-insecure-demo-secret-key-do-not-use-in-production"  # noqa: S105 — obviously throwaway, demo only
 
 DEBUG = True
 
@@ -50,13 +45,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "demo",
-    # The front end, wired exactly as README.md's "Finding a vocabulary" section documents —
-    # the demo must match it, and if the two ever disagree the README is the thing that is
-    # right (013-find-a-vocabulary task brief).
+    # Wired as README.md's "Finding a vocabulary" section documents; the README wins any disagreement.
     "controlled_vocabularies",
-    # The package's own concept search control, which its system checks require of any project
-    # installing it — not only of one rendering the browsing pages. The demo's admin edits a
-    # vocabulary, so a project reading these settings as an example gets the whole wiring.
+    # The concept search control, which the package's system checks require of any installing project.
     "django_tomselect",
     "django_cotton",
     "easy_icons",
@@ -74,19 +65,15 @@ INSTALLED_APPS = [
 # fallback to another pack.
 CRISPY_TEMPLATE_PACK = "tailwind"
 
-# And the allowlist has to name it too. The {% crispy %} tag validates the pack at
-# TEMPLATE-COMPILE time against CRISPY_ALLOWED_TEMPLATE_PACKS, whose default is
-# ("uni_form", "bootstrap3", "bootstrap4") — so every template carrying the tag fails to
-# compile.
+# The {% crispy %} tag checks the pack at template-compile time against this allowlist, whose
+# default omits "tailwind", so every template carrying the tag would fail to compile.
 CRISPY_ALLOWED_TEMPLATE_PACKS = ["tailwind"]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    # Between SessionMiddleware and CommonMiddleware, Django's own required order —
-    # without it every request reads in LANGUAGE_CODE regardless of what it asks for, and
-    # a concept's own page could never show a value falling back from a reading language
-    # to the vocabulary's default (015-read-single-record T024, FR-005, README's "Try it").
+    # Between SessionMiddleware and CommonMiddleware, as Django requires. Without it every request
+    # reads in LANGUAGE_CODE, so a concept page could not show the language fallback (FS-015).
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -119,10 +106,8 @@ TEMPLATES = [
 
 ROOT_URLCONF = "demo.urls"
 
-# Must match the path component of wherever demo/urls.py mounts controlled_vocabularies.ui's
-# routes ("/browse/") — otherwise a locally authored vocabulary's identifier does not lead
-# back to its own page (FR-004), which is exactly the misconfiguration
-# controlled_vocabularies.ui.W001 exists to report (014-look-inside-a-vocabulary T006).
+# Must match where demo/urls.py mounts the ui routes ("/browse/"), or a local vocabulary's
+# identifier does not lead back to its page, which controlled_vocabularies.ui.W001 reports (FS-014).
 CONTROLLED_VOCABULARIES_BASE_URI = "http://localhost:8000/browse"
 
 # mvp/base.html loads the packaged stylesheet with {% static %} unconditionally, so having

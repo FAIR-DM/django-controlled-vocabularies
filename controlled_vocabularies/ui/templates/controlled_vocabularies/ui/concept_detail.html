@@ -1,23 +1,13 @@
 {% extends "detail_view.html" %}
 {% load i18n %}
 {% comment %}
-  015-read-single-record T005: renders T003's rows inside one <dl>, through the T002
-  component. Two branches, not one call passing every key unconditionally: a Python
-  None substituted into `{{ }}` renders as the literal text "None" (Django's own
-  behaviour for a resolved-but-None variable, distinct from an undefined one), which
-  would make property_row.html's `{% if short_form %}` true for every plain-value row
-  too. Passing only the keys a row actually carries keeps an absent one genuinely
-  unset rather than the four-character string "None".
+  Only the keys a row carries are passed: a Python None interpolated into `{{ }}` renders as the
+  text "None", which would make property_row.html's `{% if short_form %}` true for every row.
 {% endcomment %}
 {% block page.content %}
   {% comment %}
-    015-read-single-record T026, FR-008: the record's own identifier as an outbound
-    link, the same treatment conceptscheme_detail.html already gives a vocabulary's.
-    Leads the page — the first thing in page.content — rather than trailing beneath
-    the definition list (T007's original placement): a reader citing this record
-    should not have to scroll past everything it says about itself first. Still not
-    a dl row — plan.md Key design decision #4's fixed row order names no identifier
-    row, only the SKOS statements the record makes about itself.
+    Leads the page rather than trailing the list, so a reader citing this record need not scroll past
+    it. Not a list row: those are the statements the record makes about itself (FS-015).
   {% endcomment %}
   <c-text size="xs" muted><c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" /></c-text>
   <dl>
@@ -38,18 +28,8 @@
   </dl>
   {% if concept_collections %}
     {% comment %}
-      015-read-single-record T021, FR-014: the collections that gather this concept,
-      below the definition list and outside it, under a plain-language heading rather
-      than a CURIE — SKOS has a property pointing from a collection to its concepts
-      and no inverse of it, so this is a statement other records make about this one,
-      not a row this concept's own list can carry (decisions.md, "Which collections a
-      concept belongs to..."). A concept no collection gathers renders no section at
-      all (T022) — this whole block is absent, not present and empty, the same
-      treatment conceptscheme_detail.html's own collections section gives US-4.
-      T027: headed "Member of" rather than "Collections" — the latter reads as
-      collections belonging to the concept, the inverse of what this section says.
-      Each entry composes django-mvp's own <c-link> with hover=True, so it underlines
-      on hover (daisyUI's link-hover class), rather than a bare <a>.
+      Outside the list: SKOS has no property from a concept to its collections, so this is a statement
+      other records make about it. Headed "Member of", as "Collections" reads as belonging to the concept.
     {% endcomment %}
     <div class="concept-collections">
       <c-text size="sm" bold>{% trans "Member of" %}</c-text>

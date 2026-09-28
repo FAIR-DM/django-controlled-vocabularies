@@ -1,8 +1,4 @@
-"""System checks for the opt-in vocabulary-browsing front end.
-
-Both are registered from
-:meth:`~controlled_vocabularies.ui.apps.ControlledVocabulariesUIConfig.ready`.
-"""
+"""System checks for the opt-in vocabulary-browsing front end."""
 
 from urllib.parse import urlparse
 
@@ -17,14 +13,9 @@ CHECK_ID_ROUTE_MISMATCH = "controlled_vocabularies.ui.W001"
 
 
 def check_mvp_installed(app_configs, **kwargs):
-    """Report an error when ``django-mvp`` cannot be imported (013-find-a-vocabulary,
-    FR-012's neighbour, plan.md Key design decisions #5).
-
-    Without it the first symptom is a bare ``ModuleNotFoundError: mvp`` raised from URL
-    loading, which names neither the extra nor the app that needs it. A real ``import mvp``
-    rather than an ``importlib.util.find_spec`` probe, so the check behaves exactly like the
-    URL loading it replaces the failure of.
-    """
+    """Report an error when ``django-mvp`` cannot be imported."""
+    # Without it the first symptom is a bare ModuleNotFoundError from URL loading. A real import
+    # rather than find_spec, so the check fails exactly as that loading would.
     try:
         import mvp  # noqa: F401
     except ImportError:
@@ -41,20 +32,9 @@ def check_mvp_installed(app_configs, **kwargs):
 
 
 def check_vocabulary_detail_route(app_configs, **kwargs):
-    """Warn when the ``vocabulary-detail`` route is mounted somewhere that disagrees with the
-    configured base address (014-look-inside-a-vocabulary T005, FR-004's precondition,
-    Article IX, plan.md Key design decision #2).
-
-    A vocabulary's identifier is composed from ``CONTROLLED_VOCABULARIES_BASE_URI``, a
-    setting, never a URL reversal — the ``ui`` app is mounted wherever the project chooses,
-    and nothing has ever compared the two. When they disagree, a locally held vocabulary's
-    identifier does not lead back to its own page (FR-004).
-
-    A warning, not an error: a project may serve its identifiers through a reverse proxy that
-    resolves them correctly, which this check cannot see, so it reports what it sees rather
-    than refusing to boot. Silent when the browsing routes are not mounted at all — a project
-    that installed the app and has not yet wired its URLs gets nothing from this check.
-    """
+    """Warn when the ``vocabulary-detail`` route is mounted away from the base URI's path."""
+    # Identifiers come from CONTROLLED_VOCABULARIES_BASE_URI, never a URL reversal, so nothing else
+    # compares the two (FS-014). A warning because a reverse proxy may resolve them correctly.
     placeholder = "check-placeholder-slug"
     try:
         detail_path = reverse(
