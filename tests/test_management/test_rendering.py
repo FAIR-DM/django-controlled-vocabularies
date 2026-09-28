@@ -15,6 +15,7 @@ produces, so it is proven without needing a full import for every scenario
 (tasks.md T016/T017).
 """
 
+import inspect
 from pathlib import Path
 
 from controlled_vocabularies.exchange.report import (
@@ -25,7 +26,9 @@ from controlled_vocabularies.exchange.report import (
     SetAsideReason,
 )
 from controlled_vocabularies.exchange.skos import import_skos
+from controlled_vocabularies.management import rendering
 from controlled_vocabularies.management.rendering import ReportRenderer
+from tests.i18n_sweep import visit_management_source
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "skos"
 
@@ -272,3 +275,16 @@ class TestReportRendererVerbosity:
     def test_the_default_verbosity_still_prints_the_counts(self):
         # The control: silencing 0 must not silence the default.
         assert list(ReportRenderer(ImportReport()).render()) != []
+
+
+class TestReportRendererI18nSweep:
+    def test_every_output_string_is_translatable_with_named_placeholders(self):
+        source = Path(inspect.getfile(rendering)).read_text()
+        visitor = visit_management_source(source)
+        assert visitor.positional_placeholders == [], (
+            f"{rendering.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
+        )
+        assert visitor.bare_literals == [], (
+            f"{rendering.__name__} passes a bare, untranslated literal to an output sink: {visitor.bare_literals}"
+        )

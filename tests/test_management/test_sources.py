@@ -8,6 +8,7 @@ call is made anywhere in this file.
 
 from __future__ import annotations
 
+import inspect
 import time
 import urllib.error
 import urllib.request
@@ -18,6 +19,7 @@ from django.core.management.base import CommandError
 
 from controlled_vocabularies.management import sources
 from controlled_vocabularies.management.sources import SourceResolver
+from tests.i18n_sweep import visit_management_source
 
 
 class TestHTTPStubFixture:
@@ -318,3 +320,16 @@ class TestSourceResolverSerializationLadder:
             resolver.resolve()
         assert "--format" in str(exc_info.value)
         resolver.cleanup()
+
+
+class TestSourcesI18nSweep:
+    def test_every_output_string_is_translatable_with_named_placeholders(self):
+        source = Path(inspect.getfile(sources)).read_text()
+        visitor = visit_management_source(source)
+        assert visitor.positional_placeholders == [], (
+            f"{sources.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
+        )
+        assert visitor.bare_literals == [], (
+            f"{sources.__name__} passes a bare, untranslated literal to an output sink: {visitor.bare_literals}"
+        )

@@ -130,6 +130,7 @@ import ast
 import inspect
 import signal
 import warnings
+from pathlib import Path
 
 import pytest
 from django import forms
@@ -144,6 +145,7 @@ from django.utils.functional import Promise
 from django.utils.module_loading import import_string
 
 from controlled_vocabularies import checks as checks_module
+from controlled_vocabularies import fields as fields_module
 from controlled_vocabularies.fields import (
     ConceptField,
     ConceptFieldMixin,
@@ -171,6 +173,7 @@ from tests.factories import (
     SurveyFactory,
     collection_with_members,
 )
+from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import (
     Artifact,
     Borehole,
@@ -3421,3 +3424,95 @@ class TestDeclarationRuleTypeErrorsStayUntranslated:
             ConceptsField(vocabulary="rock-type", through="whatever")
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str
+
+
+class TestFieldsI18nSweep:
+    def test_module_carries_no_bare_user_visible_literal(self):
+        source = Path(inspect.getfile(fields_module)).read_text()
+        visitor = visit_fields_checks_source(source)
+        assert visitor.bare_literals == [], (
+            f"{fields_module.__name__} passes a bare, untranslated literal to a user-visible sink: {visitor.bare_literals}"
+        )
+        assert visitor.positional_placeholders == [], (
+            f"{fields_module.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
+        )
+
+
+class TestFieldsChecksI18nVisitorCatchesAViolation:
+    def test_catches_a_bare_help_text_keyword_literal(self):
+        visitor = visit_fields_checks_source("ForeignKey(help_text='boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_verbose_name_keyword_literal(self):
+        visitor = visit_fields_checks_source("CharField(verbose_name='boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_help_text_default_via_kwargs_setdefault(self):
+        visitor = visit_fields_checks_source("kwargs.setdefault('help_text', 'boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_error_messages_dict_value(self):
+        visitor = visit_fields_checks_source("error_messages = {'invalid': 'boom'}\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_raised_as_a_validation_error(self):
+        visitor = visit_fields_checks_source("raise ValidationError('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_raised_as_improperly_configured(self):
+        visitor = visit_fields_checks_source("raise ImproperlyConfigured('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_positional_placeholder_passed_to_a_translation_call(self):
+        visitor = visit_fields_checks_source(
+            "from django.utils.translation import gettext_lazy as _\n_('%s changed')\n"
+        )
+        assert visitor.positional_placeholders == ["%s changed"]
+
+    def test_does_not_flag_a_named_placeholder_passed_to_a_translation_call(self):
+        visitor = visit_fields_checks_source(
+            "from django.utils.translation import gettext_lazy as _\n_('%(model)s changed')\n"
+        )
+        assert visitor.positional_placeholders == []
+
+    def test_catches_a_bare_literal_as_a_checks_warning(self):
+        visitor = visit_fields_checks_source("checks.Warning('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_as_a_checks_error(self):
+        visitor = visit_fields_checks_source("checks.Error('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_interpolated_message(self):
+        visitor = visit_fields_checks_source(
+            "checks.Warning('boom %(model)s' % {'model': m})\n"
+        )
+        assert visitor.bare_literals == ["boom %(model)s"]
+
+    def test_catches_a_bare_f_string_message(self):
+        visitor = visit_fields_checks_source("checks.Warning(f'boom {model}')\n")
+        assert visitor.bare_literals == ["f'boom {model}'"]
+
+    def test_catches_a_bare_hint_keyword_literal(self):
+        visitor = visit_fields_checks_source("checks.Warning(_('fine'), hint='boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_verbose_name_dict_literal_value(self):
+        visitor = visit_fields_checks_source(
+            "meta = {'verbose_name': 'boom', 'verbose_name_plural': 'booms', 'db_table': 'x'}\n"
+        )
+        assert visitor.bare_literals == ["boom", "booms"]
+
+    def test_does_not_flag_a_translated_sink(self):
+        visitor = visit_fields_checks_source(
+            "from django.utils.translation import gettext_lazy as _\n"
+            "kwargs.setdefault('help_text', _('fine'))\n"
+            "error_messages = {'invalid': _('fine')}\n"
+            "raise ValidationError(_('fine'))\n"
+            "raise ImproperlyConfigured(_('fine'))\n"
+            "checks.Warning(_('fine %(model)s') % {'model': m}, hint=_('fine'))\n"
+            "meta = {'verbose_name': _('fine') % {'x': 1}, 'db_table': 'x'}\n"
+        )
+        assert visitor.bare_literals == []
+        assert visitor.positional_placeholders == []

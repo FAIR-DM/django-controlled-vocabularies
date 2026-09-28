@@ -19,6 +19,9 @@ during a POST). Both the single- (``ConceptField``) and multiple-valued
 FR-009 promises nothing already guaranteed was taken away.
 """
 
+import inspect
+from pathlib import Path
+
 import pytest
 from django import forms
 from django.contrib.admin.sites import AdminSite
@@ -27,8 +30,10 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory, override_settings
 from django.utils import translation
+from django.utils.functional import Promise
 from django_tomselect.middleware import TomSelectMiddleware
 
+from controlled_vocabularies import forms as forms_module
 from controlled_vocabularies.forms import ConceptChoiceField, ConceptsChoiceField
 from tests.factories import (
     CollectionFactory,
@@ -38,6 +43,7 @@ from tests.factories import (
     SampleFactory,
     collection_with_members,
 )
+from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import (
     BranchSample,
     ChipSample,
@@ -664,3 +670,23 @@ class TestConceptWidgetsShipTheInlineInitialisationScript:
         ).widget
 
         assert self._ASSET in widget.media._js
+
+
+class TestFormsI18nSweep:
+    def test_module_carries_no_bare_user_visible_literal(self):
+        source = Path(inspect.getfile(forms_module)).read_text()
+        visitor = visit_fields_checks_source(source)
+        assert visitor.bare_literals == [], (
+            f"{forms_module.__name__} passes a bare, untranslated literal to a user-visible sink: {visitor.bare_literals}"
+        )
+        assert visitor.positional_placeholders == [], (
+            f"{forms_module.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
+        )
+
+
+class TestMissingRouteMessage:
+    def test_missing_route_message_is_a_lazy_translation(self):
+        assert isinstance(forms_module._MISSING_ROUTE_MESSAGE, Promise), (
+            "_MISSING_ROUTE_MESSAGE is not lazily translatable"
+        )

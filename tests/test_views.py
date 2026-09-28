@@ -30,7 +30,9 @@ this suite restricts to a collection slug, since a ``field=`` reference is resol
 through Django's app registry rather than built ad hoc in a test.
 """
 
+import inspect
 import json
+from pathlib import Path
 
 import pytest
 from django import forms
@@ -43,6 +45,7 @@ from django.urls import reverse
 from django.utils import translation
 from django_tomselect.middleware import TomSelectMiddleware
 
+from controlled_vocabularies import views as views_module
 from controlled_vocabularies.views import ConceptAutocompleteView
 from tests.factories import (
     CollectionFactory,
@@ -50,6 +53,7 @@ from tests.factories import (
     ConceptSchemeFactory,
     collection_with_members,
 )
+from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import Borehole, CoreSample, Sketch, Specimen
 
 
@@ -715,3 +719,16 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         ids = [result["id"] for result in body["results"]]
         assert len(ids) == len(set(ids))
         assert set(ids) == {alpha.pk, bravo.pk}
+
+
+class TestViewsI18nSweep:
+    def test_module_carries_no_bare_user_visible_literal(self):
+        source = Path(inspect.getfile(views_module)).read_text()
+        visitor = visit_fields_checks_source(source)
+        assert visitor.bare_literals == [], (
+            f"{views_module.__name__} passes a bare, untranslated literal to a user-visible sink: {visitor.bare_literals}"
+        )
+        assert visitor.positional_placeholders == [], (
+            f"{views_module.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
+        )

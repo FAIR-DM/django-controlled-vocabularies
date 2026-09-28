@@ -12,6 +12,7 @@ rendering the result through :class:`~controlled_vocabularies.management.renderi
 """
 
 import importlib
+import inspect
 import os
 import socket
 from io import StringIO
@@ -30,6 +31,7 @@ from controlled_vocabularies.management.commands import (
 )
 from controlled_vocabularies.management.commands.import_skos import Command
 from controlled_vocabularies.models import Concept, ConceptScheme
+from tests.i18n_sweep import visit_management_source
 
 FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "skos"
 SECURITY_FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "security"
@@ -732,3 +734,57 @@ class TestImportSkosCommandRemovesTheFetchedTemporaryFile:
         call_command("import_skos", str(FIXTURES / "rocks.ttl"), stdout=StringIO())
         assert seen == []
         assert (FIXTURES / "rocks.ttl").exists()
+
+
+class TestImportSkosCommandI18nSweep:
+    def test_every_output_string_is_translatable_with_named_placeholders(self):
+        source = Path(inspect.getfile(import_skos_command)).read_text()
+        visitor = visit_management_source(source)
+        assert visitor.positional_placeholders == [], (
+            f"{import_skos_command.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
+        )
+        assert visitor.bare_literals == [], (
+            f"{import_skos_command.__name__} passes a bare, untranslated literal to an output sink: {visitor.bare_literals}"
+        )
+
+
+class TestManagementI18nVisitorCatchesAViolation:
+    def test_catches_a_positional_placeholder_in_a_translation_call(self):
+        visitor = visit_management_source(
+            'from django.utils.translation import gettext_lazy as _\n_("%s changed")\n'
+        )
+        assert visitor.positional_placeholders == ["%s changed"]
+
+    def test_catches_a_bare_literal_raised_as_a_command_error(self):
+        visitor = visit_management_source(
+            "from django.core.management.base import CommandError\nraise CommandError('boom')\n"
+        )
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_written_to_stdout(self):
+        visitor = visit_management_source("self.stdout.write('boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_as_an_argument_help(self):
+        visitor = visit_management_source("parser.add_argument('--x', help='boom')\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_as_the_command_help_attribute(self):
+        visitor = visit_management_source(
+            "class Command(BaseCommand):\n    help = 'boom'\n"
+        )
+        assert visitor.bare_literals == ["boom"]
+
+    def test_catches_a_bare_literal_yielded_as_a_rendered_line(self):
+        visitor = visit_management_source("def render():\n    yield 'boom'\n")
+        assert visitor.bare_literals == ["boom"]
+
+    def test_does_not_flag_a_named_placeholder_or_a_translated_sink(self):
+        visitor = visit_management_source(
+            "from django.utils.translation import gettext_lazy as _\n"
+            "from django.core.management.base import CommandError\n"
+            "raise CommandError(str(_(\"'%(file)s' is fine.\")) % {'file': 'x'})\n"
+        )
+        assert visitor.positional_placeholders == []
+        assert visitor.bare_literals == []

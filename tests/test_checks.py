@@ -1,5 +1,6 @@
 """Tests for :mod:`controlled_vocabularies.checks` (T008, T009)."""
 
+import inspect
 import io
 import os
 import shutil
@@ -15,6 +16,7 @@ from django.db import connection
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
+from controlled_vocabularies import checks as checks_module
 from controlled_vocabularies.checks import (
     CHECK_ID,
     CHECK_ID_MISSING_INSTALLED_APP,
@@ -29,6 +31,7 @@ from controlled_vocabularies.checks import (
     check_tomselect_middleware_installed,
 )
 from tests.factories import CollectionFactory, ConceptFactory, ConceptSchemeFactory
+from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import Specimen
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -753,3 +756,16 @@ class TestProjectWithoutTheAdminIsUnaffected:
             model._meta.app_label for model in django_admin.site._registry
         }
         assert "controlled_vocabularies" not in registered_app_labels
+
+
+class TestChecksI18nSweep:
+    def test_module_carries_no_bare_user_visible_literal(self):
+        source = Path(inspect.getfile(checks_module)).read_text()
+        visitor = visit_fields_checks_source(source)
+        assert visitor.bare_literals == [], (
+            f"{checks_module.__name__} passes a bare, untranslated literal to a user-visible sink: {visitor.bare_literals}"
+        )
+        assert visitor.positional_placeholders == [], (
+            f"{checks_module.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
+        )

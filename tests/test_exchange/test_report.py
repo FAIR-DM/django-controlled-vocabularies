@@ -655,3 +655,51 @@ class TestDocumentSuppliedTextCannotDriveTheTerminal:
         rendered = entry.render()
         assert "https://example.org/vocab/rocks/granite (Granit, Gränit)" in rendered
         assert "es" in rendered
+
+
+class TestLanguageReasonMessagesUseNamedPlaceholders:
+    def test_language_substitution_reason_message_uses_named_placeholders(self):
+        assert isinstance(NormalizedReason.LANGUAGE_SUBSTITUTION.template, Promise), (
+            "LANGUAGE_SUBSTITUTION template is not lazily translatable"
+        )
+        template = str(NormalizedReason.LANGUAGE_SUBSTITUTION.template)
+        assert "%(language)s" in template and "%(kept_as)s" in template, (
+            "LANGUAGE_SUBSTITUTION template lacks named %(language)s/%(kept_as)s placeholders"
+        )
+        entry = NormalizedEntry(
+            reason=NormalizedReason.LANGUAGE_SUBSTITUTION,
+            subject="https://example.org/vocab/rocks/granite",
+            params={"language": "en-gb", "kept_as": "en"},
+        )
+        rendered = entry.render()
+        assert "en-gb" in rendered
+        assert "en" in rendered
+
+    def test_the_kept_as_placeholder_actually_interpolates_its_own_value(self):
+        # "en" is a substring of "en-gb", so the test above still passes if
+        # %(kept_as)s stops interpolating. These values do not overlap.
+        entry = NormalizedEntry(
+            reason=NormalizedReason.LANGUAGE_SUBSTITUTION,
+            subject="https://example.org/vocab/rocks/granite",
+            params={"language": "en-gb", "kept_as": "zh-hans"},
+        )
+        rendered = entry.render()
+        assert "en-gb" in rendered
+        assert "zh-hans" in rendered
+
+    def test_variant_not_kept_reason_message_uses_named_placeholders(self):
+        assert isinstance(SetAsideReason.VARIANT_NOT_KEPT.template, Promise), (
+            "VARIANT_NOT_KEPT template is not lazily translatable"
+        )
+        template = str(SetAsideReason.VARIANT_NOT_KEPT.template)
+        assert "%(language)s" in template and "%(kept_as)s" in template, (
+            "VARIANT_NOT_KEPT template lacks named %(language)s/%(kept_as)s placeholders"
+        )
+        entry = SetAsideEntry(
+            reason=SetAsideReason.VARIANT_NOT_KEPT,
+            subject="https://example.org/vocab/rocks/granite",
+            params={"language": "en-us", "kept_as": "en-gb"},
+        )
+        rendered = entry.render()
+        assert "en-us" in rendered
+        assert "en-gb" in rendered

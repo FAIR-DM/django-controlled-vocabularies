@@ -39,7 +39,9 @@ also registered on dedicated sites here rather than in
 ``tests/testapp/admin.py``, per the same convention (``decisions.md`` D22).
 """
 
+import inspect
 import re
+from pathlib import Path
 
 import pytest
 from django import forms
@@ -50,6 +52,7 @@ from django.db.models import ProtectedError
 from django.test import override_settings
 from django.urls import include, path, reverse
 
+from controlled_vocabularies import admin as admin_module
 from controlled_vocabularies.models import Concept
 from tests.factories import (
     ConceptFactory,
@@ -58,6 +61,7 @@ from tests.factories import (
     OutcropFactory,
     SpecimenFactory,
 )
+from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import Locality, Outcrop, Specimen
 
 
@@ -1121,4 +1125,17 @@ class TestCustomAdminSiteGetsTheSameBehaviour:
         )
         _assert_control_rendered(
             custom_response.content.decode(), Specimen, "rock_type"
+        )
+
+
+class TestAdminModuleI18nSweep:
+    def test_module_carries_no_bare_user_visible_literal(self):
+        source = Path(inspect.getfile(admin_module)).read_text()
+        visitor = visit_fields_checks_source(source)
+        assert visitor.bare_literals == [], (
+            f"{admin_module.__name__} passes a bare, untranslated literal to a user-visible sink: {visitor.bare_literals}"
+        )
+        assert visitor.positional_placeholders == [], (
+            f"{admin_module.__name__} passes a positional placeholder to a translation call: "
+            f"{visitor.positional_placeholders}"
         )
