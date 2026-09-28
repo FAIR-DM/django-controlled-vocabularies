@@ -523,8 +523,8 @@ class TestConceptFieldDeclinesTheAdminWrapper:
         assert field.widget is ordinary_widget
 
 
-# The listener in concept-inline.js is browser behaviour, so only its shipping is
-# asserted.
+# The listener in concept-inline.js is browser behaviour, so these tests check only that
+# it ships.
 class TestConceptWidgetsShipTheInlineInitialisationScript:
     _ASSET = "controlled_vocabularies/js/concept-inline.js"
 
