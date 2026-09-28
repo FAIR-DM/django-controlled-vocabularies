@@ -1,7 +1,4 @@
-"""Tests proving the ui templates carry no vocabulary link and no untranslated reader-visible
-text (T009, FR-013, decisions.md D1, and the repo's every-string-translated convention), and,
-from 015-read-single-record T002, the ``property_row`` component's own rendering and CSS.
-"""
+"""Tests for the shipped ui templates and the ``property_row`` Cotton component."""
 
 import re
 from pathlib import Path
@@ -16,12 +13,17 @@ from tests.factories import ConceptSchemeFactory
 
 
 def visible_text(element) -> str:
-    """``element``'s text with any ``.sr-only`` descendant's own text left out.
+    """Join an element's text, leaving out any ``.sr-only`` descendant.
 
-    015-read-single-record T029 (corrected): a disclosed identifier's text is a real
-    node in the DOM, inside a visually-hidden span a screen reader still reads — so
-    ``get_text()`` alone cannot tell "printed for every reader" from "reachable only
-    behind a tooltip and an accessible description".
+    A disclosed identifier is a real DOM node inside a visually hidden span, so
+    ``get_text()`` alone cannot tell text printed for every reader from text reachable only
+    through a tooltip and an accessible description.
+
+    Args:
+        element: The parsed element to read.
+
+    Returns:
+        The element's text nodes concatenated.
     """
     return "".join(
         node
@@ -46,23 +48,17 @@ PROPERTY_ROW_TEMPLATE = "cotton/controlled_vocabularies/property_row.html"
 PROPERTY_ROW_TEMPLATE_PATH = (
     TEMPLATES_ROOT / "cotton" / "controlled_vocabularies" / "property_row.html"
 )
-# 015-read-single-record T023, FR-006: every template that carries an in-site link, widened
-# from the one file ROW_TEMPLATE_PATH named on its own — the two row partials plus
-# property_row.html, which composes the in-site link T003's record-valued rows carry.
+# Every template that carries an in-site link (FS-015).
 IN_SITE_LINK_TEMPLATE_PATHS = [
     ROW_TEMPLATE_PATH,
     CONCEPT_ROW_TEMPLATE_PATH,
     PROPERTY_ROW_TEMPLATE_PATH,
 ]
-# mvp is a namespace package (no __init__.py), so it carries no __file__ — its own
-# __path__ is the only way to locate the package directory.
+# mvp is a namespace package with no __file__, so __path__ is the only way to find it.
 MVP_CSS_PATH = Path(mvp.__path__[0]) / "static" / "css" / "django-mvp.css"
 
-# Django syntax that is already known-safe and is stripped before the reader-visible-text scan:
-# a developer comment, a blocktrans block (translated, content and all), any remaining tag
-# (including a `{% trans %}` — its quoted content is translated, so removing tag and content
-# together is correct), and a variable interpolation (dynamic — not a literal string this
-# template owns the wording of).
+# Django syntax stripped before the reader-visible-text scan: comments, blocktrans blocks,
+# any remaining tag (a `{% trans %}` carries its translated text inside the tag) and variables.
 _COMMENT_RE = re.compile(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}", re.DOTALL)
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 _BLOCKTRANS_RE = re.compile(r"{%\s*blocktrans.*?{%\s*endblocktrans\s*%}", re.DOTALL)
@@ -73,13 +69,16 @@ _WORD_RE = re.compile(r"[A-Za-z]{2,}")
 
 
 def bare_reader_visible_text_nodes(source: str) -> list[str]:
-    """Every text-node fragment left after Django's own translation and comment syntax is
-    stripped out — a non-empty result names a string the convention (every reader-visible
-    string wrapped in a translation tag) failed to wrap. Scoped to text nodes (content
-    between tags), not attribute values — this app's own templates put every reader-visible
-    string there deliberately, for exactly this reason (T009: attribute-value scanning
-    cannot tell a literal string from a structural token like a slot name or a size key
-    without a real HTML/template parser, which does not earn its cost at this app's size).
+    """Find text-node fragments left once translation and comment syntax is stripped.
+
+    Only text nodes are scanned, not attribute values: without a real template parser an
+    attribute value cannot be told from a structural token such as a slot name.
+
+    Args:
+        source: The raw template source.
+
+    Returns:
+        Fragments containing letters, which a translation tag should have wrapped.
     """
     stripped = _COMMENT_RE.sub("", source)
     stripped = _HTML_COMMENT_RE.sub("", stripped)
@@ -90,27 +89,18 @@ def bare_reader_visible_text_nodes(source: str) -> list[str]:
 
 
 class TestRowPartialLinksToTheVocabulary:
-    """FR-013, T004 — the row partial's own source, the inverse of what #140 asserted here.
-
-    #140 held that no entry may link to a vocabulary, because no address served one; T001
-    gives every vocabulary a page, so the entry now leads to it. What remains true from #140
-    is the second assertion: the in-site link is reversed from the route's name, never
-    composed from the identifier base address, which is a public identifier and may point at
-    another site's publisher entirely.
-    """
-
     def test_the_row_partial_source_reverses_the_vocabularys_own_route(self):
         source = ROW_TEMPLATE_PATH.read_text()
         assert "{% url 'controlled_vocabularies_ui:vocabulary-detail'" in source
 
     def test_the_row_partial_source_contains_no_local_url_reference(self):
+        # The base address is a public identifier and may point at another site's publisher,
+        # so the in-site link is reversed from the route name instead.
         source = ROW_TEMPLATE_PATH.read_text()
         assert "local_url" not in source
 
 
 class TestRenderedPageLinksToEachVocabulary:
-    """FR-013 stated the second way: scanning the page as actually rendered."""
-
     @pytest.mark.django_db
     def test_every_entry_on_the_page_carries_an_anchor_to_its_own_page(self, client):
         schemes = [ConceptSchemeFactory(), ConceptSchemeFactory()]
@@ -130,16 +120,9 @@ class TestRenderedPageLinksToEachVocabulary:
 
 
 class TestConceptRowPartialLinksToItsOwnPage:
-    """015-read-single-record T019, FR-015 — the inverse of what T008 asserted here.
-
-    T008 held that a concept's row carries nothing to follow, because no address served
-    one; this feature gives every concept a page, so the row now leads to it. The row
-    renders in an isolated context holding only the object (`render_list_item` builds a
-    fresh context per row), so the address is reversed from ``object.scheme`` and
-    ``object.slug`` alone, never from a variable the surrounding page happens to carry.
-    """
-
     def test_the_row_partial_source_reverses_the_concepts_own_route(self):
+        # The row renders in a fresh context holding only the object, so the address comes
+        # from object.scheme and object.slug alone.
         source = CONCEPT_ROW_TEMPLATE_PATH.read_text()
         assert "{% url 'controlled_vocabularies_ui:concept-detail'" in source
 
@@ -149,13 +132,6 @@ class TestConceptRowPartialLinksToItsOwnPage:
 
 
 class TestConceptSchemeDetailCollectionsLinkToTheirOwnPages:
-    """015-read-single-record T020, FR-015 — the inverse of what
-    `TestVocabularyDetailCollections.test_nothing_links_to_a_collection`
-    (test_views.py) asserted here: a collection was named but nothing linked to it,
-    because no address served one. This feature gives every collection a page, so
-    each entry now leads to it.
-    """
-
     def test_the_page_source_reverses_the_collections_own_route(self):
         source = CONCEPTSCHEME_DETAIL_TEMPLATE_PATH.read_text()
         assert "{% url 'controlled_vocabularies_ui:collection-detail'" in source
@@ -166,34 +142,19 @@ class TestConceptSchemeDetailCollectionsLinkToTheirOwnPages:
 
 
 class TestEveryTemplateCarryingAnInSiteLinkContainsNoLocalUrlReference:
-    """015-read-single-record T023, FR-006 — the guard
-    :class:`TestRowPartialLinksToTheVocabulary` and
-    :class:`TestConceptRowPartialLinksToItsOwnPage` each make for their own one
-    template, widened to every template that carries an in-site link: the two row
-    partials plus ``property_row.html``, which composes T003's record-valued rows'
-    own in-site link from a caller-supplied ``href`` rather than reversing a route
-    itself. A broadening, not a supersession — every one of the per-template
-    assertions above still runs unchanged; this adds the coverage none of them gave
-    ``property_row.html``.
-    """
-
     @pytest.mark.parametrize(
         "path",
         IN_SITE_LINK_TEMPLATE_PATHS,
         ids=lambda p: str(p.relative_to(TEMPLATES_ROOT)),
     )
     def test_the_template_source_contains_no_local_url_reference(self, path):
-        # Stripped of {% comment %} blocks first, the same known-safe syntax
-        # bare_reader_visible_text_nodes above already treats as inert: property_row.html's
-        # own comment explains in prose why it avoids local_url, which would otherwise read
-        # as a false positive of the very thing this guard exists to catch.
+        # Comment blocks are stripped first: property_row.html explains in a comment why it
+        # avoids local_url.
         markup = _COMMENT_RE.sub("", path.read_text())
         assert "local_url" not in markup
 
 
 class TestEveryShippedTemplateWrapsReaderVisibleTextInATranslationTag:
-    """Every reader-visible string is translatable (repo convention, checked mechanically per T009)."""
-
     @pytest.mark.parametrize(
         "path",
         sorted(TEMPLATES_ROOT.rglob("*.html")),
@@ -205,8 +166,6 @@ class TestEveryShippedTemplateWrapsReaderVisibleTextInATranslationTag:
 
 
 class TestPropertyRowRendersAPlainValue:
-    """A term and a plain value render as a ``<dt>``/``<dd>`` pair (T002, FR-016)."""
-
     def test_emits_a_dt_dd_pair_carrying_the_term_and_the_value(self):
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
@@ -225,13 +184,6 @@ class TestPropertyRowRendersAPlainValue:
 
 
 class TestPropertyRowRendersARecordValue:
-    """A record-valued row also carries the record's short form, its canonical identifier
-    as reader-reachable text, and its in-site link (T002, FR-016, plan.md Key design
-    decision #6). ``href`` is a plain string here, exactly as :func:`render_to_string`
-    receives one in isolation — reversing it through the app's own namespace is the
-    caller's job (T003), not this component's.
-    """
-
     def test_renders_the_short_form_as_the_in_site_links_own_text(self):
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
@@ -249,10 +201,8 @@ class TestPropertyRowRendersARecordValue:
         assert anchor.get_text(strip=True) == "geology:granite"
 
     def test_the_canonical_identifier_is_disclosed_on_hover_not_printed_as_text(self):
-        # 015-read-single-record T029 (corrected): the full identifier is disclosed
-        # behind the short form — a tooltip for a pointer, aria-describedby naming a
-        # hidden span for a keyboard user and a screen reader — not printed as
-        # ordinary text beside it, and never in a title attribute.
+        # A title attribute is announced only for some screen-reader users, so the identifier
+        # is disclosed through a tooltip plus aria-describedby naming a hidden span.
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
             {
@@ -275,18 +225,9 @@ class TestPropertyRowRendersARecordValue:
 
 
 class TestPropertyRowRecordValueDisclosesIdentifierOnHover:
-    """FR-007's later clarification: the full identifier is disclosed behind the short
-    form, not printed inline beside it, and reachable by more than a pointer alone
-    (015-read-single-record T029, corrected). daisyUI's ``:has(:focus-visible)``
-    reveal rule matches a focused *descendant*, so the ``.tooltip`` element must wrap
-    the link rather than be a class on the anchor itself, or a keyboard user tabbing
-    to the link never sees it. The accessible description is carried by
-    ``aria-describedby`` naming a visually-hidden ``.sr-only`` span, not ``title`` —
-    ``aria-describedby`` wins where both are present, and a screen reader's
-    willingness to announce ``title`` is a per-user setting.
-    """
-
     def test_the_tooltip_wraps_the_link_rather_than_a_class_on_it(self):
+        # daisyUI reveals a tooltip on a focused descendant, so the tooltip element has to
+        # wrap the link or a keyboard user tabbing to it never sees the identifier.
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
             {
@@ -302,9 +243,6 @@ class TestPropertyRowRecordValueDisclosesIdentifierOnHover:
         anchor = dd.find("a", href="/vocabularies/geology/granite/")
 
         assert anchor is not None
-        # The broken arrangement this replaces put class="tooltip" on the anchor
-        # itself — asserting only that data-tip exists somewhere would still pass
-        # against that shape, so the anchor's own class is asserted clean of it.
         assert "tooltip" not in anchor.get("class", [])
         assert anchor.get("title") is None
 
@@ -322,13 +260,6 @@ class TestPropertyRowRecordValueDisclosesIdentifierOnHover:
 
 
 class TestPropertyRowTermDisclosesItsOwnURI:
-    """015-read-single-record second round: the ``<dt>`` lost the ``<abbr title=...>``
-    arrangement T031 first used, in favour of the same wrapping-``.tooltip``-span and
-    visually-hidden ``.sr-only``-span shape
-    :class:`TestPropertyRowRecordValueDisclosesIdentifierOnHover` proves for a ``<dd>``.
-    Covers what none of the tests above prove about the ``<dt>`` itself.
-    """
-
     def test_the_dt_carries_neither_text_xs_nor_uppercase(self):
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
@@ -365,34 +296,29 @@ class TestPropertyRowTermDisclosesItsOwnURI:
         assert "http://publisher.example.org/broader" not in visible_text(dt)
 
 
-# A class name never continues past one of these in the shipped stylesheet: the brace of a
-# standalone rule, or a combinator, attribute selector, pseudo-class or list separator gluing
-# it to the rest of a compound selector. Required so "tooltip-right" cannot match a would-be
-# "tooltip-rightmost" — the boundary check is what makes the match a name match rather than a
-# prefix match.
+# A class name ends at one of these in the stylesheet, so "tooltip-right" cannot match
+# "tooltip-rightmost".
 _SELECTOR_BOUNDARY = r"[{>:,\[)\s]"
 
 
 def _tailwind_selector_pattern(class_token: str) -> re.Pattern[str]:
-    """A regex matching ``class_token`` as the shipped stylesheet actually spells it, at a
-    real selector boundary: Tailwind backslash-escapes a colon or a slash inside a compiled
-    class name (memory: "built CSS escapes the colon" — the same is true of the slash a class
-    like ``text-base-content/60`` carries), so the escaped spelling is matched, not the raw
-    token. And daisyUI's positional tooltip classes such as ``tooltip-right`` never appear as
-    a standalone ``.token{`` rule — only glued to a combinator or another selector, e.g.
-    ``.tooltip-right>.tooltip-content`` or ``.tooltip-right:after`` — so a bare ``{`` search
-    returns a false negative for a class that is plainly shipped and would work.
+    """Build a regex matching a class as the shipped stylesheet spells it.
+
+    Tailwind backslash-escapes a colon or slash in a compiled class name, and daisyUI's
+    positional tooltip classes only appear glued to another selector, never as a standalone
+    rule, so both are handled here.
+
+    Args:
+        class_token: The class name as written in a template.
+
+    Returns:
+        A pattern matching the class at a selector boundary.
     """
     escaped = re.escape(class_token.replace("/", r"\/").replace(":", r"\:"))
     return re.compile(rf"\.{escaped}(?={_SELECTOR_BOUNDARY})")
 
 
 class TestPropertyRowClasses:
-    """Every class the component names by hand is present in django-mvp's own shipped
-    stylesheet (T002) — this package ships none of its own, and django-mvp's is prebuilt
-    from django-mvp's own templates, so an invented class would be silently inert.
-    """
-
     def test_every_class_the_component_names_is_present_in_the_shipped_stylesheet(self):
         source = PROPERTY_ROW_TEMPLATE_PATH.read_text()
         css = MVP_CSS_PATH.read_text()
@@ -412,19 +338,13 @@ class TestPropertyRowClasses:
             )
 
     def test_a_class_shipped_only_inside_a_compound_selector_is_still_found(self):
-        # tooltip-right (015-read-single-record second round) never appears as a standalone
-        # rule — only as ".tooltip-right>.tooltip-content,.tooltip-right[data-tip]:before" and
-        # ".tooltip-right:after". A matcher that only accepted a trailing "{" would report this
-        # class absent though it ships and works, which is the false negative this guard exists
-        # to fix.
+        # tooltip-right only ships inside compound selectors such as ".tooltip-right:after".
         css = MVP_CSS_PATH.read_text()
         assert _tailwind_selector_pattern("tooltip-right").search(css)
 
     def test_the_presence_check_discriminates_rather_than_passing_regardless(self):
-        # A control class the build has no reason to emit: this package's own component
-        # could never legitimately name it, so its absence proves the check above tells a
-        # real class from an absent one instead of matching anything handed to it — which
-        # is exactly the failure mode an invented class would hit in silence otherwise.
+        # A class the build never emits proves the check can tell a real class from an absent
+        # one.
         css = MVP_CSS_PATH.read_text()
         assert (
             _tailwind_selector_pattern("cv-property-row-invented-class").search(css)
@@ -434,29 +354,16 @@ class TestPropertyRowClasses:
     def test_the_boundary_does_not_let_a_shorter_class_match_inside_a_longer_ones_name(
         self,
     ):
-        # Widening the boundary to accept a compound selector must not widen it into a prefix
-        # match: a stylesheet naming only ".tooltip-rightmost" never ships "tooltip-right" at
-        # all, so the check for the shorter name must still report it absent.
+        # A stylesheet naming only ".tooltip-rightmost" does not ship "tooltip-right".
         css = ".tooltip-rightmost{color:red}"
         assert _tailwind_selector_pattern("tooltip-right").search(css) is None
 
 
-# The tag name portion only — up to the first whitespace, "/" or ">" — so a cotton
-# directive's own variables (e.g. <c-vars term term_uri ...>, which legitimately name
-# underscored context keys after the tag name) are never mistaken for the tag name itself.
+# The tag name only, so the underscored variables in ``<c-vars term term_uri>`` never match.
 _COTTON_TAG_NAME_RE = re.compile(r"</?c-([A-Za-z0-9_.:-]*)")
 
 
 class TestNoTemplateNamesACottonComponentWithAnUnderscore:
-    """Repo-wide convention: a cotton component tag always uses hyphens, never
-    underscores — property_row.html's own three call sites were still written
-    ``<c-controlled_vocabularies.property_row />`` until this round (the file path on
-    disk keeps its own underscores; this is about what a template writes, not what
-    cotton resolves the tag from). Asserted across every shipped template, not only the
-    two this feature touched, because the convention holds regardless of which feature
-    next writes a cotton tag.
-    """
-
     @pytest.mark.parametrize(
         "path",
         sorted(TEMPLATES_ROOT.rglob("*.html")),

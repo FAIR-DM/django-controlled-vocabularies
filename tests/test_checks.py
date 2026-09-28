@@ -1,4 +1,4 @@
-"""Tests for :mod:`controlled_vocabularies.checks` (T008, T009)."""
+"""Tests for controlled_vocabularies.checks."""
 
 import inspect
 import io
@@ -40,14 +40,19 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def _run_django_admin(
     *args: str, settings: str = "tests.settings"
 ) -> subprocess.CompletedProcess:
-    """Run ``django-admin`` in a fresh subprocess against a brand-new, never-migrated
-    ``:memory:`` sqlite database (``tests/settings.py``'s ``DATABASES``) — the state
-    the very first ``migrate`` on a real install runs the checks against (T009).
+    """Run ``django-admin`` in a fresh subprocess against a never-migrated database.
 
-    ``settings`` defaults to today's module and is overridden by T014 to run against
-    ``tests.settings_no_admin`` — proving the no-admin case needs a fresh interpreter
-    with a different ``INSTALLED_APPS``, which only a subprocess can give (012
-    decisions.md D13, D-T014)."""
+    The database is a brand-new in-memory sqlite one, the state the first ``migrate`` on a
+    real install runs the checks against. A subprocess is the only way to run under a
+    different ``INSTALLED_APPS`` (docs/adr/0013-the-django-admin-stays-an-optional-dependency.md).
+
+    Args:
+        *args: The arguments to ``django-admin``.
+        settings: The settings module to run under.
+
+    Returns:
+        The completed process, with its output captured.
+    """
     env = {**os.environ, "DJANGO_SETTINGS_MODULE": settings}
     uv = shutil.which("uv")
     assert uv is not None, "uv must be on PATH to run this test"
@@ -63,9 +68,6 @@ def _run_django_admin(
 
 @pytest.mark.django_db
 class TestCheckConceptFieldVocabularies:
-    """T008 — the check walks every declared ``ConceptField`` and warns about the
-    ones naming a vocabulary absent from the database."""
-
     def test_warns_about_a_field_whose_vocabulary_is_absent(self):
         warnings = check_concept_field_vocabularies(None)
         by_field = {(w.obj.model._meta.label, w.obj.name): w for w in warnings}
@@ -94,8 +96,6 @@ class TestCheckConceptFieldVocabularies:
     def test_reports_only_the_absent_vocabulary_when_a_concept_field_names_several(
         self,
     ):
-        """#111 — the single-value field reaches the check the same way the
-        many-valued one does, one warning per absent slug it names."""
         ConceptSchemeFactory(name="Rock Type")
 
         warnings = check_concept_field_vocabularies(None)
@@ -112,9 +112,6 @@ class TestCheckConceptFieldVocabularies:
         assert "rock-type" not in message
 
     def test_never_reports_a_concept_field_naming_no_vocabulary(self):
-        """#111 — a single-value field naming none names nothing that could be
-        missing, so the check has nothing to say about it, before or after any
-        vocabulary is imported."""
         assert [
             w
             for w in check_concept_field_vocabularies(None)
@@ -131,10 +128,6 @@ class TestCheckConceptFieldVocabularies:
         ] == []
 
     def test_costs_one_query_however_many_fields_are_declared(self):
-        # The test app declares several ConceptField and ConceptsField
-        # instances (T010 widens the check to cover both) across a handful
-        # of distinct vocabularies. However many slugs those fields name
-        # between them, the distinct set is still resolved in one query.
         with CaptureQueriesContext(connection) as ctx:
             check_concept_field_vocabularies(None)
 
@@ -143,11 +136,6 @@ class TestCheckConceptFieldVocabularies:
 
 @pytest.mark.django_db
 class TestCheckConceptsFieldVocabularies:
-    """T010 — the check widens to cover ``ConceptsField`` too (US-6, FR-003,
-    FR-004, D9): a field naming several vocabularies contributes each slug it
-    names, and a field naming none contributes nothing and is never warned
-    about."""
-
     def test_warns_about_a_concepts_field_whose_vocabulary_is_absent(self):
         warnings = check_concept_field_vocabularies(None)
 
@@ -232,14 +220,6 @@ class TestCheckConceptsFieldVocabularies:
 
 @pytest.mark.django_db
 class TestCheckConceptFieldRestrictionTargets:
-    """T019 (FS-016 US-5, FR-009) — a new check walking every declared
-    ``collection``, ``concepts`` and ``branch`` restriction, warning about the
-    ones naming a target absent from the vocabulary the field itself names.
-    ``CoreSample``/``DrillCore`` (collection), ``ChipSample``/``ChipTray``
-    (concepts) and ``BranchSample``/``BranchTray`` (branch) all restrict to
-    the "rock-type" vocabulary, so no vocabulary needs creating here — only
-    the target rows this check is deciding are present or absent."""
-
     def test_warns_about_an_absent_collection_target(self):
         warnings = check_concept_field_restriction_targets(None)
 
@@ -250,8 +230,6 @@ class TestCheckConceptFieldRestrictionTargets:
         assert "rock-type" in message
 
     def test_warns_about_an_absent_concepts_target_naming_the_specific_slug(self):
-        """A ten-item ``concepts`` list with one typo names the one missing
-        slug, not the list — here a two-item list with one present."""
         scheme = ConceptSchemeFactory(name="Rock Type")
         ConceptFactory(scheme=scheme, label="Granite")
 
@@ -300,13 +278,6 @@ class TestCheckConceptFieldRestrictionTargets:
         ] == []
 
     def test_resolves_on_the_vocabulary_and_target_pair_not_a_flat_set_of_slugs(self):
-        """The one thing most likely to be got wrong (plan.md A6, decisions.md
-        D7): a collection slug is unique only within its own scheme, so a
-        collection named "core-samples" that exists in a *different*
-        vocabulary ("mineral") must not be read as satisfying
-        ``CoreSample.rock_type``'s restriction, which names "core-samples"
-        within "rock-type". A flat set of existing collection slugs would
-        wrongly consider this one present."""
         other_scheme = ConceptSchemeFactory(name="Mineral")
         CollectionFactory(scheme=other_scheme, name="Core samples")
 
@@ -329,9 +300,8 @@ class TestCheckConceptFieldRestrictionTargets:
             assert warning.id == CHECK_ID_MISSING_RESTRICTION_TARGET
 
     def test_costs_three_queries_however_many_fields_are_declared(self):
-        # One batched query per target kind (collection, concepts, branch),
-        # never one per field — the same batching check_concept_field_vocabularies
-        # already uses, extended to the three restriction axes.
+        # One batched query per target kind (collection, concepts, branch), never one
+        # per field.
         with CaptureQueriesContext(connection) as ctx:
             check_concept_field_restriction_targets(None)
 
@@ -340,12 +310,7 @@ class TestCheckConceptFieldRestrictionTargets:
 
 @pytest.mark.django_db
 class TestCheckConceptFieldRestrictionTargetsStaysQuietWhenItShould:
-    """T020 (FS-016 US-5, FR-009) — the three silences, plus the one case W005
-    must not be quiet for."""
-
     def test_a_collection_that_exists_and_holds_no_members_is_not_reported(self):
-        """Present and empty is not missing (plan.md A6): a curator's
-        legitimate, unpopulated collection is not a declaration error."""
         scheme = ConceptSchemeFactory(name="Rock Type")
         CollectionFactory(scheme=scheme, name="Core samples")
 
@@ -372,11 +337,6 @@ class TestCheckConceptFieldRestrictionTargetsStaysQuietWhenItShould:
         assert CHECK_ID_MISSING_RESTRICTION_TARGET not in stderr.getvalue()
 
     def test_still_reports_a_target_whose_slug_exists_in_a_different_vocabulary(self):
-        """The case this check exists to catch, on the concepts axis this
-        time: a concept slug that only exists in a different vocabulary is
-        still reported absent from the one the field names. "basalt" is made
-        genuinely present in "rock-type" so the one surviving warning can
-        only be about "granite"."""
         rock_type = ConceptSchemeFactory(name="Rock Type")
         ConceptFactory(scheme=rock_type, label="Basalt")
         other_scheme = ConceptSchemeFactory(name="Mineral")
@@ -396,13 +356,6 @@ class TestCheckConceptFieldRestrictionTargetsStaysQuietWhenItShould:
 
 
 class TestCheckRestrictionTargetsSurvivesUnmigratedDatabase:
-    """T020 — the check runs before ``migrate``, so it must survive a database
-    with no tables rather than raising. Exercised against a genuinely
-    unmigrated connection (a fresh subprocess, never-migrated ``:memory:``
-    database), not a mock of ``DatabaseError`` — reproducing
-    ``TestCheckSurvivesUnmigratedDatabase``'s own reasoning for this check's
-    guard."""
-
     def test_check_reports_nothing_against_an_unmigrated_connection(self):
         result = _run_django_admin("check")
 
@@ -418,9 +371,8 @@ from controlled_vocabularies.checks import check_concept_field_restriction_targe
 
 call_command("migrate", verbosity=0)
 
-# Non-vacuous: the tables now exist and hold none of the restriction targets
-# CoreSample/ChipSample/BranchSample and friends name, so the check must
-# actually have something to report at this point.
+# Non-vacuous: the tables exist and hold none of the restriction targets, so the check
+# must have something to report.
 warnings = check_concept_field_restriction_targets(None)
 assert warnings, "expected W005 to report the absent restriction targets once the tables exist"
 
@@ -432,12 +384,6 @@ print("ALL_SUCCEEDED")
 
 
 class TestNothingAboutAnAbsentRestrictionTargetStopsTheProject:
-    """T021 (FS-016 US-5) — FR-007 end to end for this feature: with every
-    named restriction target absent, importing the models, ``makemigrations``
-    and ``migrate`` all succeed. This is the assertion that would catch
-    someone "helpfully" turning W005 into an ``Error`` or resolving a
-    restriction target at declaration time."""
-
     def test_check_makemigrations_and_migrate_all_succeed_with_every_target_absent(
         self,
     ):
@@ -454,11 +400,6 @@ class TestNothingAboutAnAbsentRestrictionTargetStopsTheProject:
 
 
 class TestCheckSurvivesUnmigratedDatabase:
-    """T009 — the check runs before ``migrate``, so it must survive a database with
-    no tables rather than raising. Exercised against a genuinely unmigrated
-    connection (a fresh subprocess, never-migrated ``:memory:`` database), not a
-    mock of ``DatabaseError`` (`plan.md` Risks, `research.md` R3)."""
-
     def test_check_reports_nothing_against_an_unmigrated_connection(self):
         result = _run_django_admin("check")
 
@@ -500,10 +441,6 @@ class TestCheckSurvivesUnmigratedDatabase:
 
 
 class TestCheckConceptAutocompleteRouteIncluded:
-    """T008 — warns when the project has not included this package's URL
-    configuration (FR-010, decisions.md D14). ``reverse()`` resolves entirely
-    against the already-loaded URLconf, so this never touches the database."""
-
     def test_warns_when_the_route_is_not_included(self):
         with override_settings(ROOT_URLCONF=()):
             warnings = check_concept_autocomplete_route_included(None)
@@ -534,11 +471,6 @@ class TestCheckConceptAutocompleteRouteIncluded:
 
 
 class TestCheckDjangoTomselectInstalled:
-    """T008 — warns when ``django_tomselect`` is not among the project's
-    installed applications (FR-010, decisions.md D10). ``apps.is_installed()``
-    reads the already-loaded app registry, so this never touches the
-    database."""
-
     def test_warns_when_django_tomselect_is_not_installed(self):
         installed = [
             app for app in settings.INSTALLED_APPS if app != "django_tomselect"
@@ -576,11 +508,6 @@ class TestCheckDjangoTomselectInstalled:
 
 @pytest.mark.django_db
 class TestBothWiringChecksReachManageCheck:
-    """T008 — FR-010 promises the two wiring steps are *reported*, which a
-    function nobody registered never does. Calling the check functions directly
-    passes whether or not ``apps.ready()`` registers them, so these assert on
-    what a project actually runs: ``manage.py check``."""
-
     def test_the_missing_route_is_reported_by_manage_check(self):
         stderr = io.StringIO()
         with override_settings(ROOT_URLCONF=()):
@@ -612,11 +539,6 @@ class TestBothWiringChecksReachManageCheck:
 
 
 class TestCheckTomselectMiddlewareInstalled:
-    """US-6 repair — the third wiring step (decisions.md D15). Without
-    ``TomSelectMiddleware`` the widget renders an empty select carrying no
-    control, and nothing raises, so this check is the only report of it.
-    ``settings.MIDDLEWARE`` is read directly, so it never touches the database."""
-
     def test_warns_when_the_middleware_is_not_installed(self):
         with override_settings(MIDDLEWARE=[]):
             warnings = check_tomselect_middleware_installed(None)
@@ -648,15 +570,9 @@ class TestCheckTomselectMiddlewareInstalled:
 
 @pytest.mark.django_db
 class TestTheMiddlewareCheckReachesManageCheck:
-    """US-6 repair — same reasoning as :class:`TestBothWiringChecksReachManageCheck`:
-    a check nobody registered reports nothing, whatever it returns."""
-
     def test_the_missing_middleware_is_reported_by_manage_check(self):
-        # Drop only the middleware under test rather than emptying the list: since
-        # 012 T001 the test project installs django.contrib.admin, whose own checks
-        # refuse an empty MIDDLEWARE and would abort the command before this
-        # assertion (012 decisions.md D17). Isolating the one entry is also the
-        # narrower test — it cannot pass for a reason other than the one it names.
+        # Drop only this entry, not the whole list: the admin's own checks refuse an
+        # empty MIDDLEWARE and would abort the command before the assertion.
         remaining = [m for m in settings.MIDDLEWARE if m != TOMSELECT_MIDDLEWARE]
         stderr = io.StringIO()
         with override_settings(MIDDLEWARE=remaining):
@@ -693,29 +609,6 @@ print("ADMIN_NOT_IMPORTED")
 
 
 class TestProjectWithoutTheAdminIsUnaffected:
-    """T014 — FR-006, US-5 scenarios 1 and 2, SC-005: a project that never
-    installs ``django.contrib.admin`` sees no change from this feature.
-
-    ``tests/settings_no_admin.py`` mirrors ``tests/settings.py`` minus the
-    admin app and its supporting middleware/apps (``decisions.md`` D13's
-    reasoning extended to this story). Every assertion here runs against it
-    in a fresh subprocess, via ``_run_django_admin``'s new ``settings``
-    parameter — a single process' app registry and ``sys.modules`` are built
-    once at startup, so nothing in-process can prove either absent.
-
-    The two ``check`` tests mirror :class:`TestCheckSurvivesUnmigratedDatabase`'s
-    already-clean baseline under ``tests.settings``: the no-admin
-    configuration must report exactly as little, not merely something.
-
-    The ``sys.modules`` assertion is deliberately not "``controlled_vocabularies.admin``
-    is unimported" — ``forms.py`` calls its lookup on every render, so that
-    module is imported whether or not the admin is installed (``decisions.md``
-    D10). What FR-006 actually forbids is ``django.contrib.admin`` itself
-    reaching ``sys.modules``, which is what the rendered form here is built to
-    prove: the lookup runs, finds the admin not installed, and returns
-    without importing it.
-    """
-
     def test_check_is_as_clean_without_the_admin_as_it_is_with_it(self):
         result = _run_django_admin("check", settings="tests.settings_no_admin")
 
@@ -745,10 +638,6 @@ class TestProjectWithoutTheAdminIsUnaffected:
     def test_controlled_vocabularies_admin_registers_nothing_with_the_default_site(
         self, settings
     ):
-        """With the admin installed (``tests.settings``, this suite's default),
-        ``controlled_vocabularies.admin`` still registers nothing — the module
-        exists only to hold the lazy lookup (``decisions.md`` D10), never a
-        ``@admin.register``."""
         from django.contrib import admin as django_admin
 
         assert "django.contrib.admin" in settings.INSTALLED_APPS

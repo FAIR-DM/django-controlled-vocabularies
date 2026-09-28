@@ -1,65 +1,4 @@
-"""Models exercising :class:`~controlled_vocabularies.fields.ConceptField`'s
-and :class:`~controlled_vocabularies.fields.ConceptsField`'s public APIs.
-
-Three models carry ``ConceptField`` (FS-009, T002), a different way US-1
-through US-5 there need to test against:
-
-- :class:`Specimen` — a required ``ConceptField``.
-- :class:`Sample` — an optional ``ConceptField`` with a ``related_name``.
-- :class:`Artifact` — an optional ``ConceptField`` on a model that already
-  defines ``get_mineral_label`` itself, so US-5's ``contribute_to_class()``
-  collision guard (T011) has a real pre-existing definition to leave alone
-  rather than a synthetic one.
-
-Two more carry ``ConceptField`` in the shapes #111 added to it, mirroring
-``ConceptsField``'s own:
-
-- :class:`Borehole` — a ``ConceptField`` naming two vocabularies.
-- :class:`Sketch` — a ``ConceptField`` naming no vocabulary at all.
-
-Six more models carry ``ConceptsField`` (FS-010 Phase F), one per shape
-`tasks.md` T001 lists:
-
-- :class:`Deposit` — a required ``ConceptsField`` (T003, T009's enforced
-  half).
-- :class:`Survey` — two required ``ConceptsField``s against the same
-  vocabulary, both ``related_name="+"`` (T003, T009's enumeration case).
-- :class:`Outcrop` — an optional ``ConceptsField`` with a ``related_name``
-  (US-1's reverse accessor, US-5's permissive half).
-- :class:`RockSample` — both a ``ConceptField`` and a ``ConceptsField``
-  against the same vocabulary on one model, the collision case `plan.md`'s
-  Risks section refuses to assume away.
-- :class:`FieldNote` — a ``ConceptsField`` naming two vocabularies (T012).
-- :class:`Photograph` — a ``ConceptsField`` naming no vocabulary at all — the
-  keywords shape (T012).
-
-:class:`Deposit` and :class:`Survey` were added in T003, since T003's own
-acceptance needs a real declaration to test the generated membership model
-against (`decisions.md` D10). The remaining four are T001's.
-
-Two more carry a ``collection`` restriction (FS-016 US-1):
-
-- :class:`CoreSample` — an optional ``ConceptField`` restricted to the
-  "core-samples" collection within the "rock-type" vocabulary (T007, T009,
-  T010, T011).
-- :class:`DrillCore` — an optional ``ConceptsField`` restricted the same
-  way, for the many-valued write guard (T012).
-
-Two more carry a ``concepts`` restriction (FS-016 US-2):
-
-- :class:`ChipSample` — an optional ``ConceptField`` restricted to the
-  "granite" and "basalt" concepts of the "rock-type" vocabulary (T013,
-  T014).
-- :class:`ChipTray` — an optional ``ConceptsField`` restricted the same
-  way, for the many-valued write guard (T013).
-
-Two more carry a ``branch`` restriction (FS-016 US-3):
-
-- :class:`BranchSample` — an optional ``ConceptField`` restricted to the
-  "igneous" branch of the "rock-type" vocabulary's hierarchy (T017, T018).
-- :class:`BranchTray` — an optional ``ConceptsField`` restricted the same
-  way, for the many-valued write guard (T017).
-"""
+"""Models that carry concept fields, for the test project to consume."""
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -68,7 +7,7 @@ from controlled_vocabularies.fields import ConceptField, ConceptsField
 
 
 class Specimen(models.Model):
-    """Carries a required concept from the "rock-type" vocabulary."""
+    """Carry a required concept from the "rock-type" vocabulary."""
 
     name = models.CharField(
         max_length=255,
@@ -91,12 +30,12 @@ class Specimen(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class Sample(models.Model):
-    """Carries an optional concept from the "mineral" vocabulary, with a
-    reverse accessor (``mineral.samples``)."""
+    """Carry an optional concept from the "mineral" vocabulary, with a reverse accessor."""
 
     name = models.CharField(
         max_length=255,
@@ -113,16 +52,12 @@ class Sample(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class Artifact(models.Model):
-    """Carries an optional concept from the "mineral" vocabulary, on a model
-    that already defines ``get_mineral_label()`` — the name US-5's
-    ``contribute_to_class()`` (T011) would generate for a field named
-    ``mineral``. The collision guard is tested against this real, pre-existing
-    definition rather than a synthetic one.
-    """
+    """Carry an optional "mineral" concept on a model that defines ``get_mineral_label()`` itself."""
 
     name = models.CharField(
         max_length=255,
@@ -138,16 +73,17 @@ class Artifact(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
     def get_mineral_label(self) -> str:
-        """Pre-existing — must survive T011's ``contribute_to_class()`` guard untouched."""
+        """Return a label of the artifact's own."""
+        # Pre-existing on purpose: the field's generated getter must not overwrite it.
         return "this artifact's own label, not the field's"
 
 
 class Deposit(models.Model):
-    """Carries a required ``ConceptsField`` against the "rock-type" vocabulary
-    (T003, T009's enforced half)."""
+    """Carry a required ``ConceptsField`` against the "rock-type" vocabulary."""
 
     name = models.CharField(
         max_length=255,
@@ -161,16 +97,12 @@ class Deposit(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class Survey(models.Model):
-    """Carries two required ``ConceptsField``s against the same vocabulary
-    (T003, T009): one required field enforced and the other silently skipped
-    is the failure T009's enumeration case exists to catch, and it needs two
-    of them on one model to be visible at all. Both declare
-    ``related_name="+"`` so T003's hidden related_name rewrite has two live
-    fields that would otherwise clash to prove itself against."""
+    """Carry two required ``ConceptsField``s against the same vocabulary."""
 
     name = models.CharField(
         max_length=255,
@@ -191,13 +123,12 @@ class Survey(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class Outcrop(models.Model):
-    """Carries an optional ``ConceptsField`` against the "mineral" vocabulary,
-    with a reverse accessor (``mineral.outcrops``) — US-1's reverse accessor
-    and US-5's permissive half."""
+    """Carry an optional ``ConceptsField`` against the "mineral" vocabulary, with a reverse accessor."""
 
     name = models.CharField(
         max_length=255,
@@ -213,14 +144,12 @@ class Outcrop(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class RockSample(models.Model):
-    """Carries both a ``ConceptField`` and a ``ConceptsField`` against the
-    same "mineral" vocabulary — the collision case `plan.md`'s Risks section
-    refuses to assume away: two declarations on one model must generate
-    distinct membership tables and non-clashing reverse accessors."""
+    """Carry a ``ConceptField`` and a ``ConceptsField`` against the same "mineral" vocabulary."""
 
     name = models.CharField(
         max_length=255,
@@ -245,13 +174,12 @@ class RockSample(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class FieldNote(models.Model):
-    """Carries a ``ConceptsField`` naming two vocabularies — "keywords from
-    GCMD or AGU" is a boundary (`decisions.md` D9); here "rock-type" or
-    "mineral" (T012)."""
+    """Carry a ``ConceptsField`` naming two vocabularies."""
 
     name = models.CharField(
         max_length=255,
@@ -269,13 +197,12 @@ class FieldNote(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class Borehole(models.Model):
-    """Carries a ``ConceptField`` naming two vocabularies (#111) — the
-    single-value counterpart of :class:`FieldNote`: one concept drawn from
-    either of the schemes the project accepts."""
+    """Carry a ``ConceptField`` naming two vocabularies."""
 
     name = models.CharField(
         max_length=255,
@@ -294,13 +221,12 @@ class Borehole(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class Sketch(models.Model):
-    """Carries a ``ConceptField`` naming no vocabulary at all (#111) — the
-    single-value counterpart of :class:`Photograph`: the restriction is given
-    up, the delete protection and the label/URI readback are not."""
+    """Carry a ``ConceptField`` naming no vocabulary."""
 
     name = models.CharField(
         max_length=255,
@@ -318,13 +244,12 @@ class Sketch(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class Photograph(models.Model):
-    """Carries a ``ConceptsField`` naming no vocabulary at all — the keywords
-    shape (T012, `decisions.md` D9): the restriction is given up, but the
-    delete protection, the readback, and the required-set rule are not."""
+    """Carry a ``ConceptsField`` naming no vocabulary."""
 
     name = models.CharField(
         max_length=255,
@@ -341,13 +266,12 @@ class Photograph(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class CoreSample(models.Model):
-    """Carries an optional ``ConceptField`` restricted to the "core-samples"
-    collection within the "rock-type" vocabulary (FS-016 US-1, T007, T009,
-    T010, T011)."""
+    """Carry an optional ``ConceptField`` restricted to a collection of the "rock-type" vocabulary."""
 
     name = models.CharField(
         max_length=255,
@@ -367,17 +291,12 @@ class CoreSample(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class DrillCore(models.Model):
-    """Carries an optional ``ConceptsField`` restricted to the "core-samples"
-    collection within the "rock-type" vocabulary (FS-016 US-1, T012's
-    many-valued write guard). ``related_name`` is a real name, not ``"+"``,
-    so T012 has a live reverse accessor (``concept.drill_cores``) to drive
-    the reverse-write branch of the guard through, the way
-    :class:`Outcrop`'s ``minerals``/``outcrops`` already does for the
-    vocabulary-only case."""
+    """Carry an optional ``ConceptsField`` restricted to a collection, with a reverse accessor."""
 
     name = models.CharField(
         max_length=255,
@@ -396,12 +315,12 @@ class DrillCore(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class ChipSample(models.Model):
-    """Carries an optional ``ConceptField`` restricted to the "granite" and
-    "basalt" concepts of the "rock-type" vocabulary (FS-016 US-2, T013)."""
+    """Carry an optional ``ConceptField`` restricted to two named concepts of the "rock-type" vocabulary."""
 
     name = models.CharField(
         max_length=255,
@@ -421,14 +340,12 @@ class ChipSample(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class ChipTray(models.Model):
-    """Carries an optional ``ConceptsField`` restricted the same way, for the
-    many-valued write guard (FS-016 US-2, T013). ``related_name`` is a real
-    name, not ``"+"``, so the reverse-write branch of the guard has a live
-    accessor (``concept.chip_trays``) to drive it through."""
+    """Carry an optional ``ConceptsField`` restricted to two named concepts, with a reverse accessor."""
 
     name = models.CharField(
         max_length=255,
@@ -447,16 +364,12 @@ class ChipTray(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class BranchSample(models.Model):
-    """Carries an optional ``ConceptField`` restricted to the "igneous"
-    branch of the "rock-type" vocabulary's hierarchy (FS-016 US-3, T017).
-    The concept named "igneous" and everything narrower than it are built
-    per test, through ``add_broader()`` — this declaration only names the
-    root, exactly as ``CoreSample`` and ``ChipSample`` only name a
-    collection or a concept list without knowing its members."""
+    """Carry an optional ``ConceptField`` restricted to a branch of the "rock-type" hierarchy."""
 
     name = models.CharField(
         max_length=255,
@@ -476,14 +389,12 @@ class BranchSample(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class BranchTray(models.Model):
-    """Carries an optional ``ConceptsField`` restricted the same way, for the
-    many-valued write guard (FS-016 US-3, T017). ``related_name`` is a real
-    name, not ``"+"``, so the reverse-write branch of the guard has a live
-    accessor (``concept.branch_trays``) to drive it through."""
+    """Carry an optional ``ConceptsField`` restricted to a branch, with a reverse accessor."""
 
     name = models.CharField(
         max_length=255,
@@ -502,16 +413,12 @@ class BranchTray(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name
 
 
 class Locality(models.Model):
-    """The parent side of the inline relationship US-3 (T008) exercises:
-    :class:`Specimen` rows may belong to one, through the ``locality`` foreign
-    key added there. Carries its own ``ConceptField`` against a vocabulary
-    distinct from ``Specimen.rock_type``, so a saved inline row's own
-    autocomplete reference can be told apart from the parent form's own field
-    (spec.md US-3 scenario 4)."""
+    """The parent of :class:`Specimen` in the inline relationship, carrying its own concept field."""
 
     name = models.CharField(
         max_length=255,
@@ -530,4 +437,5 @@ class Locality(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return the name."""
         return self.name

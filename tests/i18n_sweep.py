@@ -4,14 +4,16 @@ import ast
 import re
 
 TRANSLATION_CALL_NAMES = {"_", "gettext_lazy", "ngettext_lazy"}
-# A `%` not followed by `(` (a named placeholder) or `%` (an escaped percent) is positional.
+# A `%` not followed by `(` (a named placeholder) or `%` (an escaped percent) is
+# positional.
 POSITIONAL_PLACEHOLDER = re.compile(r"%(?!%|\()[-+ 0#]*\d*(?:\.\d+)?[a-zA-Z]")
 FIELD_METADATA_KEYWORDS = {"help_text", "verbose_name", "verbose_name_plural"}
 DIAGNOSTIC_MESSAGE_KEYWORDS = {"msg", "message", "hint"}
 
 
-# ReportRenderer has already %-formatted a translated template by the time a line reaches
-# a terminal, so the placeholder shape is only visible in the source, hence a static sweep.
+# ReportRenderer has already %-formatted a translated template by the time a line
+# reaches a terminal, so the placeholder shape is only visible in the source, hence a
+# static sweep.
 class ManagementI18nVisitor(ast.NodeVisitor):
     """Record positional placeholders in translation calls and bare literals in output sinks.
 
@@ -211,8 +213,8 @@ class FieldsChecksI18nVisitor(ast.NodeVisitor):
 
     def visit_Dict(self, node: ast.Dict) -> None:
         """Record bare literals under field-metadata keys of any dict literal."""
-        # ConceptsField builds its through model's Meta as `type("Meta", (), {...})`, so the
-        # metadata sits in a positional dict a keyword check never sees.
+        # ConceptsField builds its through model's Meta as `type("Meta", (), {...})`, so
+        # the metadata sits in a positional dict a keyword check never sees.
         for key, value in zip(node.keys, node.values, strict=True):
             name = self.str_constant(key) if key is not None else None
             if name in FIELD_METADATA_KEYWORDS:

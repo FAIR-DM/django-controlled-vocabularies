@@ -1,34 +1,4 @@
-"""Tests for ``controlled_vocabularies.views`` (T003, T005, FR-005, FR-012, FR-004).
-
-``TestConceptAutocompleteResults`` — a result carries exactly the identifier, the
-preferred label and the vocabulary a concept belongs to (FR-005, FR-012): not the
-editorial notes, hidden labels or anything else the concept holds, and not merely
-those three among others — the exact key set. A second test bounds the query cost
-of a full page under ``django_assert_num_queries`` (R5): ``display_label()`` walks
-each concept's ``labels.all()``, so ``hook_queryset()``'s ``prefetch_related`` is
-what keeps that from costing a query per row.
-
-``TestConceptAutocompleteSearch`` — a typed string matches a concept by any of its
-three kinds of label in the active language, or by the default-language preferred
-label every concept carries (FR-004, User Story 2). Every case is displayed under
-the concept's preferred label, whichever label matched (FR-005).
-
-Every request here carries a ``field=`` reference, because T006 made one mandatory:
-the endpoint derives what a search may return from the declaration that reference
-names, and a request without one is refused with an empty page (FR-006). These two
-classes are about result shaping and label matching rather than the restriction, so
-they name :class:`~tests.testapp.models.Sketch`'s ``subject`` — the declaration that
-names no vocabulary and so makes every concept eligible — leaving each assertion
-about exactly what its own name says.
-
-``TestConceptAutocompleteOrderedCollectionSequence`` (T022, FR-010, plan.md A5,
-decisions.md D8) — an ordered collection's own member sequence reaches this list,
-not alphabetical order and not creation order, because that sequence is the whole
-reason ``Collection.ordered`` means anything to somebody picking from it. Every
-case names :class:`~tests.testapp.models.CoreSample`'s ``rock_type``, the one field
-this suite restricts to a collection slug, since a ``field=`` reference is resolved
-through Django's app registry rather than built ad hoc in a test.
-"""
+"""Tests for controlled_vocabularies.views."""
 
 import inspect
 import json
@@ -58,19 +28,27 @@ from tests.testapp.models import Borehole, CoreSample, Sketch, Specimen
 
 
 def _field_reference(model, field_name):
-    """The ``<app_label>.<model>.<field_name>`` reference the control's
-    widget sends (decisions.md D11), built the same way for a test as
-    ``ConceptWidgetReferenceMixin.get_autocomplete_params()`` builds it."""
+    """Return the ``<app_label>.<model>.<field_name>`` reference the widget sends.
+
+    Args:
+        model: The model class declaring the field.
+        field_name: The name of the concept field on ``model``.
+
+    Returns:
+        The dotted reference the endpoint resolves through the app registry.
+    """
     return f"{model._meta.app_label}.{model._meta.model_name}.{field_name}"
 
 
 def _unrestricted_get(**params):
-    """Search from the one declaration that restricts nothing.
+    """Search from ``Sketch.subject``, the one declaration that restricts nothing.
 
-    ``Sketch.subject`` names no vocabulary, so its ``limit_choices_to`` is an
-    empty ``Q`` and every concept stays eligible — the restriction T006 added
-    is present but neutral, which is what keeps a result-shaping or
-    label-matching assertion about result shaping or label matching."""
+    Args:
+        **params: Extra query parameters sent with the ``field`` reference.
+
+    Returns:
+        The endpoint's response.
+    """
     return Client().get(
         reverse("controlled_vocabularies:concept-autocomplete"),
         {"field": _field_reference(Sketch, "subject"), **params},
@@ -84,8 +62,6 @@ class SpecimenForm(forms.ModelForm):
 
 
 class TestConceptAutocompleteResults:
-    """The endpoint's JSON results carry exactly what FR-012 permits."""
-
     @pytest.mark.django_db
     def test_a_result_carries_exactly_the_id_display_label_and_vocabulary(self):
         scheme = ConceptSchemeFactory(name="Rock types")
@@ -105,33 +81,31 @@ class TestConceptAutocompleteResults:
         assert result["vocabulary"] == "Rock types"
 
     @pytest.mark.django_db
-    def test_a_full_page_of_concepts_with_labels_and_notes_costs_a_bounded_query_count(
+    def test_a_full_page_of_concepts_costs_the_same_queries_as_one_concept(
         self, django_assert_num_queries
     ):
         scheme = ConceptSchemeFactory()
-        for _ in range(20):
+        concept = ConceptFactory(scheme=scheme)
+        concept.add_label(language="de", kind="alternative", text="alt")
+        concept.add_note(language="en", kind="definition", value="A definition.")
+        with CaptureQueriesContext(connection) as one_concept:
+            _unrestricted_get()
+
+        for _ in range(19):
             concept = ConceptFactory(scheme=scheme)
             concept.add_label(language="de", kind="alternative", text="alt")
             concept.add_note(language="en", kind="definition", value="A definition.")
 
-        with django_assert_num_queries(3):
+        with django_assert_num_queries(len(one_concept)):
             response = _unrestricted_get()
 
         body = json.loads(response.content)
         assert len(body["results"]) == 20
 
 
+# Each search fragment must match through one clause only: a fragment that is also a
+# substring of the default-language ``label`` passes whichever label kind is under test.
 class TestConceptAutocompleteSearch:
-    """A typed string matches a concept by any of its labels, in the active
-    language (FR-004, User Story 2). Every case is displayed under the
-    concept's preferred label for the active language, whichever label the
-    match was made on (FR-005).
-
-    Each search fragment is one no other clause of the filter can match: a
-    fragment that is also a substring of the default-language ``label``
-    column passes whether or not the label kind under test is searched at
-    all, which is a test that asserts nothing about its own scenario."""
-
     @pytest.mark.django_db
     def test_a_fragment_of_an_alternative_label_finds_the_concept_by_its_preferred_label(
         self,
@@ -194,10 +168,8 @@ class TestConceptAutocompleteSearch:
 
     @pytest.mark.django_db
     def test_a_label_in_another_language_does_not_match(self):
-        # The other half of FR-004's "in the active language": a fragment
-        # unique to a label the active language does not own must not find
-        # the concept. Without this, dropping the language constraint from
-        # the filter altogether leaves every other test in this class green.
+        # Without this, dropping the language constraint from the filter
+        # altogether leaves every other test in this class green.
         concept = ConceptFactory(label="Granite")
         concept.add_label(language="de", kind="alternative", text="Tiefengestein")
 
@@ -238,11 +210,6 @@ class TestConceptAutocompleteSearch:
 
 @pytest.mark.django_db
 class TestConceptAutocompleteRestrictionFromDeclaration:
-    """FR-006, plan.md A6 path one, decisions.md D11: the endpoint derives
-    what a search may return from the field declaration a ``field=``
-    reference names, resolved through Django's app registry — never from
-    anything else the request carries (T006)."""
-
     def test_a_field_declared_against_one_vocabulary_returns_only_that_vocabularys_concepts(
         self,
     ):
@@ -272,10 +239,8 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
             {
                 "q": "Granite",
                 "field": _field_reference(Specimen, "rock_type"),
-                # Names a vocabulary directly, through a parameter the
-                # endpoint never reads. FR-006 says the restriction comes
-                # from the declaration alone; this is the case that proves
-                # it (prohibitions).
+                # A parameter the endpoint never reads: the restriction comes
+                # from the declaration alone.
                 "vocabulary": mineral_scheme.slug,
             },
         )
@@ -323,12 +288,9 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
         }
 
     def test_the_rendered_widget_carries_the_reference(self):
-        # The widget's full context — including autocompleteParams — only
-        # builds with a live request in django_tomselect's thread-local
-        # storage (widgets.py:610-628), the way TomSelectMiddleware provides
-        # it on a real request/response cycle. A bare `str(SpecimenForm())`
-        # falls back to the base context, which carries no reference at all,
-        # and would pass this assertion vacuously by asserting on nothing.
+        # autocompleteParams only builds with the live request TomSelectMiddleware
+        # stores; a bare `str(SpecimenForm())` carries no reference and would pass
+        # the assertion below vacuously.
         request = RequestFactory().get("/")
         request.user = AnonymousUser()
         rendered = {}
@@ -339,10 +301,8 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
 
         TomSelectMiddleware(get_response)(request)
 
-        # The template renders autocompleteParams through Django's `escapejs`
-        # filter, which escapes "=" to the literal six characters
-        # backslash-u-0-0-3-D — verified against the actual rendered output,
-        # not assumed from the raw parameter string.
+        # The template runs autocompleteParams through `escapejs`, which turns "="
+        # into the six characters backslash-u-0-0-3-D.
         escaped_equals = "\\u003D"
         assert (
             f"autocompleteParams: 'field{escaped_equals}testapp.specimen.rock_type'"
@@ -352,10 +312,6 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
 
 @pytest.mark.django_db
 class TestConceptAutocompleteRefusalDisclosesNothing:
-    """FR-006: an unresolvable ``field=`` reference never discloses what it
-    rejects. All four refusal shapes are byte-identical HTTP responses, and
-    identical to a search that simply matched nothing (T007)."""
-
     def _get(self, **params):
         return Client().get(
             reverse("controlled_vocabularies:concept-autocomplete"), params
@@ -390,15 +346,6 @@ class TestConceptAutocompleteRefusalDisclosesNothing:
 
 @pytest.mark.django_db
 class TestConceptAutocompletePagination:
-    """FR-007, User Story 5, plan.md A7: the endpoint answers with a bounded
-    page and says whether more exist, paging is stable across a search, the
-    control's empty-query open is bounded the same way, an over-large
-    ``page_size`` is clamped, and a field naming no vocabulary is bounded
-    across however many vocabularies the database holds. Every paging
-    assertion compares the identifiers collected from both pages against the
-    full ordered match set, never page lengths, so a repeat or a skip fails
-    rather than cancelling out (prohibitions)."""
-
     def test_a_search_matching_more_than_one_page_returns_one_page_and_says_more_exist(
         self,
     ):
@@ -450,8 +397,7 @@ class TestConceptAutocompletePagination:
         ]
 
     def test_a_page_past_the_last_returns_nothing_and_says_no_more_exist(self):
-        # This fails against the inherited behaviour, which re-serves page 1
-        # (autocompletes.py:743) — that is the point of this task.
+        # The inherited behaviour re-serves page 1 for a page past the last.
         ConceptFactory(label="Granite")
 
         response = _unrestricted_get(p=5)
@@ -488,24 +434,14 @@ class TestConceptAutocompletePagination:
     def test_the_ordering_breaks_ties_with_pk_so_identically_labelled_concepts_stay_stable(
         self,
     ):
-        # decisions.md D13: Concept.label is unique only within its own
-        # scheme, so two concepts in different vocabularies can share the
-        # same label, and a field naming several (or none) can serve such a
-        # tie in one page. A black-box paging test cannot discriminate this
-        # on SQLite: its scan already returns tied rows in insertion order,
-        # so ordering by "label" alone coincidentally reproduces ("label",
-        # "pk") here — verified empirically (41 identically labelled
-        # concepts across three pages, union and count both matched with the
-        # tie-break removed). Asserting the declared ordering directly is
-        # the one check this database's behaviour cannot mask.
+        # Concept.label is unique only within a scheme, so ties are possible. SQLite
+        # returns tied rows in insertion order, which masks a missing "pk" tie-break
+        # in any paging test, so the declared ordering is asserted directly.
         assert ConceptAutocompleteView.ordering == ("label", "pk")
 
     def test_both_ordering_columns_reach_the_database(self):
-        """The assertion above says the class declares the tie-break. This one
-        says the endpoint applies it: the base view reads ``ordering`` through
-        its own ``apply_ordering()``, and a declared-but-unapplied ordering
-        would satisfy the assertion above while sorting by nothing in
-        particular. Asserted on the SQL the search actually issued."""
+        # Asserted on the SQL issued: a declared-but-unapplied ordering would pass the
+        # test above while sorting by nothing in particular.
         for name in ("Mineral", "Rock Type", "Lithology"):
             ConceptFactory(scheme=ConceptSchemeFactory(name=name), label="Tied label")
 
@@ -521,10 +457,6 @@ class TestConceptAutocompletePagination:
 
 @pytest.mark.django_db
 class TestConceptAutocompleteRequestControlledSurfacesAreClosed:
-    """decisions.md D8: ``allowed_filter_fields`` and ``allowed_ordering_fields``
-    close the two other request-controlled surfaces the endpoint exposes, and
-    they refuse differently (T007)."""
-
     def test_a_blocked_filter_field_empties_the_page(self):
         ConceptFactory(label="Granite")
         reference = _field_reference(
@@ -567,20 +499,6 @@ class TestConceptAutocompleteRequestControlledSurfacesAreClosed:
 
 @pytest.mark.django_db
 class TestConceptAutocompleteOrderedCollectionSequence:
-    """T022, FR-010, plan.md A5, research.md R6, decisions.md D8: the endpoint
-    serves an ordered collection's members in the curator's own sequence, not
-    alphabetical order and not creation order — the one requirement
-    ``limit_choices_to`` cannot carry, so it is applied here rather than on
-    the widget's queryset (which nobody browsing the control ever sees).
-
-    Every case names :class:`~tests.testapp.models.CoreSample`'s ``rock_type``
-    — declared with ``vocabulary="rock-type"``, ``collection="core-samples"``
-    — so the scheme built here is named "Rock type" (slug ``rock-type``) and
-    the collection "core-samples", matching that static declaration exactly;
-    a ``field=`` reference only resolves against a real, registered model
-    field, not one built ad hoc in a test.
-    """
-
     def _get(self, **params):
         return Client().get(
             reverse("controlled_vocabularies:concept-autocomplete"),
@@ -590,11 +508,8 @@ class TestConceptAutocompleteOrderedCollectionSequence:
     def test_an_ordered_collections_sequence_differs_from_both_alphabetical_and_creation_order(
         self,
     ):
-        # Created Bravo, Alpha, Charlie in that order (creation/pk order).
-        # Alphabetical would read Alpha, Bravo, Charlie. The curator's chosen
-        # sequence below is neither, so a missing override (falls to
-        # "label") or an accidental default (falls to creation/pk order)
-        # both fail this.
+        # The curator's sequence is neither alphabetical nor creation order, so a
+        # missing override or an accidental default both fail this.
         scheme = ConceptSchemeFactory(name="Rock type")
         collection, members = collection_with_members(
             scheme=scheme,
@@ -652,9 +567,7 @@ class TestConceptAutocompleteOrderedCollectionSequence:
 
         body = json.loads(self._get(q="Basalt").content)
 
-        # Falls through to the inherited ("label", "pk") ordering once a
-        # search term is present (plan.md A5) — alphabetical by label, not
-        # the curator's sequence asserted above for the same collection.
+        # A search term falls back to the inherited ("label", "pk") ordering.
         assert [result["id"] for result in body["results"]] == [
             alpha.pk,
             bravo.pk,
@@ -677,9 +590,7 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         returned_ids = [result["id"] for result in body["results"]]
         assert set(returned_ids) == {charlie.pk, bravo.pk, alpha.pk}
         assert outsider.pk not in returned_ids
-        # No sequence is promised for an unordered collection: it falls
-        # through to the inherited alphabetical ordering, the same as any
-        # other unordered result set (plan.md A5).
+        # An unordered collection promises no sequence and gets the inherited ordering.
         assert returned_ids == [alpha.pk, bravo.pk, charlie.pk]
 
     def test_a_removed_member_leaves_the_survivors_in_relative_order(self):
@@ -703,8 +614,8 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         ]
 
     def test_a_concept_in_a_second_collection_too_is_not_duplicated(self):
-        # research.md R3/R6: a concept belonging to a second collection must
-        # not duplicate through a collection_memberships__ join.
+        # A concept in a second collection must not duplicate through a
+        # collection_memberships__ join.
         scheme = ConceptSchemeFactory(name="Rock type")
         collection, members = collection_with_members(
             scheme=scheme, name="core-samples", ordered=True, labels=("Bravo", "Alpha")

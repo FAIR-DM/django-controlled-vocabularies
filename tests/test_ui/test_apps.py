@@ -1,12 +1,4 @@
-"""Tests for ``controlled_vocabularies/ui/apps.py`` and ``__init__.py`` (T002).
-
-Run in a fresh subprocess, never the pytest process itself: ``django.setup()`` only ever runs
-once per interpreter, and the pytest session has already populated the app registry from
-``tests.settings`` before this test executes (the repo's existing out-of-process precedent,
-``tests/settings_no_admin.py``). ``controlled_vocabularies.ui`` is not yet installed by
-``tests.settings`` at this point in the story (T003 widens it), so this configures its own
-minimal registry inline rather than depending on either settings module.
-"""
+"""Tests for controlled_vocabularies.ui.apps and the ui package ``__init__``."""
 
 import ast
 import subprocess
@@ -20,6 +12,8 @@ INIT_PATH = (
     / "__init__.py"
 )
 
+# Runs in a fresh subprocess because django.setup() only runs once per interpreter and the
+# pytest session has already populated the app registry from tests.settings.
 BOOT_SCRIPT = """
 import django
 from django.conf import settings
@@ -47,9 +41,6 @@ print("BOOT_OK")
 
 
 class TestUIAppConfig:
-    """The ui app registers alongside the core app without raising, under a label distinct
-    from the core app's, and its ``__init__.py`` stays inert (FR-012)."""
-
     def test_app_registers_alongside_the_core_app_under_a_distinct_label(self):
         result = subprocess.run(  # noqa: S603 — fixed interpreter, literal script, no user input
             [sys.executable, "-c", BOOT_SCRIPT],

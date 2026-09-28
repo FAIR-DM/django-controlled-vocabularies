@@ -1,21 +1,11 @@
-"""Package-level checks whose subject is the installed package rather than one module.
-
-Currently the import contract for the ``django-tomselect`` runtime dependency
-(T001, FR-015). Article VIII pins compatibility to names rather than to a version:
-a later release of ``django-tomselect`` that renames one of these symbols fails
-here, at the dependency boundary, rather than later at form render.
-
-Article X mirrors a test module onto a source module; ``test_smoke.py`` is the
-standing exception for a check that has no single source module to mirror.
-"""
+"""Smoke tests that the package's runtime dependencies import."""
 
 from django.apps import apps
 
 
 class TestDjangoTomselectDependency:
-    """``django-tomselect`` is declared, installed and exposes the names this
-    package's views and forms build on."""
-
+    # Compatibility is pinned to names, not a version (Article VIII), so a renamed
+    # symbol fails here rather than later at form render.
     def test_app_is_installed(self):
         assert apps.is_installed("django_tomselect")
 

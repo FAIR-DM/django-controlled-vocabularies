@@ -1,10 +1,4 @@
-"""Tests for the test project's URL wiring of ``controlled_vocabularies.urls`` (T002, FR-002).
-
-The package's own ``urls.py`` is included under a non-empty prefix chosen by this
-test project (``widget/``), never at the root, because a root inclusion would
-never catch a hard-coded path in the widget's ``url`` argument. The prefix is
-deliberately unrelated to the app's own name, so nothing can match by accident.
-"""
+"""Tests for controlled_vocabularies.urls, as mounted by the test project."""
 
 import json
 
@@ -14,8 +8,8 @@ from django.urls import reverse
 
 
 class TestConceptAutocompleteUrl:
-    """The endpoint reverses under its project-chosen prefix and answers anonymously."""
-
+    # The test project mounts the package under `widget/`, never the root, so a
+    # hard-coded path in the widget's `url` argument would fail here (FS-011).
     def test_reverses_under_the_project_chosen_prefix(self):
         assert (
             reverse("controlled_vocabularies:concept-autocomplete")

@@ -1,24 +1,15 @@
-"""Minimal Django settings for the test suite — the core-only base.
+"""Minimal Django settings for the core-only test configuration."""
 
-This is the base ``tests/settings.py`` imports from and appends the opt-in ui front end to, not
-a copy of it (013-find-a-vocabulary plan.md, Structure Decision). Its own ``ROOT_URLCONF`` points
-at an empty urlconf, and it stays free of ``controlled_vocabularies.ui`` and every ui dependency —
-it is what the core-only boot test (``tests/test_ui/test_boot.py``) boots against to prove the
-core still starts with nothing ui installed.
-"""
+# Stays free of controlled_vocabularies.ui and every ui dependency: the core-only boot
+# test boots against it to prove the core starts with nothing ui installed (FS-013).
 
 SECRET_KEY = "test-key-not-for-production"
 
 ROOT_URLCONF = "tests.urls_core"
 
-# The third wiring step a real project makes (011 decisions.md D15): django_tomselect
-# builds the control's full context only when its thread-local request is set, and
-# only this middleware sets it. The test project wires what a real one wires.
-#
-# The session, authentication and message middleware are django.contrib.admin's own
-# requirements (its admin.E4xx system checks refuse to start without them), added for
-# the admin suite. tests/settings_no_admin.py is the configuration that proves a
-# project without the admin is unaffected.
+# django_tomselect builds the control's full context only when its middleware stores
+# the request. The admin's system checks (admin.E4xx) need the session, auth and
+# message middleware.
 MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -30,9 +21,8 @@ MIDDLEWARE = [
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Deterministic language set for the multilingual suite: a fixed default plus two
-# more so per-language behaviour (default-anchored slugs, one-preferred-per-language)
-# is exercised without depending on Django's full built-in LANGUAGES list.
+# A fixed default plus two more languages, so per-language behaviour does not depend on
+# Django's full built-in LANGUAGES list.
 USE_I18N = True
 LANGUAGE_CODE = "en"
 LANGUAGES = [
@@ -60,9 +50,7 @@ INSTALLED_APPS = [
     "tests.testapp",
 ]
 
-# django.contrib.admin renders through the template engine and needs these three
-# context processors; its own system checks enforce them. Nothing in the package
-# requires a TEMPLATES entry of its own.
+# The admin's system checks require these three context processors.
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
