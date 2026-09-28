@@ -53,7 +53,7 @@ each rebasing on the last. US-4 touches only `rendering.py` and runs alongside t
 - **T002** — The package skeleton. `controlled_vocabularies/management/__init__.py`,
   `management/commands/__init__.py`, and the mirrored test packages
   `tests/test_management/__init__.py` and `tests/test_management/test_commands/__init__.py`
-  (Article XIV). No behaviour. Its test is `tests/test_standards.py` staying green, plus a smoke
+  (testing standard §4). No behaviour. Its test is `tests/test_standards.py` staying green, plus a smoke
   assertion that `call_command("import_skos", ...)` resolves the command rather than raising
   `CommandError: Unknown command` once T003 lands.
 
@@ -103,7 +103,7 @@ each rebasing on the last. US-4 touches only `rendering.py` and runs alongside t
 
 ## US-2 — A vocabulary imports straight from its publisher (P1)
 
-- **T006** — The HTTP stub fixture, in `tests/conftest.py` (Article XIV — reusable, not inlined).
+- **T006** — The HTTP stub fixture, in `tests/conftest.py` (testing standard §4 — reusable, not inlined).
   `http.server.ThreadingHTTPServer` bound to port 0, started in a thread, torn down on teardown,
   yielding a base URL. Parameterised per request by status, body bytes and `Content-Type`, so one
   fixture serves the success case, a 404, a 500, an HTML body, and a redirect. A second, smaller
@@ -290,7 +290,7 @@ are never reused.)*
   All three are public markdown: humanize before commit, and no internal handles.
 
 - **T025** — Conformance and the whole-feature verification. Test modules mirror the source tree
-  with `__init__.py` at each level (Article XIV), fixtures are reusable rather than inlined, the
+  with `__init__.py` at each level (testing standard §4), fixtures are reusable rather than inlined, the
   full suite is green, coverage floors hold (project ≥ 90%, patch ≥ 85%), and `ruff`, `mypy` and
   `deptry` pass.
 

@@ -13,7 +13,8 @@ from django.apps import apps
 
 def related_field_widget_wrapper_class():
     """``django.contrib.admin.widgets.RelatedFieldWidgetWrapper``, or ``None``
-    when ``django.contrib.admin`` is not among the installed applications."""
+    when ``django.contrib.admin`` is not among the installed applications.
+    """
     if not apps.is_installed("django.contrib.admin"):
         return None
 

@@ -50,7 +50,8 @@ _STATIC_URI_MESSAGE_ECHO_CHARS = 80
 
 def _echoed_uri(value: str) -> str:
     """The value as it appears inside a validation message: bounded, never the
-    unbounded raw value (T032)."""
+    unbounded raw value (T032).
+    """
     return str(Truncator(value).chars(_STATIC_URI_MESSAGE_ECHO_CHARS))
 
 
@@ -533,7 +534,8 @@ class ConceptScheme(StaticUriModel):
 
     def save(self, *args, **kwargs):
         """Derive the slug from ``name`` unless :attr:`slug_is_manual`, freeze the default
-        language once concepts exist, and refuse an empty or colliding slug."""
+        language once concepts exist, and refuse an empty or colliding slug.
+        """
         # Freeze the default language once the vocabulary has concepts. Each concept's
         # identity anchor (``Concept.label``) is its preferred label in the effective
         # default language; changing that language afterwards would silently reinterpret
@@ -586,7 +588,7 @@ class ConceptScheme(StaticUriModel):
         else:
             # ARCH-302, fix cycle 4, decisions.md D54: the empty/malformed-manual-slug guard
             # was byte-identical across all three concrete models — extracted to the shared
-            # base (Article XV).
+            # base (Article XIV).
             self._validate_manual_slug()
         # Refuse a slug that collides with another scheme rather than minting a
         # duplicate identifier or silently auto-suffixing it (research R4).
@@ -741,7 +743,7 @@ class Concept(StaticUriModel):
         else:
             # ARCH-302, fix cycle 4, decisions.md D54: the empty/malformed-manual-slug guard
             # was byte-identical across all three concrete models — extracted to the shared
-            # base (Article XV).
+            # base (Article XIV).
             self._validate_manual_slug()
         # Refuse a slug that collides with another concept in the same scheme
         # rather than minting a duplicate identifier or silently auto-suffixing
@@ -1535,7 +1537,7 @@ class Collection(StaticUriModel):
         else:
             # ARCH-302, fix cycle 4, decisions.md D54: the empty/malformed-manual-slug guard
             # was byte-identical across all three concrete models — extracted to the shared
-            # base (Article XV).
+            # base (Article XIV).
             self._validate_manual_slug()
         if (
             Collection.objects.filter(scheme=self.scheme, slug=self.slug)

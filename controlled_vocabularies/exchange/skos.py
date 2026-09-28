@@ -113,7 +113,7 @@ def unique_slug_for_identifier(
 
     Shared by :meth:`ConceptImporter.assign_unique_slug`, :meth:`SchemeResolver.resolve_scheme`
     and :meth:`CollectionImporter.import_collections` — a collision in any of the three record
-    kinds is the same computation (Article XV), so the shape is not duplicated three times.
+    kinds is the same computation (Article XIV), so the shape is not duplicated three times.
 
     ``taken_slugs`` maps every claimed slug to its claimant's ``static_uri``, mutated in place so a
     caller resolving more than one record in the same run sees each prior assignment as taken.
@@ -411,7 +411,7 @@ class SkosGraph:
 
         Unfiltered by language: which pair fills a configured language's slot is decided by
         :meth:`~controlled_vocabularies.exchange.languages.LanguageMatcher.resolve_winner`, and that
-        policy does not belong on this RDF boundary (Article XV) — the caller, which already holds
+        policy does not belong on this RDF boundary (Article XIV) — the caller, which already holds
         the matcher, resolves and picks a winner from what this returns.
         """
         return sorted(
@@ -503,7 +503,7 @@ def _localized_literal(
 
     ``SkosGraph.first_literal``'s own ``language=`` filter is an exact match; resolving a variant
     tag to ``target_language`` is configured-language policy, which stays off ``SkosGraph``
-    (Article XV), so it happens here, reading only the graph's public, read-only queries. Without
+    (Article XIV), so it happens here, reading only the graph's public, read-only queries. Without
     this, a site importing a vocabulary declared in a variant of its default language names every
     concept correctly and then falls through to :meth:`SkosGraph.first_literal`'s own any-language
     fallback — ``sorted(...)[0]`` across every language in the file — for the record's own name.
@@ -624,7 +624,7 @@ class SchemeResolver:
                 return resolved
 
         # T040, decisions.md D34/D35 (fix cycle 3): reuses SkosGraph.preferred_label_tag_counts
-        # (Article XV) rather than keeping its own unfolded copy of the identical walk — that
+        # (Article XIV) rather than keeping its own unfolded copy of the identical walk — that
         # copy counted 'EN-GB' and 'en-gb' as two tags instead of the one FR-001 says they are.
         counts = self.skos_graph.preferred_label_tag_counts(concept_nodes)
         if counts:
@@ -1544,7 +1544,7 @@ class ConceptImporter:
         written for curator-authored content where two identifiers colliding on their own final
         segment is rare); a published file is not so well-behaved (D35), so the importer resolves
         it itself via :func:`unique_slug_for_identifier` — the same computation
-        :meth:`SchemeResolver.resolve_scheme` reuses for a vocabulary's own collision (Article XV).
+        :meth:`SchemeResolver.resolve_scheme` reuses for a vocabulary's own collision (Article XIV).
 
         ``created`` (T041, FR-020, decisions.md D35 fix cycle 3) decides whether a slug is minted
         at all: a slug is computed through :func:`unique_slug_for_identifier` only for a concept

@@ -219,7 +219,8 @@ class ConceptsWidget(
     TomSelectModelMultipleWidget,
 ):
     """The control :class:`ConceptsChoiceField` renders (FR-001). See
-    :class:`ConceptWidget` for ``Media``."""
+    :class:`ConceptWidget` for ``Media``.
+    """
 
     class Media:
         js = ["controlled_vocabularies/js/concept-inline.js"]

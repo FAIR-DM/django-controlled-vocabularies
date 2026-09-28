@@ -1,4 +1,4 @@
-"""T002 — the ``management`` package skeleton (Article XIV).
+"""T002 — the ``management`` package skeleton (testing standard §4).
 
 No behaviour lands here: this only proves the package the command (T003
 onward) and the renderer (T015) build on is importable. The command itself

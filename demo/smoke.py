@@ -103,7 +103,8 @@ def fail(url, status, reason, body=""):
 
 def check_list(list_url, status, body):
     """Both seeded vocabularies are named on the list and carry their concept counts
-    (FR-016, User Story 3 scenario 2)."""
+    (FR-016, User Story 3 scenario 2).
+    """
     if status != 200:
         fail(list_url, status, "the vocabulary list did not serve", body)
     for name, count in (
@@ -128,7 +129,8 @@ def check_list(list_url, status, body):
 
 def check_search(search_url, status, body):
     """A search narrows the list to the vocabulary it matches and excludes the other
-    (User Story 3 scenario 5)."""
+    (User Story 3 scenario 5).
+    """
     if status != 200:
         fail(search_url, status, "a search did not serve", body)
     if IMPORTED_NAME not in body:
@@ -149,7 +151,8 @@ def check_search(search_url, status, body):
 
 def check_vocabulary_page(vocabulary_url, status, body):
     """The vocabulary's own page lists a concept it actually holds (FR-019, User Story 3
-    scenario 1)."""
+    scenario 1).
+    """
     if status != 200:
         fail(vocabulary_url, status, "the vocabulary's page did not serve", body)
     if VOCABULARY_CONCEPT not in body:
@@ -163,7 +166,8 @@ def check_vocabulary_page(vocabulary_url, status, body):
 
 def check_concept_search(search_url, status, body):
     """A search inside the vocabulary narrows to the concept it matches, including one found
-    only through its hidden label (FR-019, User Story 3 scenarios 3, 9)."""
+    only through its hidden label (FR-019, User Story 3 scenarios 3, 9).
+    """
     if status != 200:
         fail(search_url, status, "a concept search did not serve", body)
     if VOCABULARY_CONCEPT not in body:
@@ -185,7 +189,8 @@ def check_concept_search(search_url, status, body):
 
 def check_authored_vocabulary_page(vocabulary_url, status, body):
     """The authored vocabulary's own page lists the concept the walk follows next
-    (015-read-single-record T024)."""
+    (015-read-single-record T024).
+    """
     if status != 200:
         fail(
             vocabulary_url, status, "the authored vocabulary's page did not serve", body
@@ -201,7 +206,8 @@ def check_authored_vocabulary_page(vocabulary_url, status, body):
 
 def check_concept_page(concept_url, status, body):
     """A concept's own page shows its relation and the collections that gather it
-    (015-read-single-record T024, FR-010, FR-014)."""
+    (015-read-single-record T024, FR-010, FR-014).
+    """
     if status != 200:
         fail(concept_url, status, "the concept's page did not serve", body)
     if AUTHORED_RELATED_CONCEPT_SHORT_FORM not in body:
@@ -224,7 +230,8 @@ def check_concept_page(concept_url, status, body):
 def check_concept_page_in_a_second_language(concept_url, status, body):
     """Read in German, the same page shows a value carried only in German directly, and
     falls back to English for a value carried only there (015-read-single-record T024,
-    FR-005)."""
+    FR-005).
+    """
     if status != 200:
         fail(concept_url, status, "the concept's page did not serve in German", body)
     if GERMAN_SCOPE_NOTE not in body:
@@ -245,7 +252,8 @@ def check_concept_page_in_a_second_language(concept_url, status, body):
 
 def check_collection_page(collection_url, status, body):
     """A collection's own page shows a concept it gathers (015-read-single-record T024,
-    FR-013)."""
+    FR-013).
+    """
     if status != 200:
         fail(collection_url, status, "the collection's page did not serve", body)
     if AUTHORED_CONCEPT_SHORT_FORM not in body:
@@ -305,7 +313,8 @@ def walk(base_url):
     inside it — including a search matching only a hidden label (User Story 3 scenarios 1, 3,
     5, 9) — then follow the authored vocabulary to one of its own concepts and one of its own
     collections, reading the concept's page once in the demo's own default language and once
-    in German (015-read-single-record T024, FR-005, FR-010, FR-013, FR-014)."""
+    in German (015-read-single-record T024, FR-005, FR-010, FR-013, FR-014).
+    """
     base_url = base_url.rstrip("/")
     list_url = f"{base_url}/browse/"
     status, list_body = get(list_url)

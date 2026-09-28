@@ -599,7 +599,7 @@ Worked in `dcv-us6` on top of all five landed stories (baseline 975 passed).
 
 - **T025** — Conformance and whole-feature verification.
 
-  Article XIV mirroring: `management/commands/import_skos.py`, `rendering.py`, and `sources.py`
+  testing standard §4 mirroring: `management/commands/import_skos.py`, `rendering.py`, and `sources.py`
   each already have a same-named test module (`test_commands/test_import_skos.py`,
   `test_rendering.py`, `test_sources.py`), and every test package directory down to
   `test_management/test_commands/` carries its own `__init__.py`. Held already; nothing to fix.

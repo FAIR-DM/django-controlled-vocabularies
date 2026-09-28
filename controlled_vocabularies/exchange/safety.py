@@ -184,7 +184,8 @@ def _check_context_value(context: Any) -> None:
 
 def _iter_context_values(node: Any) -> list[Any]:
     """Every value keyed ``@context`` anywhere in ``node`` (JSON-LD allows one
-    per embedded node object, not only at the document's top level)."""
+    per embedded node object, not only at the document's top level).
+    """
     found: list[Any] = []
     if isinstance(node, dict):
         if "@context" in node:

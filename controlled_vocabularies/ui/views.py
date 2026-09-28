@@ -196,7 +196,6 @@ def concept_property_rows(
     and leaves ``value`` empty; every other row carries ``value`` and leaves the other
     three empty.
     """
-
     identifier_ids = count()
 
     def row(term: str, *, value=None, short_form=None, uri=None, href=None) -> dict:
@@ -320,7 +319,6 @@ def collection_property_rows(collection: Collection) -> list[dict]:
     row's ``entries`` key holds the list of ``{short_form, uri, href}`` dicts every
     other record-valued row would otherwise carry singly.
     """
-
     identifier_ids = count()
 
     def row(

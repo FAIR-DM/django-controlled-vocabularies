@@ -30,7 +30,8 @@ from controlled_vocabularies.management.sources import SourceResolver
 class DryRun(Exception):
     """Private sentinel that unwinds a dry run's outer transaction after a successful run,
     carrying the report out with it (`research.md` R5, `decisions.md` D4). Caught immediately
-    outside the block it is raised in; never seen outside this module."""
+    outside the block it is raised in; never seen outside this module.
+    """
 
     def __init__(self, report: ImportReport) -> None:
         self.report = report

@@ -138,7 +138,7 @@ Everything the command prints is translatable, the README tells an operator the 
 
 1. **Given** the command's help text and every message it prints, **When** the source is inspected, **Then** each is wrapped for translation with named placeholders, per Article XII.
 2. **Given** the shipped documentation, **When** the README is read, **Then** it documents the command, both source forms, and the dry run flag, alongside the programmatic entry point.
-3. **Given** the test suite, **When** the modules are located, **Then** they mirror the source tree per Article XIV and the fixtures are reusable rather than inlined per test.
+3. **Given** the test suite, **When** the modules are located, **Then** they mirror the source tree per testing standard §4 and the fixtures are reusable rather than inlined per test.
 
 ---
 

@@ -573,7 +573,8 @@ class ImportReport:
         self, reason: SetAsideReason, subject: str, **params: str
     ) -> None:
         """Record that ``subject`` was not stored, for ``reason``, with any extra ``params``
-        its message template needs."""
+        its message template needs.
+        """
         self.set_aside.append(
             SetAsideEntry(reason=reason, subject=subject, params=params)
         )
@@ -584,7 +585,8 @@ class ImportReport:
         """Record that ``subject`` was stored under a predicate other than the one the
         file asserted, for ``reason``, with any extra ``params`` its message template
         needs (T021, FR-009). The value *is* stored — this is visibility, not a refusal,
-        so it is tracked apart from :attr:`set_aside`."""
+        so it is tracked apart from :attr:`set_aside`.
+        """
         self.normalized.append(
             NormalizedEntry(reason=reason, subject=subject, params=params)
         )
@@ -593,12 +595,14 @@ class ImportReport:
         """Record that ``subject`` is why the whole run was refused, for ``reason``, with any
         extra ``params`` its message template needs (FR-004). A run with anything in
         :attr:`fatal` raises rather than returning; the caller reads this bucket from the
-        raised exception, not from a normal return value."""
+        raised exception, not from a normal return value.
+        """
         self.fatal.append(FatalFinding(reason=reason, subject=subject, params=params))
 
     def set_aside_by_reason(self) -> dict[SetAsideReason, list[SetAsideEntry]]:
         """Group :attr:`set_aside` entries by reason, for a curator-facing count per reason
-        (#51) without parsing any rendered message."""
+        (#51) without parsing any rendered message.
+        """
         grouped: dict[SetAsideReason, list[SetAsideEntry]] = {}
         for entry in self.set_aside:
             grouped.setdefault(entry.reason, []).append(entry)

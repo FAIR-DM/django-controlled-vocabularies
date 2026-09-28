@@ -1,6 +1,6 @@
 """Resolving a published language tag to a configured language (FS-007 US0).
 
-One class owns this subject (constitution Article XV) rather than a handful of
+One class owns this subject (constitution Article XIV) rather than a handful of
 module-level functions beside ``skos.py``'s own ``configured_language_codes()`` —
 the plan's "eight comparisons" all read through :class:`LanguageMatcher` once the
 stories after this one wire them up. This module imports nothing from ``rdflib``:

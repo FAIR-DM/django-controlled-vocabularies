@@ -1,7 +1,7 @@
 """``controlled_vocabularies.exchange.languages`` — resolving a published
 language tag to a configured language (tasks.md Phase 0, T001/T021).
 
-Grows one task at a time, mirroring the module (Article XIV).
+Grows one task at a time, mirroring the module (testing standard §4).
 """
 
 from controlled_vocabularies.exchange.languages import (

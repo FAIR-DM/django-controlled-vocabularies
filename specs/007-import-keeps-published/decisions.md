@@ -175,7 +175,7 @@ class, no registry and no settings hook is right-sized, and `models.py::_configu
 stays where it is, because folding it into `exchange` would invert the dependency.
 
 The panel is also the reason `skos.py::configured_language_codes()` is deleted rather than left in
-place. The plan cited that function as its own Article XV justification and then would have shipped
+place. The plan cited that function as its own Article XIV justification and then would have shipped
 it alongside the class that replaced it.
 
 **Round two** ran the same three lenses against the revised artefacts and returned `approve` on all
@@ -209,7 +209,7 @@ the truth about what was kept.
 
 The rule therefore lives on `LanguageMatcher` and both call sites read it. This also puts the
 predominance ranking where it is used rather than reaching into the matcher from `import_labels`,
-which is Article XV — the article this plan cites as its own justification.
+which is Article XIV — the article this plan cites as its own justification.
 
 ## D14 — A contest loser is not a surplus preferred label
 
@@ -962,7 +962,7 @@ its own prior slug back to itself (stable across a re-import) and the resolution
 identifier-derived rather than order-dependent (FR-020). Rather than duplicate that computation for
 `ConceptScheme`, it is factored out of `assign_unique_slug` into a shared function,
 `unique_slug_for_identifier(static_uri, taken_slugs)`, called by both
-`ConceptImporter.assign_unique_slug` and `SchemeResolver.resolve_scheme` — Article XV's cohesion
+`ConceptImporter.assign_unique_slug` and `SchemeResolver.resolve_scheme` — Article XIV's cohesion
 rule read literally: a concept's collision and a scheme's collision are the same computation over
 two record kinds, and this story's own conventions text named the reuse explicitly rather than
 leaving it to be noticed at review. `ConceptScheme.save()`'s own refusal is untouched: a curator
@@ -1075,7 +1075,7 @@ exists because the real majority was split — so a vocabulary that is 60% Engli
 publication imported as French, wrongly setting aside six of its ten concepts as
 `NO_PREFERRED_LABEL`.
 
-**The fix is a deletion, not an edit (Article XV)**: `determine_default_language` now calls
+**The fix is a deletion, not an edit (Article XIV)**: `determine_default_language` now calls
 `self.skos_graph.preferred_label_tag_counts(concept_nodes)` in place of its own copy of the same
 walk. The existing lowest-code tie-break (D15) is unchanged — it runs over whichever tally it is
 handed.

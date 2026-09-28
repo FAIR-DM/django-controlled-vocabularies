@@ -114,7 +114,7 @@ tests/
 which one is load-bearing (`decisions.md` D10):
 
 - It keeps an admin-only import out of `forms.py`, which otherwise has nothing to do with the admin,
-  and gives `tests/test_admin.py` a source module to mirror per Article XIV.
+  and gives `tests/test_admin.py` a source module to mirror per testing standard §4.
 - Django's `AdminConfig.ready()` autodiscovers `admin` modules only when the admin is installed —
   but that is not what satisfies FR-006, because `forms.py` calls the lookup on every render and so
   imports the module regardless. **FR-006 is satisfied by the function importing

@@ -129,7 +129,7 @@ Every string the field puts in front of a person is translatable, the README sho
 
 1. **Given** the field's validation messages and its `help_text`, **When** the source is inspected, **Then** each is wrapped for translation with named placeholders, per Article XII.
 2. **Given** the shipped documentation, **When** the README is read, **Then** it shows a field declaration, the readback of label and identifier, and what happens when the named vocabulary is absent.
-3. **Given** the test suite, **When** the modules are located, **Then** they mirror the source tree per Article XIV and the consuming model and fixtures are shared rather than redefined per test.
+3. **Given** the test suite, **When** the modules are located, **Then** they mirror the source tree per testing standard §4 and the consuming model and fixtures are shared rather than redefined per test.
 
 ---
 

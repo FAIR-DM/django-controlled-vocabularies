@@ -1,7 +1,7 @@
 """``controlled_vocabularies.exchange.mapping`` — the SKOS predicate/model correspondence,
 and, from 015-read-single-record T001, the opposite direction: a stored kind's CURIE.
 
-Mirrors the module (Article XIV). New module, so it carries no conformance declaration
+Mirrors the module (testing standard §4). New module, so it carries no conformance declaration
 of its own (tasks.md T001).
 """
 

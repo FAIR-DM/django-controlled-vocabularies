@@ -97,7 +97,8 @@ for _handler_class in (
 class ResolvedSource:
     """What :class:`SourceResolver` hands the importer: a local path, plus the base URI
     and serialization a fetched document carries (``None`` for a local path, which keeps
-    ``from_file``'s own defaults, T007-T009)."""
+    ``from_file``'s own defaults, T007-T009).
+    """
 
     path: str
     base_uri: str | None
@@ -175,7 +176,8 @@ class SourceResolver:
 
     def _fetch(self) -> Fetched:
         """Fetch :attr:`source` to a temporary file under a timeout and a byte ceiling
-        (T008, research.md R3)."""
+        (T008, research.md R3).
+        """
         try:
             response = _opener.open(self.source, timeout=_TIMEOUT_SECONDS)
         except OSError as exc:
@@ -257,6 +259,7 @@ class SourceResolver:
 
     def cleanup(self) -> None:
         """Remove the temporary file a fetch wrote, if any (T008). A no-op for a local
-        path source, and safe to call more than once."""
+        path source, and safe to call more than once.
+        """
         if self._temp_path is not None:
             self._temp_path.unlink(missing_ok=True)

@@ -44,7 +44,8 @@ class ReportRenderer:
     def render(self) -> Iterator[str]:
         """Yield translated lines: bucket counts, then the set-aside account (grouped by reason,
         per-entry detail at raised verbosity, then the per-language account), then the records
-        absent from the source, then the dry-run line. Nothing at all at ``--verbosity 0``."""
+        absent from the source, then the dry-run line. Nothing at all at ``--verbosity 0``.
+        """
         if self.verbosity == 0:
             # CORR-004 (review, correctness): D6 justifies reusing Django's own option on the
             # grounds that it "already means exactly this and every management command an
@@ -99,7 +100,8 @@ class ReportRenderer:
     def _render_set_aside_by_reason(self) -> Iterator[str]:
         """One line per reason with its count (T016, FR-007), read from
         :meth:`ImportReport.set_aside_by_reason` — never by parsing a rendered message. A reason
-        with no entries has no group in that mapping, so it yields no line of its own."""
+        with no entries has no group in that mapping, so it yields no line of its own.
+        """
         for reason, entries in self.report.set_aside_by_reason().items():
             count = len(entries)
             yield str(
@@ -112,14 +114,16 @@ class ReportRenderer:
 
     def _render_set_aside_detail(self) -> Iterator[str]:
         """One line per set-aside entry, each rendered by the entry's own ``render()`` (T018,
-        FR-007). Only reached at raised verbosity — :meth:`render` guards the call."""
+        FR-007). Only reached at raised verbosity — :meth:`render` guards the call.
+        """
         for entry in self.report.set_aside:
             yield entry.render()
 
     def _render_language_account(self) -> Iterator[str]:
         """The per-language account (T016, FR-007/FR-008), read from
         :meth:`ImportReport.language_account` — how many values a language would recover if
-        configured, one line per language."""
+        configured, one line per language.
+        """
         for language, count in self.report.language_account().items():
             yield str(
                 ngettext_lazy(
@@ -132,7 +136,8 @@ class ReportRenderer:
     def _render_absent_from_source_detail(self) -> Iterator[str]:
         """Records absent from the source, named in their own section (T017, FR-008,
         `decisions.md` D7): existing data left untouched, visibly separate from set-asides and
-        never counted among them."""
+        never counted among them.
+        """
         for subject in self.report.absent_from_source:
             yield str(
                 _("'%(subject)s' is present but no longer mentioned by the source.")

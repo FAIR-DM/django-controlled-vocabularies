@@ -25,7 +25,7 @@ lock. Change the tests workflow's `poetry-install-args` from `''` to `'--extras 
 `controlled_vocabularies/**`.
 
 Also declare the four test modules that mirror no source module, or the conformance check reads them
-as Article XIV violations once T004 and T009 land:
+as testing standard §4 violations once T004 and T009 land:
 
 ```toml
 [tool.forge.conformance]

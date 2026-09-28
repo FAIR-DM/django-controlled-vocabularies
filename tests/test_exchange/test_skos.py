@@ -730,7 +730,7 @@ class TestDefaultLanguageCommonestFallbackFoldsCaseLikeThePreferredLabelTally:
     counting as the one published tag FR-001 says they are. A vocabulary published 60%
     ``en-gb`` (mixed-case) and 40% ``fr`` therefore resolved its default language to ``fr``,
     setting aside six of its ten concepts as ``NO_PREFERRED_LABEL``. The fix is a deletion, not
-    an edit (Article XV): ``determine_default_language`` calls ``preferred_label_tag_counts``
+    an edit (Article XIV): ``determine_default_language`` calls ``preferred_label_tag_counts``
     instead of keeping its own copy.
     """
 

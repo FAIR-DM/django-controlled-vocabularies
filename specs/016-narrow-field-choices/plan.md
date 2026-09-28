@@ -37,7 +37,7 @@ dependency — this feature adds none)
 deployment. No new tables, no new columns, no migration to this package's own models.
 
 **Testing**: pytest + pytest-django + factory_boy from `mvp-shared[test]`; suite mirrors the source
-tree per Article XIV
+tree per testing standard §4
 
 **Target Platform**: A Django project installing this package
 
