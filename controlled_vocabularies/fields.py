@@ -498,7 +498,7 @@ def _create_membership_model(field, cls):
 
 def _refuse_concepts_the_restriction_does_not_admit(
     *, field, instance, action, reverse, model, pk_set, **kwargs
-):
+) -> None:
     """Refuse a write that attaches a concept the field's restriction does not admit.
 
     An ``m2m_changed`` receiver bound to a :class:`ConceptsField`'s through model.
