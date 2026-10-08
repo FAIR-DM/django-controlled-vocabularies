@@ -2,7 +2,7 @@
   "feature": "001-vocabulary-concepts",
   "branch": "001-vocabulary-concepts",
   "repo": "SamuelJennings/django-controlled-vocabularies",
-  "state": "GATE_MERGE",
+  "state": "MERGED",
   "state_history": [
     {
       "state": "INTAKE",
@@ -68,6 +68,11 @@
       "state": "GATE_MERGE",
       "at": "2026-07-23T23:40:00Z",
       "note": "amendment review approved; one low finding closed test-first (AppConfig verbose_name lazily translated, 14dfc48); 53 tests green; PR #24 back at Sam's merge gate"
+    },
+    {
+      "state": "MERGED",
+      "at": "2026-07-24T08:45:03Z",
+      "note": "PR #24 merged; approved by SamuelJennings"
     }
   ],
   "gates": {
@@ -88,8 +93,8 @@
       "at": "2026-07-23T15:55:00Z"
     },
     "merge": {
-      "approved_by": null,
-      "at": null
+      "approved_by": "SamuelJennings",
+      "at": "2026-07-24T08:44:50Z"
     }
   },
   "stories": [
@@ -292,6 +297,16 @@
   },
   "pr": {
     "number": 24,
-    "draft": true
+    "draft": false
+  },
+  "integrity": {
+    "recorded_at": "2026-10-08T19:38:34Z",
+    "by": "ledger-close",
+    "errors": [
+      "stories/5/tasks/0/evidence: 'tests/test_standards.py 11 cases; RED verified independently at 2b4d026 (8 failed, 3 passed \u2014 metadata/i18n assertions drove the RED; indexing guards already held)' is not of type 'object'",
+      "stories/5/tasks/1/evidence: 'efa29c3 \u2014 verbose_name+help_text on all six editable fields, Meta verbose_name(_plural), gettext_lazy validation messages via nested ValidationError(params=...) keeping msgids lazy (decisions.md #9); 52 passed' is not of type 'object'",
+      "stories/5/tasks/2/evidence: '61103e0 \u2014 metadata-only 0003 migration (AlterModelOptions+AlterField); makemigrations --check clean' is not of type 'object'"
+    ],
+    "note": "Present before the terminal close and left unrepaired. Repairing them here would mean inventing evidence that was never recorded, so the gap is recorded instead. The merge outcome below is read from the remote and is accurate."
   }
 }
