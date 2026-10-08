@@ -37,7 +37,7 @@ Everything needed to reach a minimum usable release.
 
 ### R1 — Core domain foundation
 
-*Large, expect several stories · advances the foundation, and G6 directly.* **Delivered.**
+*delivered in [#15](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/15), [#16](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/16), [#17](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/17), [#18](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/18) · advances the foundation, and G6 directly.*
 
 Nothing else can be built until the system can represent a vocabulary and everything inside it, so
 this goes first. It shipped as four features:
@@ -75,7 +75,7 @@ served URLs, and the editing interface.
 
 ### R2 — RDF import
 
-*Full feature · advances G4, and G8, G6.* **Delivered.**
+*delivered in [#49](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/49), [#50](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/50), [#51](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/51), [#52](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/52) · advances G4, and G8, G6.*
 
 Import is the only way to get real vocabularies into the system: the heat-flow vocabularies already
 published as Turtle, large external sets, and whatever a curator starts from. Until it existed,
@@ -103,11 +103,23 @@ interface.
 
 ### R3 — Concept consumption field
 
-*Full feature · advances G2.*
+*delivered in [#86](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/86), [#87](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/87), [#88](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/88), [#89](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/89), [#111](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/111), [#164](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/164) · advances G2.*
 
-This is what the whole package was built for: letting a Django project attach controlled-vocabulary
-concepts to its own models as first-class data. It depends on R1, and with R2 delivered there are
-now real imported vocabularies to build and test the field against, rather than only fixtures.
+This is what the whole package was built for: a Django project attaches controlled-vocabulary
+concepts to its own models as first-class data. It shipped as five features and one fix:
+
+- attaching a concept from a chosen vocabulary to a model
+  ([#86](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/86));
+- attaching several concepts
+  ([#87](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/87));
+- choosing a concept by typing instead of scrolling
+  ([#88](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/88));
+- concept selection inside the Django admin
+  ([#89](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/89));
+- narrowing a field's choices to part of a vocabulary
+  ([#164](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/164));
+- the single and multiple fields naming their vocabulary the same way
+  ([#111](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/111)).
 
 **Deliverables:**
 
@@ -167,24 +179,41 @@ Anything that advances toward the v1.0.0 release.
 
 ### R6 — Vocabulary browsing
 
-*Full feature · advances G7.* A read-only way for people to search and move around concepts, across
-both local vocabularies and imported external ones, so a stable URI leads somewhere a person can
-use.
+*delivered in [#140](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/140), [#141](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/141), [#142](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/142) · advances G7.*
+
+People search and move around concepts on read-only pages, across both local vocabularies and
+imported external ones, so a stable URI leads somewhere a person can use. It shipped as three
+features:
+
+- finding a vocabulary
+  ([#140](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/140));
+- looking inside a vocabulary
+  ([#141](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/141));
+- reading a single record
+  ([#142](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/142)).
+
+[Browsing](browsing.md) covers mounting the pages.
 
 ### R7 — Scale hardening
 
-*Full feature · advances G5.* Keep search, browse, and autocomplete responsive at tens of thousands
-of concepts, and support navigation over deep hierarchies.
+*Full feature · advances G5.*
+
+Keep search, browse, and autocomplete responsive at tens of thousands of concepts, and support
+navigation over deep hierarchies.
 
 ### R8 — Embeddable and standalone modes
 
-*Full feature · advances G9.* Make the app a good guest inside a host Django project, and, with a
-thin wrapper, a system that runs on its own.
+*Full feature · advances G9.*
+
+Make the app a good guest inside a host Django project, and, with a thin wrapper, a system that runs
+on its own.
 
 ### R9 — Adopt the heat-flow vocabularies as first real content
 
-*Small to medium · advances G10.* Move the existing heat-flow vocabularies onto this app as the
-first production content, exercising the manage, consume, and publish loop on a real dataset.
+*Small to medium · advances G10.*
+
+Move the existing heat-flow vocabularies onto this app as the first production content, exercising
+the manage, consume, and publish loop on a real dataset.
 
 ## Aspirational goals: v2.0
 
@@ -192,10 +221,12 @@ Bigger bets, taken on once the 1.x line is stable.
 
 ### R10 — Collaborative curation
 
-*Draft · large · advances G11.* Several curators working the same vocabularies under object-level
-permissions.
+*Draft · large · advances G11.*
+
+Several curators working the same vocabularies under object-level permissions.
 
 ### R11 — Vocabulary versioning
 
-*Draft · large · advances G12.* Track versions of a vocabulary as it changes so a consumer can cite
-the version it used.
+*Draft · large · advances G12.*
+
+Track versions of a vocabulary as it changes so a consumer can cite the version it used.
