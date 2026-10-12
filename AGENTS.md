@@ -58,5 +58,5 @@ CI calls the reusable workflows in `django-mvp/shared`, pinned to a release tag 
 
 Feature work follows a spec-driven process: spec → plan → tasks → implement → review → PR, with
 `specs/NNN-slug/` directories generated per feature (there is no Spec Kit install in the repo).
-Project standards and the quality bar live in `CONSTITUTION.md`; the testing and code-documentation
+Project standards and the quality bar live in `CONSTITUTION.md`; the testing, code-documentation and Django
 rules it points to live in `docs/contributing/standards/`.

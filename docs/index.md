@@ -25,6 +25,8 @@ how to install it, and the shortest example that works. These pages are the manu
   cycle, how tests and fixtures are structured, and the coverage floors.
 - **[Code documentation standards](contributing/standards/code-documentation.md)** — docstrings,
   component annotations and comments.
+- **[Django standards](contributing/standards/django.md)** — where code lives, and when a new
+  abstraction is worth adding.
 
 ## Direction and decisions
 
