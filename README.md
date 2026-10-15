@@ -3,11 +3,13 @@
 [![Tests](https://github.com/FAIR-DM/django-controlled-vocabularies/actions/workflows/tests.yml/badge.svg)](https://github.com/FAIR-DM/django-controlled-vocabularies/actions/workflows/tests.yml)
 [![Build](https://github.com/FAIR-DM/django-controlled-vocabularies/actions/workflows/build.yml/badge.svg)](https://github.com/FAIR-DM/django-controlled-vocabularies/actions/workflows/build.yml)
 [![Publish](https://github.com/FAIR-DM/django-controlled-vocabularies/actions/workflows/publish.yml/badge.svg)](https://github.com/FAIR-DM/django-controlled-vocabularies/actions/workflows/publish.yml)
-[![PyPI](https://img.shields.io/pypi/v/django-controlled-vocabularies.svg)](https://pypi.org/project/django-controlled-vocabularies/)
-[![codecov](https://codecov.io/gh/FAIR-DM/django-controlled-vocabularies/branch/main/graph/badge.svg)](https://codecov.io/gh/FAIR-DM/django-controlled-vocabularies)
-[![Python Versions](https://img.shields.io/pypi/pyversions/django-controlled-vocabularies.svg)](https://pypi.org/project/django-controlled-vocabularies/)
-[![Django Versions](https://img.shields.io/pypi/djversions/django-controlled-vocabularies.svg)](https://pypi.org/project/django-controlled-vocabularies/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Coverage](https://codecov.io/gh/FAIR-DM/django-controlled-vocabularies/branch/main/graph/badge.svg)](https://codecov.io/gh/FAIR-DM/django-controlled-vocabularies)
+[![PyPI](https://img.shields.io/pypi/v/django-controlled-vocabularies)](https://pypi.org/project/django-controlled-vocabularies/)
+[![Development status](https://img.shields.io/pypi/status/django-controlled-vocabularies)](https://pypi.org/project/django-controlled-vocabularies/)
+[![Python](https://img.shields.io/pypi/pyversions/django-controlled-vocabularies)](https://pypi.org/project/django-controlled-vocabularies/)
+[![Django](https://img.shields.io/pypi/djversions/django-controlled-vocabularies)](https://pypi.org/project/django-controlled-vocabularies/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Licence](https://img.shields.io/github/license/FAIR-DM/django-controlled-vocabularies)](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/LICENSE)
 
 Manage, publish, and consume SKOS controlled vocabularies in Django.
 
