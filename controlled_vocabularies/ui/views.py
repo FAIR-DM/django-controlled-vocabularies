@@ -35,7 +35,7 @@ from controlled_vocabularies.models import (
 from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
 
 
-class StrippedSearchMixin:
+class _StrippedSearchMixin:
     """Strip the search term in the request before the filterset reads it."""
 
     def setup(self, request, *args, **kwargs):
@@ -51,7 +51,7 @@ class StrippedSearchMixin:
             request.GET = stripped
 
 
-class VocabularyListView(StrippedSearchMixin, MVPListView):
+class VocabularyListView(_StrippedSearchMixin, MVPListView):
     """Every vocabulary the site holds, narrowed by an optional search."""
 
     model = ConceptScheme
@@ -437,7 +437,7 @@ class CollectionDetailView(MVPDetailView):
         return context
 
 
-class VocabularyDetailView(StrippedSearchMixin, MVPListView):
+class VocabularyDetailView(_StrippedSearchMixin, MVPListView):
     """A single vocabulary's page: its description, provenance and the concepts it holds.
 
     A list view over ``Concept`` rather than a detail view over ``ConceptScheme``,
