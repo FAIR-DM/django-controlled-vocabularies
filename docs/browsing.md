@@ -19,12 +19,17 @@ holds; finding a concept without already knowing which vocabulary holds it is no
 page does. The term travels in the page's address (`?q=`), so a narrowed list can be linked to or
 bookmarked and returned to. A second word **widens** the results rather than narrowing them:
 matching is OR across every word and both fields, not AND, which is the opposite of what a search
-box usually implies. A search matching nothing says so and repeats what was searched for.
+box usually implies. A search matching nothing says so, repeats what was searched for, and offers
+**Clear all** as the way back to the full list.
 
 A sort control offers the list by name, A-Z or Z-A. That choice travels in the address as `?o=`,
 next to any search term, so a searched and sorted list is still one link you can share. Only the
 orderings the view declares are honoured. Anything else in `?o=` is ignored rather than passed to
-the database, and the page comes back in its default order.
+the database, and the page comes back in its default order. Two vocabularies with the same name
+keep the same order across pages.
+
+Searching, sorting and moving between pages update the list in place, and the address bar follows,
+so the back button and a copied link behave as they would after a full page load.
 
 There is no way to filter the list. Filtering needs an axis, and a vocabulary has none that would
 suit every site.
@@ -58,20 +63,22 @@ INSTALLED_APPS = [
     "django_cotton",
     "easy_icons",
     "flex_menu",
-    # "mvp" before "crispy_tailwind": django-mvp ships an override of crispy-tailwind's
-    # help-text template, and the first app to declare a template path wins.
+    # "daisy_cotton" below "mvp": both ship an icon component, and the first app to declare a
+    # template path wins.
     "mvp",
+    "daisy_cotton",
     "crispy_forms",
-    "crispy_tailwind",
+    "mvp_forms",
+    "django_filters",
     "controlled_vocabularies.ui",
 ]
 
 # crispy-forms 2.7's get_template_pack() has no default, and the {% crispy %} tag validates
 # the pack against CRISPY_ALLOWED_TEMPLATE_PACKS at template-compile time — django-mvp's own
 # templates carry the tag, so both settings are required even though this page renders no
-# form of its own.
-CRISPY_TEMPLATE_PACK = "tailwind"
-CRISPY_ALLOWED_TEMPLATE_PACKS = ["tailwind"]
+# form of its own. "daisyui" is the pack django-mvp-forms provides; django-mvp installs it.
+CRISPY_TEMPLATE_PACK = "daisyui"
+CRISPY_ALLOWED_TEMPLATE_PACKS = ["daisyui"]
 
 TEMPLATES[0]["OPTIONS"]["context_processors"] += ["mvp.context_processors.mvp_config"]
 
@@ -118,11 +125,10 @@ Each entry's name is a link to that vocabulary's own page, described below. The 
 from the route's name rather than composed from the identifier base address, so it stays an
 in-site address whatever that setting says.
 
-**One thing is still missing.** When a search on this page matches nothing, it names the term but
-offers no link back to the unsearched list. Clearing the box and pressing the button does the same
-job, so the page is not a dead end, but the link belongs there. It has to go in the page's actions
-area, and django-mvp offers no way to add anything there without replacing the whole page template
-([django-mvp#291](https://github.com/django-mvp/django-mvp/issues/291)).
+The search and the sort are a django-filter filterset, `VocabularyFilter` in
+`controlled_vocabularies.ui.filters`: `q` is django-mvp's `SearchFilter` and `o` its `SortFilter`.
+Only the first hundred words of a search are used, far more than any real search, because the
+query grows with every word.
 
 Until django-mvp 0.19.2 the search box on this page could not be submitted at all: its input was
 tied to a form only the filter control created
@@ -186,8 +192,8 @@ the concept it names without ever displaying the label itself, which is the whol
 keeping it hidden. As with the list of vocabularies above, the term travels in the page's own
 address (`?q=`), so a narrowed list can be linked to, bookmarked and returned to, and it reaches
 every concept in the vocabulary before paging divides the results — not only the page being
-viewed. A search matching nothing says so, repeats what was searched for, and offers a link back
-to the whole vocabulary.
+viewed. A search matching nothing says so, repeats what was searched for, and offers **Clear all**
+as the way back to the whole vocabulary.
 
 Case is ignored, with the same database-dependent limit disclosed above: SQLite folds ASCII
 letters only, so a concept labelled *Ökologie* is found by *ÖKOLOGIE* and not by *ökologie*;
@@ -197,15 +203,15 @@ PostgreSQL folds the whole of Unicode and matches either way
 Searching by address works the same as searching in the box: the demo project's own DCMI Type
 Vocabulary carries a concept named *Dataset* with a hidden label of `Datset`, a plausible
 misspelling — `?q=Datset` narrows the page to *Dataset* without the misspelling itself ever
-appearing in the response, and the narrowed address can be shared and bookmarked the same as any
-other. Unlike the list of vocabularies, a search here that matches nothing offers a link back to
-the unsearched vocabulary: this page has a template of its own to put that link in, where the list
-of vocabularies has none.
+appearing among the results, and the narrowed address can be shared and bookmarked the same as any
+other. The term you typed is still repeated above the results, as on any search.
 
 A sort control offers the concepts by label, A-Z or Z-A. The choice travels in the address as
 `?o=`, next to any search term, exactly as it does on the list of vocabularies. It sorts by the
 label a reader actually sees rather than the stored one, so a German reader gets the concepts in
-German alphabetical order and not in the vocabulary's own default language.
+German alphabetical order and not in the vocabulary's own default language. The search and the sort
+are `ConceptFilter`, in `controlled_vocabularies.ui.filters`, and only the first ten words of a
+search are used.
 
 Reverse the page by name, passing the vocabulary's slug:
 

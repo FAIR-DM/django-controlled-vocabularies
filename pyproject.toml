@@ -54,11 +54,15 @@ Homepage = "https://github.com/FAIR-DM/django-controlled-vocabularies"
 # is 3.11, so the marker makes the extra unavailable there rather than an
 # install error. Pinned to the 0.19 line rather than the whole pre-1.0 range:
 # a 0.x minor is free to change the browsing page's markup, and this package
-# reads that markup in its own tests. The floor is 0.19.2 and not lower: below
-# it the shipped search and sort controls render associated with a form only
-# the filter action defines (django-mvp#282), so both are inert on a page that
-# shows neither a filter nor a create button — which is every page here.
-ui = ["django-mvp>=0.19.2,<0.24.0; python_version >= '3.12'"]
+# reads that markup in its own tests. The floor is 0.30.1: from 0.29 a list
+# page takes its search and sort from a django-filter filterset, and 0.30.1 is
+# the release this package's pages and tests were written against.
+# django-filter is declared beside it because controlled_vocabularies/ui/filters.py
+# imports it directly; the range is django-mvp's own.
+ui = [
+    "django-mvp>=0.30.1,<0.31.0; python_version >= '3.12'",
+    "django-filter>=26.1,<27; python_version >= '3.12'",
+]
 
 [dependency-groups]
 # Shared toolchain bundle from django-mvp/shared, pinned to a release tag. Ships
@@ -69,7 +73,7 @@ ui = ["django-mvp>=0.19.2,<0.24.0; python_version >= '3.12'"]
 # dependency after a plain `uv sync`, in CI and locally.
 dev = [
     "mvp-shared[dev,test]; python_version >= '3.12'",
-    "django-mvp>=0.19.2,<0.24.0; python_version >= '3.12'",
+    "django-mvp>=0.30.1,<0.31.0; python_version >= '3.12'",
 ]
 
 [tool.uv.sources]
@@ -162,10 +166,12 @@ extend_exclude = [
 [tool.deptry.per_rule_ignores]
 DEP003 = ["controlled_vocabularies"]
 
-# django-mvp installs as `mvp`; without this map deptry looks for a module
-# named `django_mvp` and reports every ui/ import as a missing dependency.
+# django-mvp installs as `mvp` and django-filter as `django_filters`; without
+# this map deptry looks for modules named after the distributions and reports
+# every ui/ import of them as a missing dependency.
 [tool.deptry.package_module_name_map]
 django-mvp = "mvp"
+django-filter = "django_filters"
 
 [tool.forge.conformance]
 # The subject of each of these four is not a Python module under

@@ -9,7 +9,7 @@
     Leads the page rather than trailing the list, so a reader citing this record need not scroll past
     it. Not a list row: those are the statements the record makes about itself (FS-015).
   {% endcomment %}
-  <c-text size="xs" muted><c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" /></c-text>
+  <c-mvp.text size="xs" muted><c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" /></c-mvp.text>
   <dl>
     {% for row in rows %}
       {% if row.short_form %}
@@ -32,7 +32,7 @@
       other records make about it. Headed "Member of", as "Collections" reads as belonging to the concept.
     {% endcomment %}
     <div class="concept-collections">
-      <c-text size="sm" bold>{% trans "Member of" %}</c-text>
+      <c-mvp.text size="sm" bold>{% trans "Member of" %}</c-mvp.text>
       <ul>
         {% for collection in concept_collections %}
           <li>

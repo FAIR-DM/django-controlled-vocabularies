@@ -8,7 +8,7 @@
   {% comment %}
     Leads the page, as in concept_detail.html.
   {% endcomment %}
-  <c-text size="xs" muted><c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" /></c-text>
+  <c-mvp.text size="xs" muted><c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" /></c-mvp.text>
   <dl>
     {% for row in rows %}
       {% if row.entries %}
@@ -34,6 +34,6 @@
     the reader to infer it from an absence (FS-015).
   {% endcomment %}
   {% if not collection_has_members %}
-    <c-text muted>{% trans "This collection holds no members." %}</c-text>
+    <c-mvp.text muted>{% trans "This collection holds no members." %}</c-mvp.text>
   {% endif %}
 {% endblock page.content %}

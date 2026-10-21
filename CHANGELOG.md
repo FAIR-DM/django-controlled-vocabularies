@@ -15,6 +15,20 @@ All notable changes to this project are documented in this file. The format foll
 - The project is built and developed with uv instead of Poetry. Contributors run `uv sync` in
   place of `poetry install`, and `uv run` in place of `poetry run`. Published packages are
   unaffected.
+- **Breaking:** the `ui` extra requires django-mvp 0.30.1 or later, below 0.31. A project
+  installing it changes its settings to match. In `INSTALLED_APPS`, `"crispy_tailwind"` becomes
+  `"mvp_forms"`, with `"daisy_cotton"` listed below `"mvp"` and `"django_filters"` added. Both
+  `CRISPY_TEMPLATE_PACK` and `CRISPY_ALLOWED_TEMPLATE_PACKS` become `"daisyui"`. See "Wiring it
+  up" in `docs/browsing.md`.
+- The search and sort of the list of vocabularies and of a vocabulary's page are filtersets,
+  `VocabularyFilter` and `ConceptFilter` in `controlled_vocabularies.ui.filters`. The addresses
+  are unchanged: `?q=` searches and `?o=` sorts, with the same option names. A sorted list keeps
+  two records of the same name in the same order on every page. Searching, sorting and paging
+  update the list in place.
+- A search that matches nothing shows the term above the results with a control to remove it,
+  and offers Clear all as the way back to the full list. This replaces the "Nothing matches"
+  heading. The list of vocabularies now has a way back from a search that matches nothing, which
+  until now only a vocabulary's page had.
 
 ## [v0.1.0] - 2026-08-26
 

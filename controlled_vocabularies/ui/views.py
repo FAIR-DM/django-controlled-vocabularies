@@ -32,83 +32,49 @@ from controlled_vocabularies.models import (
     ConceptNote,
     ConceptScheme,
 )
+from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
 
 
-class VocabularyListView(MVPListView):
+class StrippedSearchMixin:
+    """Strip the search term in the request before the filterset reads it."""
+
+    def setup(self, request, *args, **kwargs):
+        """Replace a ``?q=`` carrying surrounding whitespace with its stripped value."""
+        # The search filter strips the term it searches with, but the search box shows the raw one, so
+        # a whitespace-only query would come back in the box and read as searched while filtering
+        # nothing (#140).
+        super().setup(request, *args, **kwargs)
+        term = request.GET.get("q")
+        if term is not None and term != term.strip():
+            stripped = request.GET.copy()
+            stripped["q"] = term.strip()
+            request.GET = stripped
+
+
+class VocabularyListView(StrippedSearchMixin, MVPListView):
     """Every vocabulary the site holds, narrowed by an optional search."""
 
     model = ConceptScheme
     list_item_template = "controlled_vocabularies/ui/conceptscheme_list_item.html"
 
     # No page template of our own: the page is django-mvp's `list_view.html` and this package supplies
-    # only the row. An override would outlive the upstream fix it worked around (django-mvp#282, fixed
-    # in 0.19.2). One test stays skipped for a gap that release left open (django-mvp#291).
+    # only the row. A search that matches nothing gets django-mvp's no-match state, which repeats the
+    # term and offers Clear all as the way back to the full list.
+    # An empty site says so, rather than pointing at a create button this page does not show.
+    empty_state_heading = _("This site holds no vocabularies")
+    empty_state_message = None
 
-    search_fields = ["name", "description"]
+    filterset_class = VocabularyFilter
+    # Both in the toolbar, so the page draws no filter panel and no button to open one.
+    toolbar_filters = ["q", "o"]
 
-    # A class attribute: Django applies `ordering` before django-mvp's search mixin adds `.distinct()`,
-    # which an order_by() in get_queryset() would land after. `pk` makes the order total for pagination.
+    # A class attribute: Django applies `ordering` before the search adds `.distinct()`, which an
+    # order_by() in get_queryset() would land after. `pk` makes the order total for pagination.
     ordering = [Lower("name"), "pk"]
-
-    # Declaring these is what makes django-mvp render the sort control. Each is one expression, so a
-    # chosen sort has no `pk` tiebreak and equal names can swap pages (django-mvp#290).
-    order_by = [
-        ("name_asc", _("Name (A-Z)"), Lower("name")),
-        ("name_desc", _("Name (Z-A)"), Lower("name").desc()),
-    ]
-
-    max_search_words = 100
-
-    def setup(self, request, *args, **kwargs):
-        """Bound the search term to ``max_search_words`` words before anything reads it."""
-        # django-mvp ORs one condition per word with no bound. Past roughly 400 words the expression
-        # exceeds SQLite's parser depth limit and the page raises OperationalError (django-mvp#281).
-        # The bound is far above any real search, because dropping words from an OR search drops matches.
-        super().setup(request, *args, **kwargs)
-        words = request.GET.get("q", "").split()
-        if len(words) > self.max_search_words:
-            bounded = request.GET.copy()
-            bounded["q"] = " ".join(words[: self.max_search_words])
-            request.GET = bounded
 
     def get_queryset(self):
         """Annotate each vocabulary with its concept count."""
         return super().get_queryset().annotate(concept_count=Count("concepts"))
-
-    def get_search_term(self):
-        """Return the stripped search term.
-
-        Returns:
-            The ``?q=`` value with surrounding whitespace removed, empty when none was given.
-        """
-        # Stripped as django-mvp's search mixin does, so "a search is in force" means the same to the
-        # empty states as to the queryset. `search_query` in the context is the raw value.
-        return self.request.GET.get("q", "").strip()
-
-    def get_context_data(self, **kwargs):
-        """Add the stripped search term, and make it the value the search box shows."""
-        context = super().get_context_data(**kwargs)
-        context["search_term"] = self.get_search_term()
-        # django-mvp fills the search box from the raw `?q=`, so a whitespace-only query would put
-        # whitespace back in the box and read as searched while filtering nothing (#140).
-        context["search_query"] = context["search_term"]
-        return context
-
-    def get_empty_state_heading(self):
-        """Return a heading that names the search term, or says the site holds no vocabularies."""
-        # Plain translatable text, never mark_safe: django-mvp's empty state autoescapes the string, so
-        # the way back to the full list is a link in the actions block, not markup here.
-        search_term = self.get_search_term()
-        if search_term:
-            return _("Nothing matches “%(term)s”") % {"term": search_term}
-        return _("This site holds no vocabularies")
-
-    def get_empty_state_message(self):
-        """Return a hint after an unmatched search, and no message for an empty site."""
-        if self.get_search_term():
-            return _("Try a different search term.")
-        # None: the base class's default points at a create button this page does not show.
-        return None
 
 
 def concept_property_rows(
@@ -471,7 +437,7 @@ class CollectionDetailView(MVPDetailView):
         return context
 
 
-class VocabularyDetailView(MVPListView):
+class VocabularyDetailView(StrippedSearchMixin, MVPListView):
     """A single vocabulary's page: its description, provenance and the concepts it holds.
 
     A list view over ``Concept`` rather than a detail view over ``ConceptScheme``,
@@ -488,16 +454,11 @@ class VocabularyDetailView(MVPListView):
     # pagination (#140).
     ordering = [Lower("resolved_label"), "pk"]
 
-    # By the label shown, as `ordering` above. The single-expression limit is the list view's
-    # (django-mvp#290).
-    order_by = [
-        ("label_asc", _("Label (A-Z)"), Lower("resolved_label")),
-        ("label_desc", _("Label (Z-A)"), Lower("resolved_label").desc()),
-    ]
+    filterset_class = ConceptFilter
+    toolbar_filters = ["q", "o"]
 
-    # `labels__text` reaches every label: other languages, alternative and hidden. Notes are left out
-    # on purpose. A hidden label is matched but never shown, since display reads only preferred labels.
-    search_fields = ["label", "labels__text"]
+    empty_state_heading = _("This vocabulary holds no concepts")
+    empty_state_message = None
 
     def setup(self, request, *args, **kwargs):
         """Resolve the vocabulary and build the queryset of its concepts."""
@@ -531,35 +492,9 @@ class VocabularyDetailView(MVPListView):
         # Otherwise the title reads as the concept model's plural.
         return self.vocabulary.name
 
-    def get_search_term(self):
-        """Return the stripped search term.
-
-        Returns:
-            The ``?q=`` value with surrounding whitespace removed, empty when none was given.
-        """
-        # Stripped as django-mvp's search mixin does, so "a search is in force" means the same to the
-        # empty states and the back link as to the queryset (#140).
-        return self.request.GET.get("q", "").strip()
-
     def get_context_data(self, **kwargs):
-        """Add the vocabulary, the stripped search term and the vocabulary's collections."""
+        """Add the vocabulary and its collections."""
         context = super().get_context_data(**kwargs)
         context["vocabulary"] = self.vocabulary
-        context["search_term"] = self.get_search_term()
-        # The stripped term, as in VocabularyListView.
-        context["search_query"] = context["search_term"]
         context["collections"] = self.vocabulary.collections.order_by(Lower("name"))
         return context
-
-    def get_empty_state_heading(self):
-        """Return a heading that names the search term, or says the vocabulary holds no concepts."""
-        search_term = self.get_search_term()
-        if search_term:
-            return _("Nothing matches “%(term)s”") % {"term": search_term}
-        return _("This vocabulary holds no concepts")
-
-    def get_empty_state_message(self):
-        """Return a hint after an unmatched search, and no message otherwise."""
-        if self.get_search_term():
-            return _("Try a different search term.")
-        return None
