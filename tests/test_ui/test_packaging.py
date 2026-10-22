@@ -27,7 +27,8 @@ class TestDjangoMVPIsOptOnly:
         pyproject = load_pyproject()
         extras = pyproject["project"]["optional-dependencies"]
         assert [requirement.split(">")[0] for requirement in extras["ui"]] == [
-            "django-mvp"
+            "django-mvp",
+            "django-filter",
         ]
 
     def test_django_mvp_is_absent_from_every_other_extra(self):
@@ -61,7 +62,7 @@ class TestToolingReadsCoreOnlySettings:
             "mvp",
             "django_cotton",
             "crispy_forms",
-            "crispy_tailwind",
+            "mvp_forms",
             "easy_icons",
             "flex_menu",
         ):

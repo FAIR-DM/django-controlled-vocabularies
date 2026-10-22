@@ -3,7 +3,7 @@
   A slot rather than the card's `title` attribute, which is escaped text and cannot carry an anchor.
   The row renders in an isolated context holding only the object, so the address comes from the route name.
 {% endcomment %}
-<c-card>
+<c-mvp.card>
   <c-slot name="title">
     <a href="{% url 'controlled_vocabularies_ui:vocabulary-detail' object.slug %}">{{ object.name }}</a>
   </c-slot>
@@ -19,14 +19,14 @@
       Truncated here rather than clamped in CSS: django-mvp's prebuilt stylesheet omits classes its own
       templates do not use, so `line-clamp-*` would silently do nothing.
     {% endcomment %}
-    <c-text size="sm" muted>{{ object.description|truncatewords:40 }}</c-text>
+    <c-mvp.text size="sm" muted>{{ object.description|truncatewords:40 }}</c-mvp.text>
   {% endif %}
   {% if object.static_uri %}
     {% comment %} An outbound link to an address this site does not control, hence rel="noopener". A bare
        anchor, as the text component always renders a paragraph (#140). {% endcomment %}
     <a href="{{ object.static_uri }}" rel="noopener">{{ object.static_uri }}</a>
   {% endif %}
-  <c-text size="xs" muted>
+  <c-mvp.text size="xs" muted>
     {% blocktrans count counter=object.concept_count %}{{ counter }} concept{% plural %}{{ counter }} concepts{% endblocktrans %}
-  </c-text>
-</c-card>
+  </c-mvp.text>
+</c-mvp.card>

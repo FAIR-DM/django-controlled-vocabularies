@@ -3,8 +3,8 @@
   `object.scheme`, which VocabularyDetailView select_relates. `title` is a slot for the reason
   given in conceptscheme_list_item.html.
 {% endcomment %}
-<c-card>
+<c-mvp.card>
   <c-slot name="title">
     <a href="{% url 'controlled_vocabularies_ui:concept-detail' object.scheme.slug object.slug %}">{{ object.resolved_label }}</a>
   </c-slot>
-</c-card>
+</c-mvp.card>

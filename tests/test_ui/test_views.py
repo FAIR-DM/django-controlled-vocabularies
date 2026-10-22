@@ -89,6 +89,29 @@ def term_text(dt) -> str:
     return visible_text(dt).strip()
 
 
+def submits_to(soup, name) -> str | None:
+    """Return the id of the form an input submits with.
+
+    An input belongs to the form named by its ``form`` attribute, else to the form it sits in.
+    django-mvp draws the search box inside the filter form and the sort's input outside it, so
+    a check reading only one of the two would miss the other.
+
+    Args:
+        soup: The parsed page.
+        name: The input's ``name``.
+
+    Returns:
+        The form's id, or ``None`` when the input belongs to no form.
+    """
+    field = soup.find("input", attrs={"name": name})
+    if field is None:
+        return None
+    if field.get("form"):
+        return field["form"]
+    form = field.find_parent("form")
+    return form.get("id") if form else None
+
+
 class TestVocabularyList:
     @pytest.mark.django_db
     def test_every_vocabulary_appears_exactly_once(self, client):
@@ -328,8 +351,8 @@ class TestVocabularyListOrdering:
 
 
 class TestVocabularyListChosenOrdering:
-    # ?o= does nothing unless the view declares order_by, and the sort control is wrapped in
-    # {% if order_by_choices %} upstream, so a view declaring none ignores it in silence.
+    # ?o= does nothing unless the view's filterset declares a sort, and the sort control is drawn
+    # only for one, so a view declaring none ignores it in silence.
 
     @pytest.mark.django_db
     def test_the_page_offers_both_directions_by_name(self, client):
@@ -338,7 +361,7 @@ class TestVocabularyListChosenOrdering:
         response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
 
         assert [
-            key for key, _label, _expression in response.context["order_by_choices"]
+            key for key, _label, _columns in response.context["filter"].filters["o"].options
         ] == [
             "name_asc",
             "name_desc",
@@ -370,7 +393,7 @@ class TestVocabularyListChosenOrdering:
             reverse("controlled_vocabularies_ui:vocabulary-list"), {"o": "name_desc"}
         )
 
-        assert response.context["current_ordering"] == "name_desc"
+        assert response.context["sort_label"] == "Name (Z-A)"
 
     @pytest.mark.django_db
     def test_an_ordering_nobody_offered_is_ignored_rather_than_obeyed(self, client):
@@ -388,7 +411,7 @@ class TestVocabularyListChosenOrdering:
             "antelope",
             "Zebra",
         ]
-        assert response.context["current_ordering"] == ""
+        assert response.context["sort_label"] == ""
 
     @pytest.mark.django_db
     def test_a_search_and_a_chosen_order_apply_together(self, client):
@@ -414,7 +437,7 @@ class TestVocabularyListChosenOrdering:
         soup = BeautifulSoup(response.content, "html.parser")
 
         assert soup.find("form", id="filterForm") is not None
-        assert soup.find("input", attrs={"name": "o"}).get("form") == "filterForm"
+        assert submits_to(soup, "o") == "filterForm"
 
 
 class TestVocabularyListEmptyState:
@@ -576,22 +599,23 @@ class TestVocabularySearch:
 
     @pytest.mark.django_db
     def test_the_rendered_page_carries_a_search_input_and_nothing_else(self, client):
-        # The toolbar django-mvp renders by default also offers filter and create, and this
-        # page uses neither. Sort renders only because the view declares order_by.
+        # The toolbar django-mvp renders can also offer a filter panel and create, and this
+        # page uses neither. Sort renders only because the view's filterset declares one.
         ConceptSchemeFactory()
 
         response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
         content = response.content.decode()
+        soup = BeautifulSoup(response.content, "html.parser")
 
         assert 'name="q"' in content
         assert 'name="o"' in content
-        assert "filterModal" not in content
+        assert soup.find(id="filters") is None
 
     @pytest.mark.django_db
     def test_the_search_input_belongs_to_a_get_form_that_actually_exists(self, client):
-        # The search input and button carry a hard-coded form="filterForm". Before django-mvp
-        # 0.19.2 that id existed only inside the filter action, so search alone was wired to
-        # nothing. A query-string test never touches the box's own wiring.
+        # Before django-mvp 0.19.2 the search box named a form="filterForm" that existed only
+        # inside the filter action, so search alone was wired to nothing. A query-string test
+        # never touches the box's own wiring.
         ConceptSchemeFactory()
 
         response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
@@ -601,16 +625,9 @@ class TestVocabularySearch:
         assert form is not None
         assert form.get("method", "").lower() == "get"
 
-        search_input = soup.find("input", attrs={"name": "q"})
-        assert search_input is not None
-        assert search_input.get("form") == "filterForm"
-
-        submit = soup.find(attrs={"type": "submit", "form": "filterForm"})
-        assert submit is not None
-
-        sort_input = soup.find("input", attrs={"name": "o"})
-        assert sort_input is not None
-        assert sort_input.get("form") == "filterForm"
+        assert submits_to(soup, "q") == "filterForm"
+        assert form.find(attrs={"type": "submit"}) is not None
+        assert submits_to(soup, "o") == "filterForm"
 
 
 class TestVocabularySearchAcrossRequestsAndPages:
@@ -690,21 +707,6 @@ class TestVocabularySearchEmptyState:
         assert response.status_code == 200
         assert "Stratigraphy" in content
 
-    @pytest.mark.skip(
-        reason=(
-            "django-mvp 0.19.2 fixed the search box itself (django-mvp#282) but not this. A "
-            "reader whose search matched nothing can clear the box and press the button to get "
-            "back, so the page is usable; what is missing is a plain link that says so. It has "
-            "to go in the page's actions area, because django-mvp renders the empty-state "
-            "heading and message as autoescaped strings with no slot — an anchor inside the "
-            "message would show as literal text, and mark_safe over a string that also carries "
-            "the search term would emit that term unescaped. The actions area has no slot "
-            "either, so placing it needs a page-template override, and this package no longer "
-            "carries one. Raised upstream as django-mvp#291. The no-match message still names "
-            "the term (test above); the vocabulary's own page has the link (it has its own "
-            "template) and is not skipped."
-        )
-    )
     @pytest.mark.django_db
     def test_a_search_matching_nothing_offers_a_link_back_to_the_unsearched_list(
         self, client
@@ -730,31 +732,35 @@ class TestVocabularySearchEmptyState:
         hrefs = {a["href"] for a in soup.find_all("a", href=True)}
         assert list_url not in hrefs
 
-    def test_the_no_match_and_site_empty_headings_are_different_strings(self, rf):
-        no_match_view = VocabularyListView()
-        no_match_view.request = rf.get("/", {"q": "Stratigraphy"})
+    @pytest.mark.django_db
+    def test_the_no_match_and_site_empty_headings_are_different_strings(self, client):
+        list_url = reverse("controlled_vocabularies_ui:vocabulary-list")
 
-        site_empty_view = VocabularyListView()
-        site_empty_view.request = rf.get("/")
+        site_empty = BeautifulSoup(client.get(list_url).content, "html.parser")
+        ConceptSchemeFactory(name="Soil Classification")
+        no_match = BeautifulSoup(
+            client.get(list_url, {"q": "Stratigraphy"}).content, "html.parser"
+        )
 
-        assert str(no_match_view.get_empty_state_heading()) != str(
-            site_empty_view.get_empty_state_heading()
+        assert (
+            site_empty.select_one(".mvp-list-empty h2").get_text(strip=True)
+            != no_match.select_one(".mvp-list-empty h2").get_text(strip=True)
         )
 
     @pytest.mark.django_db
     def test_a_term_containing_markup_is_escaped_in_the_response(self, client):
-        # Scoped to the heading because the page's own theme-toggle script is a <script>. An
-        # unescaped term parses as a real <script> inside it; a substring check on the raw
-        # response cannot tell the two apart.
+        # Scoped to the applied-search chip, where the term is repeated, because the page's own
+        # theme-toggle script is a <script>. An unescaped term parses as a real <script> inside
+        # the chip; a substring check on the raw response cannot tell the two apart.
         ConceptSchemeFactory(name="Soil Classification")
         list_url = reverse("controlled_vocabularies_ui:vocabulary-list")
 
         response = client.get(list_url, {"q": "<script>alert(1)</script>"})
         soup = BeautifulSoup(response.content, "html.parser")
-        heading = soup.find("h3")
+        refinements = soup.find(class_="mvp-list-refinements")
 
-        assert heading.find("script") is None
-        assert "<script>alert(1)</script>" in heading.get_text()
+        assert refinements.find("script") is None
+        assert "<script>alert(1)</script>" in refinements.get_text()
 
 
 class TestVocabularyDetail:
@@ -1197,7 +1203,7 @@ class TestVocabularyDetailChosenConceptOrder:
         )
 
         assert [
-            key for key, _label, _expression in response.context["order_by_choices"]
+            key for key, _label, _columns in response.context["filter"].filters["o"].options
         ] == [
             "label_asc",
             "label_desc",
@@ -1257,7 +1263,7 @@ class TestVocabularyDetailChosenConceptOrder:
             antelope.pk,
             zebra.pk,
         ]
-        assert response.context["current_ordering"] == ""
+        assert response.context["sort_label"] == ""
 
     @pytest.mark.django_db
     def test_a_search_and_a_chosen_order_apply_together(self, client):
@@ -1292,8 +1298,8 @@ class TestVocabularyDetailChosenConceptOrder:
         form = soup.find("form", id="filterForm")
         assert form is not None
         assert form.get("method", "").lower() == "get"
-        assert soup.find("input", attrs={"name": "q"}).get("form") == "filterForm"
-        assert soup.find("input", attrs={"name": "o"}).get("form") == "filterForm"
+        assert submits_to(soup, "q") == "filterForm"
+        assert submits_to(soup, "o") == "filterForm"
 
 
 class TestVocabularyDetailConceptPaging:
@@ -1409,12 +1415,15 @@ class TestVocabularyDetailConceptSearch:
         )
 
         response = client.get(url, {"q": "granate"})
-        # The search box echoes ?q= as an <input value> attribute, which get_text() skips.
-        rendered_text = BeautifulSoup(response.content, "html.parser").get_text()
+        # Read from the result rows: the applied-search chip repeats what the reader typed, which
+        # is the term and not the concept's label.
+        soup = BeautifulSoup(response.content, "html.parser")
+        rows_text = " ".join(card.get_text() for card in soup.select("#mvp-list .card"))
 
         listed = {c.pk for c in response.context["object_list"]}
         assert listed == {match.pk}
-        assert "granate" not in rendered_text
+        assert "Granite" in rows_text
+        assert "granate" not in rows_text
 
     @pytest.mark.django_db
     def test_a_concept_matching_on_several_labels_at_once_is_listed_once(self, client):
@@ -1628,19 +1637,22 @@ class TestVocabularyDetailConceptSearchEmptyState:
         hrefs = {a["href"] for a in soup.find_all("a", href=True)}
         assert detail_url not in hrefs
 
-    def test_the_no_match_and_no_concepts_headings_are_different_strings(self, rf):
-        scheme = ConceptSchemeFactory.build()
+    @pytest.mark.django_db
+    def test_the_no_match_and_no_concepts_headings_are_different_strings(self, client):
+        scheme = ConceptSchemeFactory()
+        detail_url = reverse(
+            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
+        )
 
-        no_match_view = VocabularyDetailView()
-        no_match_view.vocabulary = scheme
-        no_match_view.request = rf.get("/", {"q": "Basalt"})
+        no_concepts = BeautifulSoup(client.get(detail_url).content, "html.parser")
+        ConceptFactory(scheme=scheme, label="Granite")
+        no_match = BeautifulSoup(
+            client.get(detail_url, {"q": "Basalt"}).content, "html.parser"
+        )
 
-        empty_view = VocabularyDetailView()
-        empty_view.vocabulary = scheme
-        empty_view.request = rf.get("/")
-
-        assert str(no_match_view.get_empty_state_heading()) != str(
-            empty_view.get_empty_state_heading()
+        assert (
+            no_concepts.select_one(".mvp-list-empty h2").get_text(strip=True)
+            != no_match.select_one(".mvp-list-empty h2").get_text(strip=True)
         )
 
     @pytest.mark.django_db

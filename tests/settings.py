@@ -7,22 +7,24 @@ INSTALLED_APPS = [
     "django_cotton",
     "easy_icons",
     "flex_menu",
-    # ``mvp`` before ``crispy_tailwind``: mvp overrides crispy-tailwind's help-text
-    # template, and the first app to declare a template path wins.
+    # ``daisy_cotton`` below ``mvp``: both ship an icon component, and the first app to
+    # declare a template path wins.
     "mvp",
+    "daisy_cotton",
     "crispy_forms",
-    "crispy_tailwind",
+    "mvp_forms",
+    "django_filters",
     "controlled_vocabularies.ui",
 ]
 
 # crispy-forms reads this with no default, so leaving it unset is an AttributeError on
 # the first form render.
-CRISPY_TEMPLATE_PACK = "tailwind"
+CRISPY_TEMPLATE_PACK = "daisyui"
 
 # The {% crispy %} tag checks the pack at template-compile time against this allowlist,
-# whose default omits tailwind, so every template carrying the tag would fail to
+# whose default omits daisyui, so every template carrying the tag would fail to
 # compile.
-CRISPY_ALLOWED_TEMPLATE_PACKS = ["tailwind"]
+CRISPY_ALLOWED_TEMPLATE_PACKS = ["daisyui"]
 
 TEMPLATES[0]["OPTIONS"]["context_processors"] = [
     *TEMPLATES[0]["OPTIONS"]["context_processors"],
