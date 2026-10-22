@@ -81,7 +81,7 @@
           <dd>{{ language_name }}</dd>
         </div>
       </dl>
-      <dl class="flex flex-col gap-3 border-t border-base-300 pt-4">
+      <dl id="vocabulary-publication" class="flex flex-col gap-3 border-t border-base-300 pt-4">
         <c-controlled-vocabularies.publication-detail term="{% trans "Publisher" %}" value="{{ vocabulary.publisher }}" />
         <c-controlled-vocabularies.publication-detail term="{% trans "Creator" %}" value="{{ vocabulary.creator }}" />
         <c-controlled-vocabularies.publication-detail term="{% trans "Licence" %}" value="{{ vocabulary.license }}" />

@@ -988,7 +988,7 @@ class TestVocabularyDetailPublicationDetails:
             )
         )
         soup = BeautifulSoup(response.content, "html.parser")
-        return soup.find(class_="vocabulary-publication")
+        return soup.find(id="vocabulary-publication")
 
     @pytest.mark.django_db
     def test_each_publication_detail_is_shown(self, client):
