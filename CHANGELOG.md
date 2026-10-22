@@ -16,9 +16,18 @@ All notable changes to this project are documented in this file. The format foll
   them, with a dash for any it does not have. The report gains `SetAsideReason.SURPLUS_VALUE`,
   `SetAsideReason.NOT_A_DATE` and `NormalizedReason.DATE_FROM_DATE_TIME`. A project runs
   `migrate` for the new fields (#205).
+- The list of vocabularies can be narrowed by publisher, licence and language from a filter panel
+  beside it, each option showing how many vocabularies it would leave. A user with the
+  `change_conceptscheme` permission can also narrow it to imported vocabularies or those held
+  here. The list can be sorted by most concepts or most recently updated.
 
 ### Changed
 
+- The list of vocabularies shows its entries as rows rather than cards, laid out as the concepts
+  on a vocabulary's page are. Each row names the vocabulary's publisher, its collection count and
+  when it was last updated, and shows every vocabulary's identifier. Whether a vocabulary was
+  imported is no longer shown on the list. A project overriding `conceptscheme_list_item.html`
+  should compare its copy with the new template.
 - A vocabulary's page lists its concepts as rows rather than cards. Each row shows the concept's
   broader concept, its definition cut to 30 words, its identifier as a link, and the collections
   that hold it. What the page says about the vocabulary moves to a side panel beside the list:

@@ -207,9 +207,7 @@ class TestVocabularyListEntry:
         assert counts[populated.pk] == 3
         assert counts[empty.pk] == 0
 
-    def test_imported_vocabulary_shows_its_publisher_identifier_as_a_link_and_reads_as_imported(
-        self,
-    ):
+    def test_imported_vocabulary_shows_its_publisher_identifier_as_a_link(self):
         # The anchor's href and text are the publisher's identifier, unrewritten, and it
         # carries rel="noopener" because the address is not this site's.
         scheme = ConceptSchemeFactory.build(external=True)
@@ -222,27 +220,48 @@ class TestVocabularyListEntry:
         assert anchor is not None
         assert anchor.text == scheme.static_uri
         assert anchor.get("rel") == ["noopener"]
-        assert "Imported" in html
-        assert "Held here" not in html
 
-    def test_a_locally_authored_vocabulary_is_marked_as_held_here(self):
+    def test_a_locally_authored_vocabulary_shows_its_identifier_too(self):
+        # As a concept row does: a vocabulary held here has an identifier of its own.
         scheme = ConceptSchemeFactory.build()
         scheme.concept_count = 0
 
         html = render_to_string(ROW_TEMPLATE, {"object": scheme})
+        anchor = BeautifulSoup(html, "html.parser").find("a", href=scheme.uri)
 
-        assert "Held here" in html
-        assert "Imported" not in html
+        assert anchor is not None
+        assert anchor.text == scheme.uri
 
-    def test_a_locally_authored_vocabulary_still_shows_no_identifier(self):
-        # A vocabulary held here gains an identifier link only on its own page.
-        scheme = ConceptSchemeFactory.build()
+    def test_names_its_publisher_when_it_gives_one(self):
+        scheme = ConceptSchemeFactory.build(publisher="Dublin Core Metadata Initiative")
         scheme.concept_count = 0
 
         html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-        soup = BeautifulSoup(html, "html.parser")
 
-        assert soup.find("a", href=scheme.local_url) is None
+        assert "Dublin Core Metadata Initiative" in html
+
+    def test_reports_its_collections_and_when_it_was_last_updated(self):
+        scheme = ConceptSchemeFactory.build(modified=datetime.date(2024, 3, 2))
+        scheme.concept_count = 5
+        scheme.collection_count = 2
+
+        with translation.override("en"):
+            html = render_to_string(ROW_TEMPLATE, {"object": scheme})
+
+        assert "2 collections" in html
+        assert "2 March 2024" in html or "March 2, 2024" in html
+
+    def test_a_vocabulary_with_no_collections_and_no_date_says_nothing_about_either(self):
+        scheme = ConceptSchemeFactory.build()
+        scheme.concept_count = 5
+        scheme.collection_count = 0
+
+        text = BeautifulSoup(
+            render_to_string(ROW_TEMPLATE, {"object": scheme}), "html.parser"
+        ).get_text()
+
+        assert "collection" not in text
+        assert "·" not in text
 
     def test_a_urn_identifier_is_still_rendered_as_a_link_unrewritten(self):
         scheme = ConceptSchemeFactory.build(static_uri="urn:nbn:example:vocab-1")
@@ -279,8 +298,8 @@ class TestVocabularyListEntry:
 
         html = render_to_string(ROW_TEMPLATE, {"object": scheme})
 
-        # Only the concept-count line renders as a <p>; nothing stands in for the description.
-        assert html.count("<p") == 1
+        # The description is the row's only paragraph, and nothing stands in for it.
+        assert html.count("<p") == 0
 
 
 class TestVocabularyListOrdering:
@@ -361,7 +380,7 @@ class TestVocabularyListChosenOrdering:
     # only for one, so a view declaring none ignores it in silence.
 
     @pytest.mark.django_db
-    def test_the_page_offers_both_directions_by_name(self, client):
+    def test_the_page_offers_name_both_ways_size_and_recency(self, client):
         ConceptSchemeFactory()
 
         response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
@@ -371,6 +390,37 @@ class TestVocabularyListChosenOrdering:
         ] == [
             "name_asc",
             "name_desc",
+            "concepts_desc",
+            "modified_desc",
+        ]
+
+    @pytest.mark.django_db
+    def test_most_concepts_puts_the_largest_vocabulary_first(self, client):
+        small = ConceptSchemeFactory(name="Alpha")
+        ConceptFactory.create_batch(1, scheme=small)
+        large = ConceptSchemeFactory(name="Beta")
+        ConceptFactory.create_batch(3, scheme=large)
+        url = reverse("controlled_vocabularies_ui:vocabulary-list")
+
+        response = client.get(url, {"o": "concepts_desc"})
+
+        assert [v.pk for v in response.context["object_list"]] == [large.pk, small.pk]
+
+    @pytest.mark.django_db
+    def test_recently_updated_puts_the_newest_first_and_undated_ones_last(
+        self, client
+    ):
+        undated = ConceptSchemeFactory(name="Alpha")
+        older = ConceptSchemeFactory(name="Beta", modified=datetime.date(2020, 1, 1))
+        newer = ConceptSchemeFactory(name="Gamma", modified=datetime.date(2025, 1, 1))
+        url = reverse("controlled_vocabularies_ui:vocabulary-list")
+
+        response = client.get(url, {"o": "modified_desc"})
+
+        assert [v.pk for v in response.context["object_list"]] == [
+            newer.pk,
+            older.pk,
+            undated.pk,
         ]
 
     @pytest.mark.django_db
@@ -444,6 +494,190 @@ class TestVocabularyListChosenOrdering:
 
         assert soup.find("form", id="filterForm") is not None
         assert submits_to(soup, "o") == "filterForm"
+
+
+LIST_URL_NAME = "controlled_vocabularies_ui:vocabulary-list"
+
+
+def listed(response) -> set[int]:
+    """Return the primary keys of the vocabularies a list response shows.
+
+    Args:
+        response: The list page's response.
+
+    Returns:
+        The primary keys.
+    """
+    return {vocabulary.pk for vocabulary in response.context["object_list"]}
+
+
+def facet_options(response, name) -> dict[str, str]:
+    """Return a facet's options as the filter panel draws them, by value.
+
+    Args:
+        response: The list page's response.
+        name: The facet.
+
+    Returns:
+        Each option's drawn label, count included, keyed by its value.
+    """
+    soup = BeautifulSoup(response.content, "html.parser")
+    return {
+        box["value"]: soup.find("label", attrs={"for": box["id"]}).get_text(" ", strip=True)
+        for box in soup.find_all("input", attrs={"type": "checkbox", "name": name})
+    }
+
+
+class TestVocabularyListFacets:
+    @pytest.mark.django_db
+    def test_choosing_a_publisher_keeps_only_its_vocabularies(self, client):
+        first = ConceptSchemeFactory(publisher="ODM2 Project")
+        ConceptSchemeFactory(publisher="NASA")
+
+        response = client.get(reverse(LIST_URL_NAME), {"publisher": "ODM2 Project"})
+
+        assert listed(response) == {first.pk}
+
+    @pytest.mark.django_db
+    def test_choosing_two_publishers_keeps_the_vocabularies_of_either(self, client):
+        first = ConceptSchemeFactory(publisher="ODM2 Project")
+        second = ConceptSchemeFactory(publisher="NASA")
+        ConceptSchemeFactory(publisher="BODC")
+
+        response = client.get(
+            reverse(LIST_URL_NAME), {"publisher": ["ODM2 Project", "NASA"]}
+        )
+
+        assert listed(response) == {first.pk, second.pk}
+
+    @pytest.mark.django_db
+    def test_choosing_a_licence_keeps_only_its_vocabularies(self, client):
+        licence = "https://creativecommons.org/licenses/by/4.0/"
+        match = ConceptSchemeFactory(license=licence)
+        ConceptSchemeFactory(license="https://creativecommons.org/publicdomain/zero/1.0/")
+
+        response = client.get(reverse(LIST_URL_NAME), {"license": licence})
+
+        assert listed(response) == {match.pk}
+
+    @pytest.mark.django_db
+    def test_a_known_licence_is_offered_by_its_short_name(self, client):
+        ConceptSchemeFactory(license="http://creativecommons.org/licenses/by/4.0")
+        ConceptSchemeFactory(license="Open Government Licence")
+
+        options = facet_options(client.get(reverse(LIST_URL_NAME)), "license")
+
+        assert options["http://creativecommons.org/licenses/by/4.0"].startswith(
+            "CC BY 4.0"
+        )
+        assert options["Open Government Licence"].startswith("Open Government Licence")
+
+    @pytest.mark.django_db
+    def test_a_vocabulary_giving_no_language_is_found_under_the_sites(
+        self, client, settings
+    ):
+        settings.LANGUAGE_CODE = "en"
+        unstated = ConceptSchemeFactory(default_language="")
+        english = ConceptSchemeFactory(default_language="en")
+        ConceptSchemeFactory(default_language="de")
+
+        response = client.get(reverse(LIST_URL_NAME), {"language": "en"})
+
+        assert listed(response) == {unstated.pk, english.pk}
+
+    @pytest.mark.django_db
+    def test_a_facet_on_which_no_two_vocabularies_differ_is_not_offered(self, client):
+        ConceptSchemeFactory(publisher="ODM2 Project", license="")
+        ConceptSchemeFactory(publisher="ODM2 Project", license="")
+
+        response = client.get(reverse(LIST_URL_NAME))
+
+        assert "publisher" not in response.context["filter"].filters
+        assert "license" not in response.context["filter"].filters
+
+    @pytest.mark.django_db
+    def test_each_option_counts_the_vocabularies_it_would_leave(self, client):
+        ConceptSchemeFactory.create_batch(2, publisher="ODM2 Project")
+        ConceptSchemeFactory(publisher="NASA")
+
+        options = facet_options(client.get(reverse(LIST_URL_NAME)), "publisher")
+
+        assert options["ODM2 Project"].endswith("(2)")
+        assert options["NASA"].endswith("(1)")
+
+    @pytest.mark.django_db
+    def test_the_counts_follow_the_search(self, client):
+        ConceptSchemeFactory(name="Soil one", publisher="ODM2 Project")
+        ConceptSchemeFactory(name="Rock one", publisher="ODM2 Project")
+        ConceptSchemeFactory(name="Rock two", publisher="NASA")
+
+        options = facet_options(
+            client.get(reverse(LIST_URL_NAME), {"q": "Soil"}), "publisher"
+        )
+
+        assert options["ODM2 Project"].endswith("(1)")
+        assert options["NASA"].endswith("(0)")
+
+    @pytest.mark.django_db
+    def test_a_choice_narrows_the_other_facets_counts_and_not_its_own(self, client):
+        cc_by = "https://creativecommons.org/licenses/by/4.0/"
+        cc_zero = "https://creativecommons.org/publicdomain/zero/1.0/"
+        ConceptSchemeFactory(publisher="ODM2 Project", license=cc_by)
+        ConceptSchemeFactory(publisher="NASA", license=cc_zero)
+
+        response = client.get(reverse(LIST_URL_NAME), {"publisher": "ODM2 Project"})
+
+        assert facet_options(response, "publisher")["NASA"].endswith("(1)")
+        assert facet_options(response, "license")[cc_zero].endswith("(0)")
+
+    @pytest.mark.django_db
+    def test_an_applied_filter_is_named_without_its_count(self, client):
+        ConceptSchemeFactory(publisher="ODM2 Project")
+        ConceptSchemeFactory(publisher="NASA")
+
+        response = client.get(reverse(LIST_URL_NAME), {"publisher": "ODM2 Project"})
+
+        assert [
+            refinement["value"] for refinement in response.context["refinements"]
+        ] == ["ODM2 Project"]
+
+
+class TestVocabularyListSourceFacet:
+    """Whether a vocabulary was imported is a facet only for someone who can change vocabularies."""
+
+    @pytest.mark.django_db
+    def test_a_reader_is_not_offered_it(self, client):
+        ConceptSchemeFactory(external=True)
+        ConceptSchemeFactory()
+
+        response = client.get(reverse(LIST_URL_NAME))
+
+        assert "source" not in response.context["filter"].filters
+
+    @pytest.mark.django_db
+    def test_a_reader_choosing_it_by_address_still_sees_every_vocabulary(self, client):
+        imported = ConceptSchemeFactory(external=True)
+        held_here = ConceptSchemeFactory()
+
+        response = client.get(reverse(LIST_URL_NAME), {"source": "imported"})
+
+        assert listed(response) == {imported.pk, held_here.pk}
+
+    @pytest.mark.django_db
+    @pytest.mark.parametrize("source", ["imported", "here"])
+    def test_an_editor_can_keep_only_one_source(
+        self, client, django_user_model, source
+    ):
+        imported = ConceptSchemeFactory(external=True)
+        held_here = ConceptSchemeFactory()
+        client.force_login(editor(django_user_model))
+
+        response = client.get(reverse(LIST_URL_NAME), {"source": source})
+
+        assert listed(response) == {
+            "imported": {imported.pk},
+            "here": {held_here.pk},
+        }[source]
 
 
 class TestVocabularyListEmptyState:

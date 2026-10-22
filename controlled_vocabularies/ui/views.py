@@ -35,7 +35,11 @@ from controlled_vocabularies.models import (
     ConceptRelation,
     ConceptScheme,
 )
-from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
+from controlled_vocabularies.ui.filters import (
+    ConceptFilter,
+    VocabularyFilter,
+    language_expression,
+)
 
 
 class _StrippedSearchMixin:
@@ -55,29 +59,44 @@ class _StrippedSearchMixin:
 
 
 class VocabularyListView(_StrippedSearchMixin, MVPListView):
-    """Every vocabulary the site holds, narrowed by an optional search."""
+    """Every vocabulary the site holds, narrowed by an optional search and facets."""
 
     model = ConceptScheme
+    # The page template only draws the rows as a list. A search that matches nothing gets
+    # django-mvp's no-match state, which repeats the term and offers Clear all as the way back.
+    template_name = "controlled_vocabularies/ui/conceptscheme_list.html"
     list_item_template = "controlled_vocabularies/ui/conceptscheme_list_item.html"
 
-    # No page template of our own: the page is django-mvp's `list_view.html` and this package supplies
-    # only the row. A search that matches nothing gets django-mvp's no-match state, which repeats the
-    # term and offers Clear all as the way back to the full list.
     # An empty site says so, rather than pointing at a create button this page does not show.
     empty_state_heading = _("This site holds no vocabularies")
     empty_state_message = None
 
     filterset_class = VocabularyFilter
-    # Both in the toolbar, so the page draws no filter panel and no button to open one.
+    # The facets go in django-mvp's filter panel, set where the vocabulary page sets its About
+    # panel, so the two pages share one frame.
     toolbar_filters = ["q", "o"]
+    filter_panel_attrs = {"position": "end", "align": "content", "width": "md"}
 
     # A class attribute: Django applies `ordering` before the search adds `.distinct()`, which an
     # order_by() in get_queryset() would land after. `pk` makes the order total for pagination.
     ordering = [Lower("name"), "pk"]
 
     def get_queryset(self):
-        """Annotate each vocabulary with its concept count."""
-        return super().get_queryset().annotate(concept_count=Count("concepts"))
+        """Annotate each vocabulary with its counts and its effective default language."""
+        return (
+            super()
+            .get_queryset()
+            .annotate(
+                concept_count=Count("concepts", distinct=True),
+                collection_count=Count("collections", distinct=True),
+                language=language_expression(),
+            )
+        )
+
+    def get_context_data(self, **kwargs):
+        """Count each facet option before the filter panel draws it."""
+        self.get_filterset().count_facets()
+        return super().get_context_data(**kwargs)
 
 
 def concept_property_rows(
