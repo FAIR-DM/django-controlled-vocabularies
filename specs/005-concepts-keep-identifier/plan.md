@@ -88,9 +88,7 @@ specs/005-concepts-keep-identifier/
 ├── contracts/python-api.md
 ├── quickstart.md
 ├── plan.md
-├── tasks.md
-├── progress.md
-└── feature-state.json
+└── tasks.md
 ```
 
 ### Source Code (repository root)

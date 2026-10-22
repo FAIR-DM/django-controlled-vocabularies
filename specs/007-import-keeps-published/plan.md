@@ -92,9 +92,7 @@ specs/007-import-keeps-published/
 ├── decisions.md         # D1–D11, plus anything self-resolved from here on
 ├── research.md          # R1–R5
 ├── plan.md              # this file
-├── tasks.md             # the task graph
-├── progress.md          # append-only stage log
-└── feature-state.json   # the ledger
+└── tasks.md             # the task graph
 ```
 
 ### Source Code (repository root)

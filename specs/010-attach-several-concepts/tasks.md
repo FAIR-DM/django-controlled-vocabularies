@@ -8,7 +8,7 @@ the same task. Task ids are stable and never reused.
 change wrong — with one declared exception, T010, which widens an existing check and may extend (not
 rewrite) its tests.
 
-**Tasks have no issues** — this file and `feature-state.json` are the whole task record.
+**Tasks have no issues** — this file is the whole task record.
 
 **The research is not optional reading.** `research.md` R1 to R6 were established empirically
 against the installed Django, and three of them contradict what the equivalent FS-009 code does.

@@ -93,9 +93,7 @@ specs/016-narrow-field-choices/
 ├── decisions.md         # D1–D7 from S1, grows through the run
 ├── research.md          # Phase 0 — R1–R8
 ├── plan.md              # this file
-├── progress.md          # stage/gate log
-├── tasks.md             # Phase 2
-└── feature-state.json   # ledger
+└── tasks.md             # Phase 2
 ```
 
 No `data-model.md`: this feature adds no model, no field and no migration. No `contracts/`: the

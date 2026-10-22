@@ -75,9 +75,7 @@ specs/006-import-published-skos/
 ├── decisions.md         # self-resolved decisions and rationale (S1, extended here)
 ├── research.md          # rdflib behaviour, the security probe, the SKOS mapping (S3)
 ├── plan.md              # this file
-├── tasks.md             # the task graph (S3)
-├── progress.md          # stage and gate log
-└── feature-state.json   # the ledger
+└── tasks.md             # the task graph (S3)
 ```
 
 ### Source Code (repository root)

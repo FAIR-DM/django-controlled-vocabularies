@@ -81,8 +81,6 @@ specs/012-concept-selection-in-the-admin/
 ├── decisions.md
 ├── research.md          # Phase 0
 ├── plan.md              # this file
-├── progress.md
-├── feature-state.json
 └── tasks.md             # Phase 2
 ```
 

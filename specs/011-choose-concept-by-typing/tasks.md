@@ -3,7 +3,7 @@
 Every task is test-first (Article I): the failing test comes before the code that satisfies it, in
 the same task. Task ids are stable and never reused.
 
-**Tasks have no issues** — this file and `feature-state.json` are the whole task record.
+**Tasks have no issues** — this file is the whole task record.
 
 **`research.md` and the wheel verification are not optional reading.** Every line number this file
 cites in `django_tomselect` was read from the published wheel `2026.6.2`, not from the project's

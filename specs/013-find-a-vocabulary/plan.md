@@ -81,8 +81,7 @@ specs/013-find-a-vocabulary/
 ├── decisions.md
 ├── research.md
 ├── plan.md
-├── tasks.md
-└── progress.md
+└── tasks.md
 ```
 
 ### Source Code (repository root)

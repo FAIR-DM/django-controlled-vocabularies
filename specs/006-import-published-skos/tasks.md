@@ -5,7 +5,7 @@ the same task. Task ids are stable and never reused. Story phases after the foun
 independently implementable; within a phase the order is the sensible one, not a hard dependency
 unless stated.
 
-**Tasks have no issues** — this file and `feature-state.json` are the whole task record.
+**Tasks have no issues** — this file is the whole task record.
 
 ## Phase 0 — Foundational (sequential, blocks every story)
 

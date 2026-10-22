@@ -85,9 +85,7 @@ specs/010-attach-several-concepts/
 ├── decisions.md
 ├── research.md
 ├── plan.md
-├── tasks.md
-├── progress.md
-└── feature-state.json
+└── tasks.md
 ```
 
 ### Source code
