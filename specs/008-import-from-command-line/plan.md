@@ -67,8 +67,7 @@ specs/008-import-from-command-line/
 ├── research.md
 ├── decisions.md
 ├── plan.md
-├── tasks.md
-└── progress.md
+└── tasks.md
 ```
 
 ### Source code

@@ -7,7 +7,7 @@ the same task. Task ids are stable and never reused.
 with a default, so #50's and #51's suites must pass unmodified — that is the regression proof, and
 a task that needs to edit one of them has got the change wrong.
 
-**Tasks have no issues** — this file and `feature-state.json` are the whole task record.
+**Tasks have no issues** — this file is the whole task record.
 
 **US-2, US-3 and US-5 are sequenced, not parallel.** Each edits `handle()` in
 `commands/import_skos.py` and two edit its argument parsing, so they run one at a time in any order,

@@ -7,7 +7,7 @@ the same task. Task ids are stable and never reused.
 new modules, so the existing suite must pass untouched. A task that needs to edit an existing test
 has got the change wrong.
 
-**Tasks have no issues** — this file and `feature-state.json` are the whole task record.
+**Tasks have no issues** — this file is the whole task record.
 
 **Sequencing.** Phase F blocks everything. After it, US-1 and US-2 are sequenced together because
 both work on `fields.py`. US-3, US-4 and US-5 are independent of one another and of US-1/US-2 once

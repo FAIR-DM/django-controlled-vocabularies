@@ -5,7 +5,7 @@ the same task. Task ids are stable and never reused. Stories here are **not** in
 dispatchable in parallel — they cut across the same four methods of `exchange/skos.py`
 (`research.md` R5), so they run sequentially, each rebased on the last.
 
-**Tasks have no issues** — this file and `feature-state.json` are the whole task record.
+**Tasks have no issues** — this file is the whole task record.
 
 ## Phase 0 — Foundational (sequential, blocks every story)
 

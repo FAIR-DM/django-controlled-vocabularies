@@ -73,9 +73,7 @@ specs/009-attach-concept-to-model/
 ├── plan.md
 ├── research.md
 ├── decisions.md
-├── progress.md
-├── tasks.md
-└── feature-state.json
+└── tasks.md
 ```
 
 No `data-model.md`: this feature adds no model to the package. No `contracts/`: the contract is the
