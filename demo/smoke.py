@@ -71,6 +71,23 @@ def fail(url, status, reason, body=""):
     raise SmokeCheckFailed(f"{url} [{status}]: {reason}\n{body[:BODY_EXCERPT_LIMIT]}")
 
 
+def links_to_concept(body, label):
+    """Return whether the body carries a link whose whole text is ``label``.
+
+    A concept's row names it as the text of the link to its page. Matching the link text rather
+    than the bare word keeps a label that also appears in other text (a heading, an identifier)
+    from reading as a listed concept.
+
+    Args:
+        body: The response body.
+        label: The concept label to look for.
+
+    Returns:
+        Whether such a link is present.
+    """
+    return re.search(rf">\s*{re.escape(label)}\s*</a>", body) is not None
+
+
 def check_list(list_url, status, body):
     """Check that both seeded vocabularies are listed with their concept counts.
 
@@ -164,14 +181,14 @@ def check_concept_search(search_url, status, body):
     """
     if status != 200:
         fail(search_url, status, "a concept search did not serve", body)
-    if VOCABULARY_CONCEPT not in body:
+    if not links_to_concept(body, VOCABULARY_CONCEPT):
         fail(
             search_url,
             status,
             f"searching {HIDDEN_LABEL_SEARCH_TERM!r} does not narrow to {VOCABULARY_CONCEPT!r}",
             body,
         )
-    if OTHER_VOCABULARY_CONCEPT in body:
+    if links_to_concept(body, OTHER_VOCABULARY_CONCEPT):
         fail(
             search_url,
             status,

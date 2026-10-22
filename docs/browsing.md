@@ -156,34 +156,46 @@ class BrandedVocabularyListView(VocabularyListView):
 
 Every vocabulary the site holds has its own address — the same one its identifier composes
 (`ConceptScheme.uri`) when the site is configured as this page describes. The page's title is
-the vocabulary's name. Above the list of concepts it holds it shows the vocabulary's description,
-truncated the same way and for the same reason as the list entry above, and how the vocabulary was
-obtained: an imported vocabulary's page shows the publisher's own identifier; one authored here
-shows its own address instead. Either way the identifier is a link — to the publisher's site for
-an imported vocabulary, or back to the page itself for one authored here.
+the vocabulary's name, and its lead text is the vocabulary's description, truncated the same way
+and for the same reason as the list entry above. A vocabulary with no description has no lead text.
 
-Below that, every concept the vocabulary holds — and only that vocabulary's — in one flat,
+The main column is every concept the vocabulary holds, and only that vocabulary's, in one flat,
 alphabetical list: nothing several levels down a broader/narrower chain is nested under one above
 it. Alphabetical order follows the label actually shown, not necessarily the one stored: a concept
 carrying a preferred label in the reader's own language shows that one; a concept with none in that
-language falls back to its label in the vocabulary's own default language. A row names a concept and
-nothing more — no definition, no note, no identifier, and no relation to another concept.
+language falls back to its label in the vocabulary's own default language.
 
-**How concepts relate to one another is not shown here.** Broader, narrower and related links, and
-a concept's own page, are a later feature's (#142); until then a concept on this list is not
-something a reader can follow to anywhere else. A vocabulary holding no concepts says so, in
-wording distinct from the page's other empty state, and the rest of the page — its description and
-provenance — still renders.
+Each row in the list carries:
 
-Above the list of concepts, the page also names the vocabulary's **collections** — curator-made
-groupings of its concepts (`skos:Collection` / `skos:OrderedCollection`) that the broader/narrower
-relations do not express. Each is named, and one whose members carry a deliberate order is shown
-distinguishably from one that does not. **A collection cannot be opened from here**: neither its
-own page nor its members' names are reached by following anything on this page — that address
-belongs to #142, the same feature that gives a concept its own page, so a collection is named and
-nothing more until it lands. A vocabulary holding no collections shows no such section at all —
-most vocabularies have none, and a section that is only ever present-but-empty would be noise on
-every page but one.
+- the concept's broader concept, above its label, when it has one (the first, when it has several)
+- its label, linking to [the concept's own page](#a-concepts-own-page)
+- its definition, in the reader's language or the vocabulary's default language, cut to 30 words
+- its identifier (`Concept.uri`), as a link to that identifier itself rather than to the page here
+- the collections that hold it, each linking to [the collection's own page](#a-collections-own-page)
+
+Anything a concept does not have is left out of its row. Alternative and hidden labels are never
+shown. A vocabulary holding no concepts says so, in wording distinct from the page's other empty
+state, and the rest of the page still renders.
+
+Beside the list, a side panel describes the vocabulary itself:
+
+- its identifier, as a link: to the publisher's site for an imported vocabulary, or back to the
+  page itself for one authored here
+- whether it was imported or is held here, shown only to a user with the
+  `controlled_vocabularies.change_conceptscheme` permission, since it decides whether the
+  vocabulary may be edited here and is no concern of a reader
+- its default language
+- how many concepts it holds
+- its top concepts, the ones with no broader concept, each linking to its page; a vocabulary with
+  no broader/narrower relations at all lists none, since every concept would be listed twice
+- its collections (`skos:Collection` / `skos:OrderedCollection`), each linking to its page, with
+  how many members it has and whether those members carry a deliberate order. A vocabulary
+  holding no collections shows a dash.
+
+The panel behaves as django-mvp's filter panel does on a list page: a column at the end of the
+page from the `xl` breakpoint up, starting level with the list rather than the title and staying
+in view as the page scrolls, and a drawer opened from an **About** button in the toolbar below that
+width. Its root element carries the id `vocabulary-about`.
 
 A search box narrows the list of concepts by every name a term goes by: a concept's preferred
 label in any language it carries, its alternative labels, and its hidden labels — never its
@@ -362,13 +374,15 @@ at all.
 
 `migrate` builds the database, `seed_demo` loads two small vocabularies into it, and `runserver`
 serves the site at `http://127.0.0.1:8000/`, which redirects straight to the populated,
-searchable vocabulary list at `http://127.0.0.1:8000/browse/`. The seeded content shows both
+searchable vocabulary list at `http://127.0.0.1:8000/browse/`. An open page reloads itself when a
+template, static file or Python module changes, through `django-browser-reload` and
+`django-watchfiles` from the development dependencies. The seeded content shows both
 kinds of entry the list distinguishes: the DCMI Type Vocabulary, a real vocabulary published by
 the Dublin Core Metadata Initiative, imported from a SKOS file; and Data Collection Methods, a
 short vocabulary authored here, with no publisher of its own. Data Collection Methods' own page
 also carries one of each kind of collection — "Primary data collection methods" (unordered) and
-"Typical project workflow" (ordered) — both loaded through the same SKOS file, so the collections
-section described above is never empty on a fresh checkout.
+"Typical project workflow" (ordered) — both loaded through the same SKOS file, so the side panel's
+collections are never empty on a fresh checkout.
 
 Following "Fieldwork" from that page reaches a concept's own page: its definition, its narrower
 concept "Survey" (stored as "Survey" carrying `skos:broader` to "Fieldwork", shown here as the

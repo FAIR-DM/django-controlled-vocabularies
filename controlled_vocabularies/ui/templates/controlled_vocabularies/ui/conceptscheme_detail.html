@@ -1,39 +1,130 @@
 {% extends "list_view.html" %}
 {% load i18n %}
-{% block page.content %}
-  {% if vocabulary.description %}
-    <div class="vocabulary-description">
-      <c-mvp.text size="sm" muted>{{ vocabulary.description|truncatewords:40 }}</c-mvp.text>
-    </div>
+{% comment %}
+  The title and lead text are the vocabulary's own (the view's page title and subtitle). Everything
+  else the page says about the vocabulary sits in the side panel, so the content column is the
+  concept list and nothing else.
+{% endcomment %}
+{% block page.results %}
+  {% comment %}
+    A daisyUI list rather than django-mvp's grid of cards: the grid is a <div>, and list rows are <li>.
+    The empty and no-match states are still django-mvp's own.
+  {% endcomment %}
+  {% if object_list %}
+    <c-list>
+      {% for object in object_list %}
+        {% include list_item_template with object=object only %}
+      {% endfor %}
+    </c-list>
+  {% else %}
+    {{ block.super }}
   {% endif %}
-  <div class="vocabulary-provenance">
-    {% comment %} Both cases are stated, so a reader does not infer provenance from the identifier's
-       domain (FS-013). {% endcomment %}
-    {% if vocabulary.static_uri %}
-      <c-mvp.text size="xs" muted>{% trans "Imported" %}</c-mvp.text>
-    {% else %}
-      <c-mvp.text size="xs" muted>{% trans "Held here" %}</c-mvp.text>
-    {% endif %}
-    {% comment %} An outbound link: nothing is marked safe and only href takes an interpolated value (#140). {% endcomment %}
-    <c-mvp.text size="xs" muted><c-link href="{{ vocabulary.uri }}" text="{{ vocabulary.uri }}" hover=True rel="noopener" /></c-mvp.text>
-  </div>
-  {% if collections %}
-    {% comment %} An ordinary loop, not django-mvp's list component, which renders whatever row template
-       is already in context and would show collections as concept rows. `vocabulary` stays in
-       context here, unlike in concept_list_item.html, so the link needs no extra query (FS-014). {% endcomment %}
-    <div class="vocabulary-collections">
-      <c-mvp.text size="sm" bold>{% trans "Collections" %}</c-mvp.text>
-      <ul>
-        {% for collection in collections %}
-          <li>
-            <c-link href="{% url 'controlled_vocabularies_ui:collection-detail' vocabulary.slug collection.slug %}"
-                    text="{{ collection.name }}"
-                    hover=True />
-            {% if collection.ordered %}<c-badge>{% trans "Ordered" %}</c-badge>{% endif %}
-          </li>
+{% endblock page.results %}
+{% block page.toolbar %}
+  {% comment %}
+    django-mvp's list toolbar, with the side panel's button where its Filters button sits, beside
+    the sort. The button shows only while the panel is a closed drawer, below the xl breakpoint.
+  {% endcomment %}
+  <c-mvp.page.list.toolbar :result_count="result_count" :refinements="refinements" bare>
+    {% if filter %}
+      <form id="filterForm"
+            method="get"
+            action="."
+            class="contents"
+            hx-boost="true"
+            hx-target="#{{ list_region_id }}"
+            hx-select="#{{ list_region_id }}"
+            hx-swap="outerHTML">
+        <button type="submit" hidden tabindex="-1" aria-hidden="true"></button>
+        {% for field in toolbar_fields %}
+          <c-mvp.page.list.filters.field :field="field" />
         {% endfor %}
-      </ul>
+      </form>
+    {% endif %}
+    <div class="flex items-center gap-2 ms-auto">
+      {% if toolbar_sort %}<c-mvp.page.list.filters.field :field="toolbar_sort" />{% endif %}
+      <c-mvp.page.side.toggle for="vocabulary-about" text="{% trans "About" %}" icon="info" />
     </div>
-  {% endif %}
-  {{ block.super }}
-{% endblock page.content %}
+  </c-mvp.page.list.toolbar>
+{% endblock page.toolbar %}
+{% block page.side %}
+  {% comment %}
+    Set exactly as django-mvp's own filter panel on a list page: at the end, level with the content,
+    a column from xl, a drawer below it, sticky. Only the label and content differ.
+  {% endcomment %}
+  <c-mvp.page.side id="vocabulary-about"
+                   label="{% trans "About this vocabulary" %}"
+                   position="end"
+                   align="content"
+                   width="md">
+    <div class="flex flex-col gap-4 px-3 text-sm">
+      <dl class="flex flex-col gap-3">
+        <div>
+          <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Identifier" %}</dt>
+          <dd class="break-words">
+            <c-link href="{{ vocabulary.uri }}" text="{{ vocabulary.uri }}" hover=True rel="noopener" />
+          </dd>
+        </div>
+        {% comment %}
+          Only for someone who can edit the vocabulary: whether it was imported decides whether it may
+          be edited here, which is no concern of a reader. Both cases are stated, so an editor does not
+          infer provenance from the identifier's domain (FS-013).
+        {% endcomment %}
+        {% if perms.controlled_vocabularies.change_conceptscheme %}
+          <div>
+            <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Source" %}</dt>
+            <dd>{% if vocabulary.static_uri %}{% trans "Imported" %}{% else %}{% trans "Held here" %}{% endif %}</dd>
+          </div>
+        {% endif %}
+        <div>
+          <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Language" %}</dt>
+          <dd>{{ language_name }}</dd>
+        </div>
+      </dl>
+      <dl class="flex flex-col gap-3 border-t border-base-300 pt-4">
+        <div>
+          <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Concepts" %}</dt>
+          <dd class="tabular-nums">{{ concept_count }}</dd>
+        </div>
+        {% if top_concepts %}
+          {% comment %} Left out of a flat vocabulary, where every concept is a top concept and the list would repeat the one beside it. {% endcomment %}
+          <div>
+            <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Top concepts" %}</dt>
+            <dd>
+              <ul class="flex flex-col gap-1 mt-1">
+                {% for concept in top_concepts %}
+                  <li>
+                    <c-link href="{% url 'controlled_vocabularies_ui:concept-detail' vocabulary.slug concept.slug %}"
+                            text="{{ concept.resolved_label }}"
+                            hover=True />
+                  </li>
+                {% endfor %}
+              </ul>
+            </dd>
+          </div>
+        {% endif %}
+        <div>
+          <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Collections" %}</dt>
+          <dd>
+            {% if collections %}
+              <ul class="flex flex-col gap-2 mt-1">
+                {% for collection in collections %}
+                  <li class="leading-snug">
+                    <c-link href="{% url 'controlled_vocabularies_ui:collection-detail' vocabulary.slug collection.slug %}"
+                            text="{{ collection.name }}"
+                            hover=True />
+                    <span class="block text-xs text-base-content/60">
+                      {% blocktrans count counter=collection.member_count %}{{ counter }} member{% plural %}{{ counter }} members{% endblocktrans %}{% if collection.ordered %} · {% trans "ordered" %}{% endif %}
+                    </span>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              —
+            {% endif %}
+          </dd>
+        </div>
+      </dl>
+    </div>
+  </c-mvp.page.side>
+{% endblock page.side %}
