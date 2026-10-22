@@ -10,9 +10,17 @@ pip install django-controlled-vocabularies[ui]
 ## Finding a vocabulary
 
 The `ui` extra adds one reader-facing page: every vocabulary the site holds, in alphabetical
-order, each entry showing its description, how many concepts it holds, and whether it was
-authored here or imported from a publisher — with the publisher's own identifier shown for an
-imported one. A site holding no vocabularies says so rather than showing an empty list.
+order. Each entry is laid out as a concept is on [a vocabulary's own page](#a-vocabularys-own-page)
+and carries:
+
+- its publisher, above its name, when it names one
+- its name, linking to the vocabulary's own page
+- its description, cut to 30 words
+- how many concepts it holds, how many collections when it has any, and when it was last updated
+  when it gives a date
+- its identifier (`ConceptScheme.uri`), as a link: the publisher's own for an imported vocabulary
+
+A site holding no vocabularies says so rather than showing an empty list.
 
 A search box narrows that list by a vocabulary's name and description — not by the concepts it
 holds; finding a concept without already knowing which vocabulary holds it is not something this
@@ -22,7 +30,8 @@ matching is OR across every word and both fields, not AND, which is the opposite
 box usually implies. A search matching nothing says so, repeats what was searched for, and offers
 **Clear all** as the way back to the full list.
 
-A sort control offers the list by name, A-Z or Z-A. That choice travels in the address as `?o=`,
+A sort control offers the list by name, A-Z or Z-A, by most concepts, or by most recently
+updated, with vocabularies giving no date last. That choice travels in the address as `?o=`,
 next to any search term, so a searched and sorted list is still one link you can share. Only the
 orderings the view declares are honoured. Anything else in `?o=` is ignored rather than passed to
 the database, and the page comes back in its default order. Two vocabularies with the same name
@@ -31,8 +40,30 @@ keep the same order across pages.
 Searching, sorting and moving between pages update the list in place, and the address bar follows,
 so the back button and a copied link behave as they would after a full page load.
 
-There is no way to filter the list. Filtering needs an axis, and a vocabulary has none that would
-suit every site.
+### Narrowing by publisher, licence and language
+
+Beside the list, a filter panel narrows it by a vocabulary's publication details (see "The
+vocabulary's own details" in `docs/importing.md`):
+
+- **Publisher**, from `ConceptScheme.publisher`
+- **Licence**, from `ConceptScheme.license`. A Creative Commons licence given by its address is
+  named by its short name, such as *CC BY 4.0*. Any other licence is shown as given.
+- **Language**, the vocabulary's default language. A vocabulary that gives none is found under the
+  site's `LANGUAGE_CODE`, the language its concepts are read in.
+
+Ticking several options of one facet keeps the vocabularies carrying any of them. Facets combine
+with each other and with the search. Each option says how many vocabularies it would leave, counted
+among those the search and the other facets leave, so the counts of a facet do not change when one
+of its own options is ticked. A facet is offered only when at least two of the site's vocabularies
+differ on it, so a site holding vocabularies from one publisher shows no publisher facet.
+
+A user with the `controlled_vocabularies.change_conceptscheme` permission is offered a fourth facet,
+**Source**: imported from a publisher, or held here. For anyone else it is not offered and has no
+effect even when the address carries it, as on the vocabulary's own page.
+
+The choices travel in the address beside the search and the sort (`?publisher=…&license=…`), and
+each applied one is shown above the list with a way to remove it. The panel is django-mvp's filter
+panel, placed as the side panel on a vocabulary's own page is.
 
 Case is ignored, with one limit that belongs to the database rather than to this package. SQLite
 folds case for ASCII letters only, so a vocabulary named *Ökologie* is found by *ÖKOLOGIE* and not
@@ -125,8 +156,14 @@ Each entry's name is a link to that vocabulary's own page, described below. The 
 from the route's name rather than composed from the identifier base address, so it stays an
 in-site address whatever that setting says.
 
-The search and the sort are a django-filter filterset, `VocabularyFilter` in
-`controlled_vocabularies.ui.filters`: `q` is django-mvp's `SearchFilter` and `o` its `SortFilter`.
+The search, the sort and the facets are a django-filter filterset, `VocabularyFilter` in
+`controlled_vocabularies.ui.filters`: `q` is django-mvp's `SearchFilter`, `o` its `SortFilter`,
+and `publisher`, `license`, `language` and `source` are multiple-choice filters drawn as
+`CountedCheckboxes`, a checkbox widget that adds each option's count when it is drawn.
+`VocabularyFilter.count_facets()` sets those counts. `licence_name()` gives a licence its short
+name from `LICENCE_NAMES`, `language_name()` names a language code in the reader's language, and
+`language_expression()` is the database expression for a vocabulary's effective default language,
+which `VocabularyListView` annotates as `language`.
 Only the first hundred words of a search are used, far more than any real search, because the
 query grows with every word.
 
@@ -141,7 +178,7 @@ release that makes it unnecessary, and nothing ever reports that it has
 
 The page is served by `VocabularyListView`, in `controlled_vocabularies.ui.views`. A project that
 wants a different presentation subclasses it and routes its own path at the same view — the
-queryset, its ordering and its concept count come with the class, so an override that only changes
+queryset, its ordering, its counts and its facets come with the class, so an override that only changes
 `list_item_template` keeps every guarantee above:
 
 ```python

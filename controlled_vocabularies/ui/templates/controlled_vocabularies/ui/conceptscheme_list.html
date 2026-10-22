@@ -1,0 +1,16 @@
+{% extends "list_view.html" %}
+{% comment %}
+  django-mvp's list page with the results drawn as daisyUI list rows, as the vocabulary page draws its
+  concepts. The toolbar, count row, filter panel, pager and empty states are django-mvp's own.
+{% endcomment %}
+{% block page.results %}
+  {% if object_list %}
+    <c-list>
+      {% for object in object_list %}
+        {% include list_item_template with object=object only %}
+      {% endfor %}
+    </c-list>
+  {% else %}
+    {{ block.super }}
+  {% endif %}
+{% endblock page.results %}

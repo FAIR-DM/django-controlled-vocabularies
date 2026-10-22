@@ -1,32 +1,29 @@
 {% load i18n %}
 {% comment %}
-  A slot rather than the card's `title` attribute, which is escaped text and cannot carry an anchor.
-  The row renders in an isolated context holding only the object, so the address comes from the route name.
+  One daisyUI list row per vocabulary, laid out as a concept row on the vocabulary page: a context line
+  above the name, the description below it, the identifier small and last. The publisher is the
+  context line, as the broader concept is for a concept. Anything the vocabulary does not give is
+  left out rather than marked.
 {% endcomment %}
-<c-mvp.card>
-  <c-slot name="title">
-    <a href="{% url 'controlled_vocabularies_ui:vocabulary-detail' object.slug %}">{{ object.name }}</a>
-  </c-slot>
-  <c-slot name="badges">
-    {% if object.static_uri %}
-      <c-badge>{% trans "Imported" %}</c-badge>
-    {% else %}
-      <c-badge>{% trans "Held here" %}</c-badge>
+<c-list.row>
+  <div class="list-col-grow min-w-0">
+    {% if object.publisher %}
+      <div class="text-xs text-base-content/60 truncate">{{ object.publisher }}</div>
     {% endif %}
-  </c-slot>
-  {% if object.description %}
+    <a href="{% url 'controlled_vocabularies_ui:vocabulary-detail' object.slug %}"
+       class="link link-hover font-medium">{{ object.name }}</a>
+    {% if object.description %}
+      <p class="text-sm text-base-content/70">{{ object.description|truncatewords:30 }}</p>
+    {% endif %}
     {% comment %}
-      Truncated here rather than clamped in CSS: django-mvp's prebuilt stylesheet omits classes its own
-      templates do not use, so `line-clamp-*` would silently do nothing.
+      What a person compares between candidates: size and how recently it changed. A vocabulary with
+      no collections says nothing about them.
     {% endcomment %}
-    <c-mvp.text size="sm" muted>{{ object.description|truncatewords:40 }}</c-mvp.text>
-  {% endif %}
-  {% if object.static_uri %}
-    {% comment %} An outbound link to an address this site does not control, hence rel="noopener". A bare
-       anchor, as the text component always renders a paragraph (#140). {% endcomment %}
-    <a href="{{ object.static_uri }}" rel="noopener">{{ object.static_uri }}</a>
-  {% endif %}
-  <c-mvp.text size="xs" muted>
-    {% blocktrans count counter=object.concept_count %}{{ counter }} concept{% plural %}{{ counter }} concepts{% endblocktrans %}
-  </c-mvp.text>
-</c-mvp.card>
+    <div class="text-xs text-base-content/60 mt-1 tabular-nums">
+      {% blocktrans count counter=object.concept_count %}{{ counter }} concept{% plural %}{{ counter }} concepts{% endblocktrans %}{% if object.collection_count %} · {% blocktrans count counter=object.collection_count %}{{ counter }} collection{% plural %}{{ counter }} collections{% endblocktrans %}{% endif %}{% if object.modified %} · {% blocktrans with date=object.modified|date %}Updated {{ date }}{% endblocktrans %}{% endif %}
+    </div>
+    <div class="text-xs text-base-content/60 break-words">
+      <c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" />
+    </div>
+  </div>
+</c-list.row>
