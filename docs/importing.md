@@ -25,6 +25,30 @@ and collection membership end up matching the file exactly, including the remova
 file no longer carries. A record the file does not mention at all is left completely untouched and
 named in the report instead, never deleted.
 
+## The vocabulary's own details
+
+Besides its concepts, a file usually describes the vocabulary itself. Its name comes from the
+scheme's `skos:prefLabel` and its description from `dcterms:description`. Five publication details
+are kept as well, each in a field on `ConceptScheme`:
+
+| Published as | Kept in |
+|---|---|
+| `dcterms:publisher` | `ConceptScheme.publisher` |
+| `dcterms:creator` | `ConceptScheme.creator` |
+| `dcterms:license` | `ConceptScheme.license` |
+| `owl:versionInfo` | `ConceptScheme.version` |
+| `dcterms:modified` | `ConceptScheme.modified` |
+
+A detail published as text keeps the text, and one published as an address keeps the address, so a
+licence given as `<https://creativecommons.org/licenses/by/4.0/>` is stored as that address. Each
+field holds one value. Where a file gives several, such as two creators, the first in alphabetical
+order is kept and each of the others is named in the report. `ConceptScheme.modified` is a date: a
+typed `xsd:date`, a typed `xsd:dateTime` or untyped ISO 8601 text is read, a date and time keeps
+only its date and says so in the report, and anything else is set aside.
+
+The file is authoritative for these as for the description: a detail a later file no longer gives
+is cleared.
+
 ## Languages
 
 Labels and notes are matched by language, not only by predicate. A file's `en` value fills a site
@@ -83,12 +107,15 @@ inspect what happened without parsing anything:
   concepts is stated as both broader and related, the hierarchical statement wins, because SKOS
   declares the two disjoint, and the related one is set aside. A second preferred label in one
   language is set aside rather than refused at the database. An identifier whose own segment
-  yields no usable slug is set aside naming the slug as the problem, not the identifier. None of
-  these stops the rest of the vocabulary from importing.
+  yields no usable slug is set aside naming the slug as the problem, not the identifier. A second
+  value of one of the vocabulary's publication details is set aside as `SURPLUS_VALUE`, and a
+  last-modified value that is not a date as `NOT_A_DATE`. None of these stops the rest of the
+  vocabulary from importing.
 - `absent_from_source` — the URIs of records that exist here but that the file no longer mentions.
 - `normalized` — a `NormalizedEntry` per value the run stored, but under a different predicate than
   the one the file asserted (a foreign `dcterms:description` read as a concept's definition, for
-  example).
+  example), or in a different form (`DATE_FROM_DATE_TIME`, a last-modified date and time kept as
+  its date).
 - `fatal` — populated only on a failed run: a `FatalFinding` per reason the whole import was
   refused (a missing or blank-node identity, or a vocabulary that could not be resolved). A failed
   run raises `SkosImportFailed`, carrying this same report, and leaves the database exactly as it

@@ -64,7 +64,7 @@ By the time a curator re-runs an import, other data in the project may already p
 2. **Given** a concept whose preferred label the publisher has since corrected, **When** the updated file is imported, **Then** the concept keeps its identifier and its database identity, and reports the new label.
 3. **Given** a concept from which the publisher has removed an alternative label, a note, or a relationship, **When** the updated file is imported, **Then** that value is gone from the record, because the file is authoritative for the concepts it contains.
 4. **Given** a concept the updated file no longer mentions at all, **When** the file is imported, **Then** that concept is untouched — still present, still holding its identifier, still referenced — and the report names it as no longer present in the source.
-5. **Given** a vocabulary whose own name or description the publisher has changed, **When** the updated file is imported, **Then** the vocabulary reflects the change and keeps its identifier.
+5. **Given** a vocabulary whose own name, description or publication details the publisher has changed, **When** the updated file is imported, **Then** the vocabulary reflects the change, including a detail the file no longer gives, and keeps its identifier.
 6. **Given** a run that fails partway through for any reason, **When** the failure occurs, **Then** the database is exactly as it was before the run started.
 
 ---
@@ -174,6 +174,7 @@ Every message this feature puts in front of a person is translatable, any field 
 - **FR-015**: The report MUST be a structured result the caller can act on, not only text. It MUST distinguish what was created, what was updated, what was set aside and why, what was stored under a different predicate than the file used and why, and what is present here but absent from the source. It MUST be sufficient for #52 to render a command-line summary and a rehearsal preview without re-reading the file. *(Amended during implementation, decisions.md D26: "stored, but not verbatim" is a fifth outcome, and filing it under set-aside would make that bucket — the one #51 filters on — mean two different things.)*
 - **FR-016**: Every message this feature puts in front of a person, in a failure or in the report, MUST be translatable with named placeholders. Developer-facing diagnostics are exempt (Article XII).
 - **FR-017**: Any model field this feature adds MUST carry translatable metadata and non-empty help text, and its indexing MUST be a deliberate recorded decision (Articles XII and XIII).
+- **FR-019**: A vocabulary's publication details MUST be kept on the vocabulary: its publisher (`dcterms:publisher`), creator (`dcterms:creator`), licence (`dcterms:license`), version (`owl:versionInfo`) and last-modified date (`dcterms:modified`). Each holds one value, a literal's text or an address as published. Where the file gives several, the first in alphabetical order MUST be kept and each other MUST be reported as set aside. A last-modified date and time MUST keep its date and be reported as normalised, and a last-modified value that is not a date MUST be set aside and reported. A detail the file does not give MUST be cleared, as the description is.
 - **FR-018**: The test suite MUST ship a published vocabulary as a fixture file in each supported serialization, discoverable from the suite, so the features that follow do not rebuild them.
 
 ### Key Entities *(include if feature involves data)*
@@ -182,7 +183,8 @@ Every message this feature puts in front of a person is translatable, any field 
 - **Import report**: the structured outcome of a run. What was created, what was updated, what was set aside and why, what was normalised and why, and what is here but no longer in the source. The contract #51 and #52 build on.
 - **Set-aside entry**: one thing the run could not store, with what it was and why. A language the site is not configured for, a predicate with no home in the models, a relationship end that does not exist, a concept with no usable preferred label.
 - **Normalisation entry**: one thing the run *did* store, but under a different predicate than the file used, with what it was and why — a foreign description read as a definition, say. Distinct from a set-aside entry because the value is in the database, and a caller filtering set-aside entries is asking what did not make it in (decisions.md D26).
-- **ConceptScheme, Concept, Collection, ConceptLabel, ConceptNote, ConceptRelation, CollectionMember (unchanged)**: this feature adds no domain model. It writes the ones R1 defined, through the identity #49 established.
+- **ConceptScheme**: written with its name, description and default language, and with the five publication details of FR-019, which it holds in fields of its own.
+- **Concept, Collection, ConceptLabel, ConceptNote, ConceptRelation, CollectionMember (unchanged)**: written as R1 defined them, through the identity #49 established.
 
 ## Success Criteria *(mandatory)*
 

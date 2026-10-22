@@ -40,6 +40,11 @@ _EXAMPLE_PARAMS = {
     SetAsideReason.VALUE_TOO_LONG: {"language": "en-gb"},
     SetAsideReason.STORED_SLUG_INVALID: {},
     SetAsideReason.COLLECTION_NOT_CREATED: {},
+    SetAsideReason.SURPLUS_VALUE: {
+        "predicate": "dcterms:creator",
+        "value": "B. Jeweller",
+    },
+    SetAsideReason.NOT_A_DATE: {"predicate": "dcterms:modified"},
 }
 
 _EXAMPLE_FATAL_PARAMS = {
@@ -65,6 +70,7 @@ _EXAMPLE_NORMALIZED_PARAMS = {
         "language": "en",
     },
     NormalizedReason.LANGUAGE_SUBSTITUTION: {"language": "en-gb", "kept_as": "en"},
+    NormalizedReason.DATE_FROM_DATE_TIME: {"predicate": "dcterms:modified"},
 }
 
 

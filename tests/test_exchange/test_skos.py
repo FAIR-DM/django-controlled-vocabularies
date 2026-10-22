@@ -1,5 +1,6 @@
 """Tests for controlled_vocabularies.exchange.skos."""
 
+import datetime
 import re
 import threading
 from pathlib import Path
@@ -3213,6 +3214,101 @@ class TestVocabularyMetadataUpdate:
 
         scheme = ConceptScheme.objects.get(static_uri="http://example.org/gems/")
         assert scheme.description == ""
+
+
+class TestVocabularyPublicationDetails:
+    def test_each_publication_detail_is_kept(self, db):
+        import_skos(FIXTURES / "vocabulary_publication.ttl")
+
+        scheme = ConceptScheme.objects.get(static_uri="http://example.org/gems/")
+        assert scheme.publisher == "Gem Survey"
+        assert scheme.creator == "A. Lapidary"
+        assert scheme.license == "https://creativecommons.org/licenses/by/4.0/"
+        assert scheme.version == "2.1"
+        assert scheme.modified == datetime.date(2026, 3, 14)
+
+    def test_the_publication_details_are_not_reported_as_unmodelled(self, db):
+        report = import_skos(FIXTURES / "vocabulary_publication.ttl")
+
+        assert not [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.UNMODELLED_PREDICATE
+        ]
+
+    def test_details_removed_from_the_file_are_cleared_on_reimport(self, db):
+        import_skos(FIXTURES / "vocabulary_publication.ttl")
+
+        import_skos(FIXTURES / "vocabulary_metadata.ttl")
+
+        scheme = ConceptScheme.objects.get(static_uri="http://example.org/gems/")
+        assert scheme.publisher == ""
+        assert scheme.creator == ""
+        assert scheme.license == ""
+        assert scheme.version == ""
+        assert scheme.modified is None
+
+    def test_a_detail_published_as_an_address_keeps_the_address(self, db):
+        import_skos(FIXTURES / "vocabulary_publication_variants.ttl")
+
+        scheme = ConceptScheme.objects.get(static_uri="http://example.org/gems/")
+        assert scheme.publisher == "https://example.org/gem-survey"
+        assert scheme.license == "CC BY 4.0"
+
+    def test_one_of_several_values_is_kept_and_the_rest_are_reported(self, db):
+        report = import_skos(FIXTURES / "vocabulary_publication_variants.ttl")
+
+        scheme = ConceptScheme.objects.get(static_uri="http://example.org/gems/")
+        assert scheme.creator == "A. Lapidary"
+        surplus = [
+            entry
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.SURPLUS_VALUE
+        ]
+        assert [(entry.subject, entry.params) for entry in surplus] == [
+            (
+                "http://example.org/gems/",
+                {"predicate": "dcterms:creator", "value": "B. Jeweller"},
+            )
+        ]
+
+    def test_a_last_modified_time_keeps_its_date_and_is_reported(self, db):
+        report = import_skos(FIXTURES / "vocabulary_publication_variants.ttl")
+
+        scheme = ConceptScheme.objects.get(static_uri="http://example.org/gems/")
+        assert scheme.modified == datetime.date(2026, 3, 14)
+        assert [
+            entry.subject
+            for entry in report.normalized
+            if entry.reason is NormalizedReason.DATE_FROM_DATE_TIME
+        ] == ["http://example.org/gems/"]
+
+    def test_a_detail_too_long_to_store_is_set_aside(self, db, tmp_path):
+        source = (FIXTURES / "vocabulary_publication.ttl").read_text()
+        long_publisher = "G" * 300
+        path = tmp_path / "long_publisher.ttl"
+        path.write_text(source.replace('"Gem Survey"', f'"{long_publisher}"'))
+
+        report = import_skos(path)
+
+        scheme = ConceptScheme.objects.get(static_uri="http://example.org/gems/")
+        assert scheme.publisher == ""
+        assert [
+            entry.subject
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.VALUE_TOO_LONG
+        ] == ["http://example.org/gems/"]
+
+    def test_a_last_modified_value_that_is_not_a_date_is_set_aside(self, db):
+        report = import_skos(FIXTURES / "vocabulary_publication_undated.ttl")
+
+        scheme = ConceptScheme.objects.get(static_uri="http://example.org/gems/")
+        assert scheme.modified is None
+        assert [
+            entry.subject
+            for entry in report.set_aside
+            if entry.reason is SetAsideReason.NOT_A_DATE
+        ] == ["http://example.org/gems/"]
 
 
 class TestFrozenDefaultLanguageConflictIsReported:

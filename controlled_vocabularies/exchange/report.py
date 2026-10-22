@@ -59,6 +59,8 @@ class SetAsideReason(TextChoices):
       declares a default language that differs from the frozen one.
     - ``RELATION_DISJOINTNESS`` sets aside the related statement when a pair is also
       broader/narrower, because SKOS makes the two mutually exclusive.
+    - ``SURPLUS_VALUE`` is a second value of a vocabulary's publication detail, such as a
+      second creator. ``SURPLUS_PREFERRED_LABEL`` is the same outcome for a preferred label.
     """
 
     UNCONFIGURED_LANGUAGE = "unconfigured_language", _("language not configured")
@@ -107,6 +109,8 @@ class SetAsideReason(TextChoices):
         "collection_not_created",
         _("collection was not created for want of a usable name"),
     )
+    SURPLUS_VALUE = "surplus_value", _("only one value is kept for this property")
+    NOT_A_DATE = "not_a_date", _("value is not a date")
 
     @property
     def template(self) -> Promise:
@@ -185,6 +189,13 @@ _REASON_TEMPLATES: dict[SetAsideReason, Promise] = {
     ),
     SetAsideReason.COLLECTION_NOT_CREATED: _(
         "'%(subject)s' was not created because it has no name this application can store."
+    ),
+    SetAsideReason.SURPLUS_VALUE: _(
+        "'%(subject)s' carries more than one '%(predicate)s' value; only one is kept and "
+        "'%(value)s' was not stored."
+    ),
+    SetAsideReason.NOT_A_DATE: _(
+        "'%(subject)s' carries a '%(predicate)s' value that is not a date; it was not stored."
     ),
 }
 
@@ -342,6 +353,10 @@ class NormalizedReason(TextChoices):
         "language_substitution",
         _("value stored under a different language than published"),
     )
+    DATE_FROM_DATE_TIME = (
+        "date_from_date_time",
+        _("date kept from a date and time"),
+    )
 
     @property
     def template(self) -> Promise:
@@ -357,6 +372,9 @@ _NORMALIZED_TEMPLATES: dict[NormalizedReason, Promise] = {
     NormalizedReason.LANGUAGE_SUBSTITUTION: _(
         "'%(subject)s' was published in the language '%(language)s' and was stored under "
         "'%(kept_as)s', the site's matching configured language."
+    ),
+    NormalizedReason.DATE_FROM_DATE_TIME: _(
+        "'%(subject)s' carries a '%(predicate)s' date and time; only the date was stored."
     ),
 }
 

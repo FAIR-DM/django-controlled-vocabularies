@@ -9,10 +9,20 @@ from controlled_vocabularies.models import ConceptScheme
 # for itself. Concept is left out: a hand-added vocabulary should show a count of zero.
 @admin.register(ConceptScheme)
 class ConceptSchemeAdmin(admin.ModelAdmin):
-    """Admin for vocabularies, showing only the fields the list page reads."""
+    """Admin for vocabularies, showing only the fields the vocabulary pages read."""
 
     # slug and slug_is_manual are left off the form: the slug is derived from the name on save, and a
     # required slug field would demand a value the model is about to compute.
-    fields = ("name", "description", "default_language", "static_uri")
+    fields = (
+        "name",
+        "description",
+        "default_language",
+        "static_uri",
+        "publisher",
+        "creator",
+        "license",
+        "version",
+        "modified",
+    )
     list_display = ("name", "slug", "static_uri")
     search_fields = ("name", "description")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import urllib.parse
 from collections import Counter
 from collections.abc import Iterable
@@ -15,6 +16,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+from rdflib.namespace import OWL
 
 from controlled_vocabularies.exchange.exceptions import (
     SkosImportError,
@@ -548,6 +550,15 @@ class SchemeResolver:
         matcher: Resolves a published language tag to a configured language.
     """
 
+    # Each publication detail's predicate, its CURIE for the report and the field it is kept in.
+    _PUBLICATION_DETAILS: tuple[tuple[rdflib.URIRef, str, str], ...] = (
+        (DCTERMS.publisher, "dcterms:publisher", "publisher"),
+        (DCTERMS.creator, "dcterms:creator", "creator"),
+        (DCTERMS.license, "dcterms:license", "license"),
+        (OWL.versionInfo, "owl:versionInfo", "version"),
+        (DCTERMS.modified, "dcterms:modified", "modified"),
+    )
+
     # skos:hasTopConcept is read about a concept, not held for it, so ConceptImporter omits it.
     _HANDLED_PREDICATES = frozenset(
         {
@@ -555,6 +566,7 @@ class SchemeResolver:
             SKOS.prefLabel,
             SKOS.hasTopConcept,
             DCTERMS.description,
+            *(predicate for predicate, _curie, _field in _PUBLICATION_DETAILS),
         }
     )
 
@@ -671,6 +683,109 @@ class SchemeResolver:
             FatalReason.VOCABULARY_AMBIGUOUS,
             subject=self.source_label,
             declared=", ".join(str(node) for node in declared_nodes),
+        )
+        return None
+
+    def keep_publication_details(
+        self, row: ConceptScheme, declared_node: rdflib.term.Node, declared_uri: str
+    ) -> None:
+        """Assign the vocabulary's publisher, creator, licence, version and last-modified date.
+
+        Each detail holds one value: a literal's text or an address, the lexicographically first
+        when the file gives several, the rest reported. A detail the file does not give is
+        cleared, as the description is, because the file is authoritative. The row is not saved.
+
+        Args:
+            row: The vocabulary being imported into.
+            declared_node: The vocabulary's node in the graph.
+            declared_uri: The vocabulary's identifier, the subject of each report entry.
+        """
+        for predicate, curie, field_name in self._PUBLICATION_DETAILS:
+            values = sorted(
+                (str(value), value)
+                for value in self.skos_graph.graph.objects(declared_node, predicate)
+                if isinstance(value, rdflib.URIRef)
+                or self.skos_graph.is_usable_literal(value)
+            )
+            for text, _value in values[1:]:
+                self.report.add_set_aside(
+                    SetAsideReason.SURPLUS_VALUE,
+                    subject=declared_uri,
+                    predicate=curie,
+                    value=text,
+                )
+            kept = values[0] if values else None
+            if field_name == "modified":
+                row.modified = self._published_date(kept, declared_uri, curie)
+                continue
+            if kept is None:
+                setattr(row, field_name, "")
+                continue
+            text, node = kept
+            field = ConceptScheme._meta.get_field(field_name)
+            if len(text) > cast(int, getattr(field, "max_length", None)):
+                self.report.add_set_aside(
+                    SetAsideReason.VALUE_TOO_LONG,
+                    subject=declared_uri,
+                    language=getattr(node, "language", None) or "",
+                )
+                text = ""
+            setattr(row, field_name, text)
+
+    @staticmethod
+    def _parse_iso_date(text: str) -> datetime.date | str:
+        """Return the date or date and time an ISO 8601 text states, else the text unchanged.
+
+        Args:
+            text: The published value.
+
+        Returns:
+            A date for a date alone, a date and time for both, or ``text`` when it is neither.
+        """
+        for parse in (datetime.date.fromisoformat, datetime.datetime.fromisoformat):
+            try:
+                return parse(text)
+            except ValueError:
+                continue
+        return text
+
+    def _published_date(
+        self,
+        kept: tuple[str, rdflib.term.Node] | None,
+        declared_uri: str,
+        curie: str,
+    ) -> datetime.date | None:
+        """Return the date a published last-modified value states, reporting what it cannot.
+
+        A typed ``xsd:date`` or ``xsd:dateTime`` and an untyped ISO 8601 text are all read. A
+        date and time keeps its date and is reported as normalised. Anything else is set aside.
+
+        Args:
+            kept: The value chosen for the detail, as text and node, or ``None``.
+            declared_uri: The vocabulary's identifier, the subject of each report entry.
+            curie: The predicate's CURIE for the report.
+
+        Returns:
+            The date, or ``None`` when there is none to store.
+        """
+        if kept is None:
+            return None
+        text, node = kept
+        value: object = node.toPython() if isinstance(node, rdflib.Literal) else text
+        if isinstance(value, str):
+            value = self._parse_iso_date(value)
+        # datetime is checked first, because it is also a date.
+        if isinstance(value, datetime.datetime):
+            self.report.add_normalized(
+                NormalizedReason.DATE_FROM_DATE_TIME,
+                subject=declared_uri,
+                predicate=curie,
+            )
+            return value.date()
+        if isinstance(value, datetime.date):
+            return value
+        self.report.add_set_aside(
+            SetAsideReason.NOT_A_DATE, subject=declared_uri, predicate=curie
         )
         return None
 
@@ -842,6 +957,7 @@ class SchemeResolver:
                     kept_as=row.effective_default_language,
                 )
         row.description = description or ""
+        self.keep_publication_details(row, declared_node, declared_uri)
         row.static_uri = declared_uri
         # A created scheme mints its slug from its identifier and a matched row keeps the one it holds
         # (docs/adr/0002-an-address-is-minted-once-and-read-back-forever.md). Two vocabularies can end in the same
