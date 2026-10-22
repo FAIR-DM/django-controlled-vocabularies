@@ -1,0 +1,21 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# The same vocabulary published differently: the publisher as an address, two
+# creators, the licence as a name, and a last-modified time as well as a date.
+
+<http://example.org/gems/>
+    a skos:ConceptScheme ;
+    skos:prefLabel "Gemstones"@en ;
+    dcterms:publisher <https://example.org/gem-survey> ;
+    dcterms:creator "B. Jeweller", "A. Lapidary" ;
+    dcterms:license "CC BY 4.0" ;
+    dcterms:modified "2026-03-14T09:30:00Z"^^xsd:dateTime ;
+    skos:hasTopConcept <http://example.org/gems/diamond> .
+
+<http://example.org/gems/diamond>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/gems/> ;
+    skos:prefLabel "Diamond"@en .

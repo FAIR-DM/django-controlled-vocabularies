@@ -401,6 +401,40 @@ class ConceptScheme(StaticUriModel):
             "wherever the field is exposed."
         )
     )
+    # The publication details are shown, never filtered or ordered on, so none is indexed
+    # (Article XIII).
+    publisher = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("publisher"),
+        help_text=_("Who publishes this vocabulary: a name or the address of one."),
+    )
+    creator = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("creator"),
+        help_text=_("Who created this vocabulary: a name or the address of one."),
+    )
+    license = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name=_("licence"),
+        help_text=_(
+            "The licence this vocabulary is published under: its address or its name."
+        ),
+    )
+    version = models.CharField(
+        max_length=64,
+        blank=True,
+        verbose_name=_("version"),
+        help_text=_("The version of this vocabulary, as its publisher numbers it."),
+    )
+    modified = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_("last modified"),
+        help_text=_("When this vocabulary last changed, as its publisher states it."),
+    )
 
     objects = ConceptSchemeManager()
 
