@@ -58,6 +58,10 @@ INSTALLED_APPS = [
     "daisy_cotton",
     "crispy_forms",
     "mvp_forms",
+    # Development only, from the dev dependency group: the open page reloads itself when a template,
+    # static file or Python module changes, and watchfiles notices the change without polling.
+    "django_browser_reload",
+    "django_watchfiles",
     # Every list page's search and sort is a django-filter filterset.
     "django_filters",
     "controlled_vocabularies.ui",
@@ -87,6 +91,7 @@ MIDDLEWARE = [
     # and only this middleware sets it. Without the entry the control renders as an empty select
     # carrying no search — which is why the package's own checks refuse to stay quiet about it.
     "django_tomselect.middleware.TomSelectMiddleware",
+    "django_browser_reload.middleware.BrowserReloadMiddleware",
 ]
 
 TEMPLATES = [

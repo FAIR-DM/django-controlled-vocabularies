@@ -12,6 +12,8 @@ urlpatterns = [
     path("vocabularies/", include("controlled_vocabularies.urls")),
     # django-mvp's footer menu links to a view named "home". Without one, django-flex-menus logs a
     # reversal failure on every render, and the root address returns 404.
+    # The endpoint the open page listens on to reload itself after a change.
+    path("__reload__/", include("django_browser_reload.urls")),
     path(
         "",
         RedirectView.as_view(pattern_name="controlled_vocabularies_ui:vocabulary-list"),

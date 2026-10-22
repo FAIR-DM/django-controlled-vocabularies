@@ -1,10 +1,41 @@
 {% comment %}
-  Rendered in an isolated context holding only the object, so the link is reversed from
-  `object.scheme`, which VocabularyDetailView select_relates. `title` is a slot for the reason
-  given in conceptscheme_list_item.html.
+  One daisyUI list row per concept, rendered in an isolated context holding only the object, so the
+  link is reversed from `object.scheme`, which VocabularyDetailView select_relates. The broader
+  concept sits above the label as context, the way a path reads; the definition below it says what
+  the concept means, which a label alone often does not. Both are left out when absent.
 {% endcomment %}
-<c-mvp.card>
-  <c-slot name="title">
-    <a href="{% url 'controlled_vocabularies_ui:concept-detail' object.scheme.slug object.slug %}">{{ object.resolved_label }}</a>
-  </c-slot>
-</c-mvp.card>
+<c-list.row>
+  <div class="list-col-grow min-w-0">
+    {% if object.broader_label %}
+      <div class="text-xs text-base-content/60 truncate">{{ object.broader_label }}</div>
+    {% endif %}
+    <a class="link link-hover font-medium"
+       href="{% url 'controlled_vocabularies_ui:concept-detail' object.scheme.slug object.slug %}">{{ object.resolved_label }}</a>
+    {% if object.resolved_definition %}
+      <p class="text-sm text-base-content/70">{{ object.resolved_definition|truncatewords:30 }}</p>
+    {% endif %}
+    {% comment %}
+      The concept's identifier, not its page here: for an imported concept it is the publisher's
+      address. Last and smallest, as on the concept's own page, so it is there to copy without
+      competing with the label. An outbound link, hence rel="noopener".
+    {% endcomment %}
+    <div class="text-xs text-base-content/60 break-words mt-1">
+      <c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" />
+    </div>
+    {% comment %}
+      The collections holding the concept, each a badge linking to the collection's page. The view
+      prefetches the memberships with their collections, so this costs no query per row.
+    {% endcomment %}
+    {% if object.collection_memberships.all %}
+      <div class="flex flex-wrap gap-1 mt-2">
+        {% for membership in object.collection_memberships.all %}
+          {% comment %} A badge does not wrap, so a long name is cut short; the link's title carries it whole. {% endcomment %}
+          <a href="{% url 'controlled_vocabularies_ui:collection-detail' object.scheme.slug membership.collection.slug %}"
+             title="{{ membership.collection.name }}">
+            <c-badge text="{{ membership.collection.name|truncatechars:40 }}" size="sm" outline />
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</c-list.row>

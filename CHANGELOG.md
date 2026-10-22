@@ -12,6 +12,15 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Changed
 
+- A vocabulary's page lists its concepts as rows rather than cards. Each row shows the concept's
+  broader concept, its definition cut to 30 words, its identifier as a link, and the collections
+  that hold it. What the page says about the vocabulary moves to a side panel beside the list:
+  its identifier, default language, concept count, top concepts and collections with their
+  member counts. The description becomes the page's lead text. Whether a vocabulary was imported
+  is shown only to users with the `change_conceptscheme` permission. A project overriding
+  `concept_list_item.html` or `conceptscheme_detail.html` should compare its copy with the new
+  templates.
+- The demo project reloads an open page when a template, static file or Python module changes.
 - The project is built and developed with uv instead of Poetry. Contributors run `uv sync` in
   place of `poetry install`, and `uv run` in place of `poetry run`. Published packages are
   unaffected.

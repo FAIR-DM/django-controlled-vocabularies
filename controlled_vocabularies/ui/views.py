@@ -2,11 +2,12 @@
 
 from itertools import count
 
-from django.db.models import Count, F, OuterRef, Subquery
+from django.db.models import Count, F, OuterRef, Prefetch, Subquery
 from django.db.models.functions import Coalesce, Lower
 from django.http import Http404
 from django.urls import reverse
-from django.utils.translation import get_language
+from django.utils.text import Truncator
+from django.utils.translation import get_language, get_language_info
 from django.utils.translation import gettext_lazy as _
 from mvp.views import MVPDetailView, MVPListView
 
@@ -27,9 +28,11 @@ from controlled_vocabularies.exchange.mapping import (
 )
 from controlled_vocabularies.models import (
     Collection,
+    CollectionMember,
     Concept,
     ConceptLabel,
     ConceptNote,
+    ConceptRelation,
     ConceptScheme,
 )
 from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
@@ -438,7 +441,7 @@ class CollectionDetailView(MVPDetailView):
 
 
 class VocabularyDetailView(_StrippedSearchMixin, MVPListView):
-    """A single vocabulary's page: its description, provenance and the concepts it holds.
+    """A single vocabulary's page: the concepts it holds, and a side panel about the vocabulary.
 
     A list view over ``Concept`` rather than a detail view over ``ConceptScheme``,
     because django-mvp's detail view is empty below its heading and would mean
@@ -475,15 +478,63 @@ class VocabularyDetailView(_StrippedSearchMixin, MVPListView):
             language=get_language(),
             kind=ConceptLabel.Kind.PREFERRED,
         ).values("text")[:1]
-        # select_related: the row partial reverses its link from `object.scheme.slug` in an isolated
+        # Kept for the side panel's top concepts, which are named the way the rows are.
+        self.labelled_concepts = Concept.objects.filter(
+            scheme=self.vocabulary
+        ).annotate(
+            resolved_label=Coalesce(Subquery(preferred_in_active_language), F("label"))
+        )
+
+        def definition_in(language):
+            """Return the concept's definition in ``language``, as a subquery.
+
+            Args:
+                language: The language code to read.
+
+            Returns:
+                The subquery.
+            """
+            return Subquery(
+                ConceptNote.objects.filter(
+                    concept=OuterRef("pk"),
+                    language=language,
+                    kind=ConceptNote.Kind.DEFINITION,
+                ).values("value")[:1]
+            )
+
+        # The one broader concept a row names for context, named the way the rows are. A concept with
+        # several shows the one whose relation was stored first.
+        broader_preferred = ConceptLabel.objects.filter(
+            concept=OuterRef("target"),
+            language=get_language(),
+            kind=ConceptLabel.Kind.PREFERRED,
+        ).values("text")[:1]
+        broader_label = (
+            ConceptRelation.objects.filter(
+                source=OuterRef("pk"), kind=ConceptRelation.Kind.BROADER
+            )
+            .order_by("pk")
+            .annotate(name=Coalesce(Subquery(broader_preferred), F("target__label")))
+            .values("name")[:1]
+        )
+        # The collections each row names, alphabetically, in one query for the page.
+        memberships = Prefetch(
+            "collection_memberships",
+            queryset=CollectionMember.objects.select_related("collection").order_by(
+                Lower("collection__name")
+            ),
+        )
+        # select_related: the row partial reverses its links from `object.scheme.slug` in an isolated
         # context, so without the join it costs a query per row.
         self.queryset = (
-            Concept.objects.filter(scheme=self.vocabulary)
-            .select_related("scheme")
+            self.labelled_concepts.select_related("scheme")
+            .prefetch_related(memberships)
             .annotate(
-                resolved_label=Coalesce(
-                    Subquery(preferred_in_active_language), F("label")
-                )
+                resolved_definition=Coalesce(
+                    definition_in(get_language()),
+                    definition_in(self.vocabulary.effective_default_language),
+                ),
+                broader_label=Subquery(broader_label),
             )
         )
 
@@ -492,9 +543,34 @@ class VocabularyDetailView(_StrippedSearchMixin, MVPListView):
         # Otherwise the title reads as the concept model's plural.
         return self.vocabulary.name
 
+    def get_page_subtitle(self):
+        """Return the vocabulary's description, cut to the length of a lead paragraph."""
+        return Truncator(self.vocabulary.description).words(40)
+
     def get_context_data(self, **kwargs):
-        """Add the vocabulary and its collections."""
+        """Add the vocabulary and what the side panel says about it."""
         context = super().get_context_data(**kwargs)
-        context["vocabulary"] = self.vocabulary
-        context["collections"] = self.vocabulary.collections.order_by(Lower("name"))
+        vocabulary = self.vocabulary
+        context["vocabulary"] = vocabulary
+        language = vocabulary.effective_default_language
+        try:
+            context["language_name"] = get_language_info(language)["name_translated"]
+        except KeyError:
+            context["language_name"] = language
+        context["concept_count"] = vocabulary.concepts.count()
+        # A concept with no broader concept is a way into the hierarchy. A flat vocabulary has
+        # nothing but top concepts, so listing them would only repeat the concept list.
+        has_hierarchy = ConceptRelation.objects.filter(
+            source__scheme=vocabulary, kind=ConceptRelation.Kind.BROADER
+        ).exists()
+        context["top_concepts"] = (
+            self.labelled_concepts.exclude(
+                relations_as_source__kind=ConceptRelation.Kind.BROADER
+            ).order_by(Lower("resolved_label"), "pk")
+            if has_hierarchy
+            else []
+        )
+        context["collections"] = vocabulary.collections.annotate(
+            member_count=Count("memberships")
+        ).order_by(Lower("name"))
         return context
