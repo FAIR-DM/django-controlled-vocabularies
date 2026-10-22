@@ -734,7 +734,14 @@ class SchemeResolver:
 
     @staticmethod
     def _parse_iso_date(text: str) -> datetime.date | str:
-        """Return the date or date and time an ISO 8601 text states, else the text unchanged."""
+        """Return the date or date and time an ISO 8601 text states, else the text unchanged.
+
+        Args:
+            text: The published value.
+
+        Returns:
+            A date for a date alone, a date and time for both, or ``text`` when it is neither.
+        """
         for parse in (datetime.date.fromisoformat, datetime.datetime.fromisoformat):
             try:
                 return parse(text)
