@@ -1,6 +1,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # The DCMI Type Vocabulary, published by the Dublin Core Metadata Initiative at these stable
 # URIs — real, recognisable content rather than invented placeholder text (013-find-a-vocabulary
@@ -12,6 +13,9 @@
     a skos:ConceptScheme ;
     skos:prefLabel "DCMI Type Vocabulary"@en ;
     dcterms:description "A general, cross-domain list of resource types used to categorise the nature or genre of a resource."@en ;
+    dcterms:publisher "Dublin Core Metadata Initiative" ;
+    dcterms:license <https://creativecommons.org/licenses/by/4.0/> ;
+    dcterms:modified "2012-06-14"^^xsd:date ;
     skos:hasTopConcept
         <http://purl.org/dc/dcmitype/Collection>,
         <http://purl.org/dc/dcmitype/Dataset>,

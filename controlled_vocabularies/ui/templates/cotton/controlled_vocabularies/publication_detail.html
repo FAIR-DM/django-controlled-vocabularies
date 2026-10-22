@@ -1,0 +1,17 @@
+{# @description One of a vocabulary's publication details as a term and value pair for a definition list. A value that is a web address is a link to it, and a missing value is a dash. #}
+{# @prop term:string | description:"The detail's name, such as Publisher." #}
+{# @prop value:string | description:"The detail's value: text or a web address. Empty when the vocabulary does not give it." #}
+<c-vars term value />
+<div>
+  <dt class="text-xs uppercase font-semibold text-base-content/60">{{ term }}</dt>
+  <dd class="break-words">
+    {% if not value %}
+      —
+    {% elif value|slice:":8" == "https://" or value|slice:":7" == "http://" %}
+      {% comment %} An outbound link: nothing is marked safe and only href takes an interpolated value (#140). {% endcomment %}
+      <c-link href="{{ value }}" text="{{ value }}" hover=True rel="noopener" />
+    {% else %}
+      {{ value }}
+    {% endif %}
+  </dd>
+</div>

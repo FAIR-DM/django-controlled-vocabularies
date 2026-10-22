@@ -185,6 +185,9 @@ Beside the list, a side panel describes the vocabulary itself:
   `controlled_vocabularies.change_conceptscheme` permission, since it decides whether the
   vocabulary may be edited here and is no concern of a reader
 - its default language
+- its publication details: its publisher, its creator, its licence, its version and when it last
+  changed (see "The vocabulary's own details" in `docs/importing.md`). A detail held as a web
+  address is a link to it, and a detail the vocabulary does not have is shown as a dash.
 - how many concepts it holds
 - its top concepts, the ones with no broader concept, each linking to its page; a vocabulary with
   no broader/narrower relations at all lists none, since every concept would be listed twice

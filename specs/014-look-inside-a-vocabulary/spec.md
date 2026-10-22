@@ -33,7 +33,7 @@
 Six decisions were taken with the maintainer at intake, because each decides what the feature is
 rather than how it is built.
 
-- **Q: The issue says the page shows "who publishes it". Nothing in the data model records a publisher — does this feature start recording one?** → A: No. Provenance only: whether the vocabulary is held on this site or was published elsewhere, exactly as the list of vocabularies already expresses it. The maintainer named a named publisher as a genuine future need, to be derived from an existing record or required on the data model when it comes, and deferred it out of this feature. Integrated into FR-003 and Assumptions.
+- **Q: The issue says the page shows "who publishes it". Nothing in the data model records a publisher — does this feature start recording one?** → A: Not in this feature, which showed provenance only. The import now keeps the publisher a vocabulary's file states, with its other publication details (#205), and the page shows them. Integrated into FR-021 and Assumptions.
 - **Q: Do the concepts and collections shown here link to their own pages?** → A: Yes, now that #142 serves those addresses. Integrated into FR-011.
 - **Q: The vocabulary's identifier — plain text, as it is on the list of vocabularies, or a link?** → A: A link, for every vocabulary. The point of SKOS is that a vocabulary is a linked thing, and presenting a record without rendering its link makes little sense. A vocabulary published elsewhere links to its publisher; a vocabulary held here links to this page, its identifier being computed from this site's address until publication fixes it. This reverses the decision taken one feature ago that an identifier is never a link, and the maintainer expects to revisit it once he has seen it working. Integrated into FR-004, and applied to the list of vocabularies in FR-013.
 - **Q: What does searching a vocabulary's concepts match on?** → A: Every name a term goes by — its preferred label, its alternative labels, and its hidden labels, the last of which exist in SKOS precisely to be matched on without ever being shown. Definitions are not matched: prose matching returns results whose connection to the search a visitor cannot see. Integrated into FR-008 and FR-009.
@@ -58,7 +58,7 @@ The maintainer reviewed a working version of the page and settled its layout.
 - **Q: Where does what the page says about the vocabulary go?** → A: In a side panel beside the list of concepts, at the end of the page, behaving exactly as django-mvp's filter panel does on a list page. The title and lead text stay the vocabulary's name and description. Integrated into FR-002, FR-015 and FR-020.
 - **Q: Who sees whether a vocabulary was imported?** → A: Only someone who can change vocabularies. It decides whether a vocabulary may be edited here, and is no concern of a reader. Integrated into FR-003 and FR-005.
 - **Q: What does the panel say?** → A: The identifier, the source (for editors), the default language, how many concepts there are, the top concepts where the vocabulary has a hierarchy, and every collection with its member count and whether it is ordered. Integrated into FR-015 and FR-020.
-- **Q: The importer reads publication details (publisher, licence, version) from a SKOS file. Are they shown?** → A: Not yet: nothing stores them. Storing and showing them is its own change.
+- **Q: The importer reads publication details (publisher, licence, version) from a SKOS file. Are they shown?** → A: Yes, in the side panel, once the import keeps them (#205). Integrated into FR-021.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -103,6 +103,9 @@ of vocabularies leads to those same pages.
 8. **Given** the page, **When** it is requested by someone not signed in, **Then** it is served.
 9. **Given** a vocabulary, **When** its page is read, **Then** its default language and the number
    of concepts it holds are shown beside the list.
+10. **Given** a vocabulary whose publisher, creator, licence, version or last-modified date is known,
+   **When** its page is read, **Then** each is shown beside the list, a detail held as a web address
+   is a link to it, and a detail the vocabulary does not have is shown as a dash.
 
 ---
 
@@ -257,8 +260,7 @@ ordered, and that each links to its own page.
   text, omitting the lead text cleanly when there is none.
 - **FR-003**: The page MUST show a user permitted to change vocabularies whether the vocabulary is
   held on this site or was published elsewhere, and MUST NOT show it to anyone else. It MUST show
-  the publisher's own identifier where it was published elsewhere, and MUST NOT claim to name who
-  the publisher is, which nothing in the data model records.
+  the publisher's own identifier where it was published elsewhere.
 - **FR-004**: The vocabulary's identifier MUST be shown as a link, for every vocabulary — the
   publisher's address for one published elsewhere, and this site's own computed address for one held
   here.
@@ -306,12 +308,15 @@ ordered, and that each links to its own page.
 - **FR-020**: Beside the list of concepts, the page MUST show the vocabulary's identifier, its
   default language, how many concepts it holds, and, where its concepts form a hierarchy, the
   concepts with no broader concept, named as the list names them.
+- **FR-021**: Beside the list of concepts, the page MUST show the vocabulary's publisher, creator,
+  licence, version and last-modified date, a dash for each the vocabulary does not have. A detail
+  held as a web address MUST be a link to it, and no other value MUST be.
 
 ### Requirement → story
 
 | Story | Requirements |
 |---|---|
-| US-1 — Open a vocabulary and know what it is | FR-001, FR-002, FR-003, FR-004, FR-005, FR-013, FR-017, FR-020 |
+| US-1 — Open a vocabulary and know what it is | FR-001, FR-002, FR-003, FR-004, FR-005, FR-013, FR-017, FR-020, FR-021 |
 | US-2 — See every term the vocabulary holds | FR-006, FR-007, FR-010, FR-011, FR-012, FR-014, FR-016, FR-020 |
 | US-3 — Find a term inside the vocabulary | FR-008, FR-009, FR-014, FR-016, FR-018, FR-019 |
 | US-4 — See the groupings a curator made | FR-011, FR-015, FR-018 |
@@ -323,7 +328,8 @@ list stories, so that one extension of the unattended walk covers both.
 ### Key Entities
 
 - **ConceptScheme (vocabulary)**: the record the page is about. Contributes its name, its
-  description, its identifier, and whether that identifier was fixed by a publisher elsewhere.
+  description, its identifier, whether that identifier was fixed by a publisher elsewhere, and its
+  publication details.
 - **Concept**: what the page lists. Named by its labels, linked to its own page, and described by its
   definition, its broader concept and the collections holding it.
 - **ConceptLabel**: the alternative and hidden labels a search matches on, and the per-language
@@ -358,9 +364,9 @@ list stories, so that one extension of the unattended walk covers both.
 - How concepts relate to one another is shown in full on a concept's own page, which is #142's. This
   page reads the broader/narrower relations only to name a concept's broader concept and the
   vocabulary's top concepts.
-- A named publisher is a genuine future need and not a gap this feature leaves by accident. It will
-  be derived from a record or required on the data model when the maintainer decides which; until
-  then provenance is the only claim the page makes about where a vocabulary came from.
+- A vocabulary's publisher and its other publication details are the ones its published file
+  states, kept on import (006, FR-019). A vocabulary authored here has none until a curator gives
+  them, and its page shows a dash for each.
 - A concept's notation cannot be searched because nothing stores one. The ubiquitous language
   defines it, no field holds it, and adding one is a change to what the package records rather than
   to how it is browsed.

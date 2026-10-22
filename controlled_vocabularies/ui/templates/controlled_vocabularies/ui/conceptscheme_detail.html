@@ -82,6 +82,13 @@
         </div>
       </dl>
       <dl class="flex flex-col gap-3 border-t border-base-300 pt-4">
+        <c-controlled-vocabularies.publication-detail term="{% trans "Publisher" %}" value="{{ vocabulary.publisher }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Creator" %}" value="{{ vocabulary.creator }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Licence" %}" value="{{ vocabulary.license }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Version" %}" value="{{ vocabulary.version }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Last modified" %}" value="{{ vocabulary.modified|date }}" />
+      </dl>
+      <dl class="flex flex-col gap-3 border-t border-base-300 pt-4">
         <div>
           <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Concepts" %}</dt>
           <dd class="tabular-nums">{{ concept_count }}</dd>

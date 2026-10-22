@@ -9,6 +9,13 @@ All notable changes to this project are documented in this file. The format foll
 ### Added
 
 - Django 6.1 is supported, and tested on every change alongside 5.2 and 6.0.
+- An import keeps a vocabulary's publisher, creator, licence, version and last-modified date, from
+  `dcterms:publisher`, `dcterms:creator`, `dcterms:license`, `owl:versionInfo` and
+  `dcterms:modified`, in new `ConceptScheme` fields of the same names (`modified` is a date). They
+  are no longer reported as predicates the models have no place for. A vocabulary's page shows
+  them, with a dash for any it does not have. The report gains `SetAsideReason.SURPLUS_VALUE`,
+  `SetAsideReason.NOT_A_DATE` and `NormalizedReason.DATE_FROM_DATE_TIME`. A project runs
+  `migrate` for the new fields (#205).
 
 ### Changed
 

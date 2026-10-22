@@ -1,5 +1,6 @@
 """Tests for controlled_vocabularies.ui.views."""
 
+import datetime
 import re
 
 import pytest
@@ -975,6 +976,75 @@ class TestVocabularyDetailSource:
 
         assert "word0" in content
         assert "word399" not in content
+
+
+class TestVocabularyDetailPublicationDetails:
+    @staticmethod
+    def details(client, scheme):
+        response = client.get(
+            reverse(
+                "controlled_vocabularies_ui:vocabulary-detail",
+                kwargs={"slug": scheme.slug},
+            )
+        )
+        soup = BeautifulSoup(response.content, "html.parser")
+        return soup.find(class_="vocabulary-publication")
+
+    @pytest.mark.django_db
+    def test_each_publication_detail_is_shown(self, client):
+        scheme = ConceptSchemeFactory(
+            publisher="Gem Survey",
+            creator="A. Lapidary",
+            license="CC BY 4.0",
+            version="2.1",
+            modified=datetime.date(2026, 3, 14),
+        )
+
+        values = [
+            dd.get_text(strip=True) for dd in self.details(client, scheme)("dd")
+        ]
+
+        assert values[:4] == ["Gem Survey", "A. Lapidary", "CC BY 4.0", "2.1"]
+        assert "2026" in values[4]
+
+    @pytest.mark.django_db
+    def test_a_detail_given_as_an_address_links_to_it(self, client):
+        license_uri = "https://creativecommons.org/licenses/by/4.0/"
+        scheme = ConceptSchemeFactory(license=license_uri)
+
+        anchor = self.details(client, scheme).find("a", href=license_uri)
+
+        assert anchor is not None
+        assert anchor.get("rel") == ["noopener"]
+
+    @pytest.mark.django_db
+    def test_a_detail_given_as_a_name_is_not_a_link(self, client):
+        scheme = ConceptSchemeFactory(publisher="Gem Survey")
+
+        assert self.details(client, scheme).find("a") is None
+
+    @pytest.mark.django_db
+    def test_an_imported_value_is_escaped_and_only_a_web_address_is_linked(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory(
+            publisher="<b>Gem Survey</b>", license="javascript:alert(1)"
+        )
+
+        details = self.details(client, scheme)
+
+        assert details.find("b") is None
+        assert details.find("a") is None
+
+    @pytest.mark.django_db
+    def test_a_vocabulary_without_details_shows_a_dash_for_each(self, client):
+        scheme = ConceptSchemeFactory()
+
+        values = [
+            dd.get_text(strip=True) for dd in self.details(client, scheme)("dd")
+        ]
+
+        assert values == ["—"] * 5
 
 
 class TestVocabularyDetailIdentifierLink:
