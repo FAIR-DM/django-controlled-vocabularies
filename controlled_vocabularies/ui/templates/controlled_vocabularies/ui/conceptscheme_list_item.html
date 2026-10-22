@@ -10,8 +10,8 @@
     {% if object.publisher %}
       <div class="text-xs text-base-content/60 truncate">{{ object.publisher }}</div>
     {% endif %}
-    <a class="link link-hover font-medium"
-       href="{% url 'controlled_vocabularies_ui:vocabulary-detail' object.slug %}">{{ object.name }}</a>
+    <a href="{% url 'controlled_vocabularies_ui:vocabulary-detail' object.slug %}"
+       class="link link-hover font-medium">{{ object.name }}</a>
     {% if object.description %}
       <p class="text-sm text-base-content/70">{{ object.description|truncatewords:30 }}</p>
     {% endif %}
