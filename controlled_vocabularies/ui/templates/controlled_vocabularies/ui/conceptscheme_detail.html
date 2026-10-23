@@ -5,6 +5,18 @@
   else the page says about the vocabulary sits in the side panel, so the content column is the
   concept list and nothing else.
 {% endcomment %}
+{% block page.actions %}
+  {% comment %}
+    Edit only for a vocabulary held here: an imported one is the publisher's, and the side panel
+    tells a curator which this is. Delete for either, to whoever may delete.
+  {% endcomment %}
+  {% if perms.controlled_vocabularies.change_conceptscheme and not vocabulary.static_uri %}
+    <c-button text="{% trans "Edit" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-update' vocabulary.slug %}" icon="edit" outline only />
+  {% endif %}
+  {% if perms.controlled_vocabularies.delete_conceptscheme %}
+    <c-button text="{% trans "Delete" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-delete' vocabulary.slug %}" icon="delete" variant="error" outline only />
+  {% endif %}
+{% endblock page.actions %}
 {% block page.results %}
   {% comment %}
     A daisyUI list rather than django-mvp's grid of cards: the grid is a <div>, and list rows are <li>.

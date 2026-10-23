@@ -1,8 +1,14 @@
 {% extends "list_view.html" %}
+{% load i18n %}
 {% comment %}
   django-mvp's list page with the results drawn as daisyUI list rows, as the vocabulary page draws its
   concepts. The toolbar, count row, filter panel, pager and empty states are django-mvp's own.
 {% endcomment %}
+{% block page.actions %}
+  {% if perms.controlled_vocabularies.add_conceptscheme %}
+    <c-button text="{% trans "New vocabulary" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-create' %}" icon="add" variant="primary" only />
+  {% endif %}
+{% endblock page.actions %}
 {% block page.results %}
   {% if object_list %}
     <c-list>

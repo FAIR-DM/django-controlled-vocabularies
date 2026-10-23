@@ -1,0 +1,42 @@
+{% extends "delete_view.html" %}
+{% load i18n %}
+{% comment %}
+  Counts rather than django-mvp's list of every record: a vocabulary's cascade runs to its labels,
+  notes and relations, and what a curator needs to know is how many concepts and collections go.
+  A vocabulary in use names the kinds of record using it, with how many of each.
+{% endcomment %}
+{% block before_form %}
+  {% if is_protected %}
+    <c-alert variant="error" icon="error" only>
+      <div class="flex flex-col gap-2">
+        <strong>{% trans "This vocabulary cannot be deleted while its concepts are in use." %}</strong>
+        <span>{% trans "Records elsewhere on this site point at its concepts:" %}</span>
+        <ul class="list-disc ms-4">
+          {% for label, number in protected_kinds %}
+            <li>{{ label }}: <span class="tabular-nums">{{ number }}</span></li>
+          {% endfor %}
+        </ul>
+        <span>{% trans "Change those records to use other concepts, then delete the vocabulary." %}</span>
+      </div>
+    </c-alert>
+  {% else %}
+    <c-alert variant="warning" icon="warning" only>
+      <div class="flex flex-col gap-2">
+        <strong>{% trans "Deleting a vocabulary cannot be undone." %}</strong>
+        <span>{% trans "Everything it holds is deleted with it:" %}</span>
+        <ul class="list-disc ms-4">
+          <li>{% blocktrans count counter=concept_count %}{{ counter }} concept{% plural %}{{ counter }} concepts{% endblocktrans %}</li>
+          <li>{% blocktrans count counter=collection_count %}{{ counter }} collection{% plural %}{{ counter }} collections{% endblocktrans %}</li>
+        </ul>
+      </div>
+    </c-alert>
+  {% endif %}
+{% endblock before_form %}
+{% block actions %}
+  {% if not is_protected %}
+    <c-button text="{% trans "Delete vocabulary" %}" type="submit" icon="delete" variant="error" only />
+  {% endif %}
+  <c-button text="{% if is_protected %}{% trans "Back" %}{% else %}{% trans "Cancel" %}{% endif %}"
+            href="{{ back_url }}"
+            variant="ghost" only />
+{% endblock actions %}
