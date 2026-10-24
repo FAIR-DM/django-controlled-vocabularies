@@ -706,9 +706,8 @@ class VocabularyUpdateView(PermissionRequiredMixin, MVPUpdateView):
     def get_context_data(self, **kwargs):
         """Add where Cancel leads and what the save button says."""
         context = super().get_context_data(**kwargs)
-        # The slug on the instance may already be the unsaved new one when the form is re-shown.
-        stored = ConceptScheme.objects.get(pk=self.object.pk)
-        context["cancel_url"] = vocabulary_url(stored)
+        # The slug only changes inside save(), so it is the stored one even when the form is re-shown.
+        context["cancel_url"] = vocabulary_url(self.object)
         context["submit_label"] = _("Save changes")
         return context
 
