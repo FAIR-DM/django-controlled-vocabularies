@@ -412,14 +412,15 @@ The three commands run through `uv run` so they use the environment the install 
 whatever `python` on the shell's path happens to be — on many systems there is no `python` there
 at all.
 
-`migrate` builds the database, `seed_demo` loads two small vocabularies into it, and `runserver`
-serves the site at `http://127.0.0.1:8000/`, which redirects straight to the populated,
+`migrate` builds the database, `seed_demo` loads three small vocabularies and a set of sign-in
+accounts into it, and `runserver` serves the site at `http://127.0.0.1:8000/`, which redirects straight to the populated,
 searchable vocabulary list at `http://127.0.0.1:8000/browse/`. An open page reloads itself when a
 template, static file or Python module changes, through `django-browser-reload` and
 `django-watchfiles` from the development dependencies. The seeded content shows both
 kinds of entry the list distinguishes: the DCMI Type Vocabulary, a real vocabulary published by
-the Dublin Core Metadata Initiative, imported from a SKOS file; and Data Collection Methods, a
-short vocabulary authored here, with no publisher of its own. Data Collection Methods' own page
+the Dublin Core Metadata Initiative, imported from a SKOS file; Data Collection Methods, a
+short vocabulary authored here, with no publisher of its own; and Sample Types, a vocabulary held
+here that has no concepts yet. Data Collection Methods' own page
 also carries one of each kind of collection — "Primary data collection methods" (unordered) and
 "Typical project workflow" (ordered) — both loaded through the same SKOS file, so the side panel's
 collections are never empty on a fresh checkout.
@@ -439,10 +440,12 @@ definition, exactly as [a concept's own page](#a-concepts-own-page) above descri
 
 `seed_demo` is destructive and idempotent: it clears every vocabulary before loading, so running
 it again returns the demo to the same seeded state whatever was added or removed before —
-including anything entered through the admin.
+including anything entered through the browsing pages or the admin.
 
-To add a vocabulary by hand and watch it appear on the list, give yourself an account first and
-sign in at `http://127.0.0.1:8000/admin/`:
+To create a vocabulary and watch it appear on the list, sign in at
+`http://127.0.0.1:8000/accounts/login/` as `curator.user` (password `password`) and follow
+[Curating vocabularies](curating.md#creating-a-vocabulary). To use the demo's admin instead, give
+yourself an account first and sign in at `http://127.0.0.1:8000/admin/`:
 
 ```bash
 uv run python manage.py createsuperuser

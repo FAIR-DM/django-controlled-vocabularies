@@ -16,6 +16,8 @@ how to install it, and the shortest example that works. These pages are the manu
   Django admin pages, and the three wiring steps it needs.
 - **[Browsing vocabularies](browsing.md)** — the opt-in `ui` extra: the list of vocabularies, a
   page for each vocabulary, concept and collection, and the runnable demo project.
+- **[Curating vocabularies](curating.md)** — creating, editing and deleting a vocabulary from the
+  browsing pages, and the permissions each one checks.
 - **[Importing a published vocabulary](importing.md)** — reading SKOS from a file or a URL, how
   languages are matched, what the import report tells you, and the management command.
 
