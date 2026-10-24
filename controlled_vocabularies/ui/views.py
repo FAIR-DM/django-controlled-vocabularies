@@ -9,6 +9,7 @@ from django.db.models import Count, F, OuterRef, Prefetch, Subquery
 from django.db.models.functions import Coalesce, Lower
 from django.http import Http404
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import Truncator
 from django.utils.translation import get_language, get_language_info
 from django.utils.translation import gettext_lazy as _
@@ -735,7 +736,11 @@ class VocabularyDeleteView(PermissionRequiredMixin, MVPDeleteView):
     def get_back_url(self):
         """Go back to where the curator came from: the edit page, else the vocabulary's page."""
         candidate = self.request.GET.get("back", "")
-        if candidate.startswith("/") and not candidate.startswith("//"):
+        if url_has_allowed_host_and_scheme(
+            candidate,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
             return candidate
         return vocabulary_url(self.object)
 
@@ -753,16 +758,9 @@ class VocabularyDeleteView(PermissionRequiredMixin, MVPDeleteView):
         vocabulary = self.object
         context["concept_count"] = vocabulary.concepts.count()
         context["collection_count"] = vocabulary.collections.count()
-        # SKETCH: ?preview=in-use stands in for a consuming project's records pointing at a
-        # concept, which the demo has no model for.
-        if self.request.GET.get("preview") == "in-use":
-            context["is_protected"] = True
-            context["form"] = None
-            context["protected_kinds"] = [(_("Datasets"), 3), (_("Samples"), 1)]
-        else:
-            kinds = {}
-            for record in context["protected_objects"]:
-                label = type(record)._meta.verbose_name_plural.capitalize()
-                kinds[label] = kinds.get(label, 0) + 1
-            context["protected_kinds"] = sorted(kinds.items())
+        kinds = {}
+        for record in context["protected_objects"]:
+            label = type(record)._meta.verbose_name_plural.capitalize()
+            kinds[label] = kinds.get(label, 0) + 1
+        context["protected_kinds"] = sorted(kinds.items())
         return context

@@ -34,6 +34,7 @@ from controlled_vocabularies.exchange.mapping import (
 )
 from controlled_vocabularies.exchange.skos import import_skos
 from controlled_vocabularies.models import (
+    Collection,
     Concept,
     ConceptLabel,
     ConceptNote,
@@ -4448,3 +4449,110 @@ class TestVocabularyPageCuratorActions:
 
         assert update_url(vocabulary) not in links
         assert delete_url(vocabulary) not in links
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyDelete:
+    @pytest.fixture
+    def populated(self):
+        vocabulary = ConceptSchemeFactory(name="Rock Types")
+        ConceptFactory.create_batch(3, scheme=vocabulary)
+        CollectionFactory.create_batch(2, scheme=vocabulary)
+        return vocabulary
+
+    def test_the_confirmation_page_counts_what_goes_with_the_vocabulary(
+        self, client, make_user, populated
+    ):
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(populated))
+
+        assert response.status_code == 200
+        assert response.context["concept_count"] == 3
+        assert response.context["collection_count"] == 2
+        assert not response.context["is_protected"]
+
+    def test_a_post_deletes_the_vocabulary_with_its_concepts_and_collections(
+        self, client, make_user, populated
+    ):
+        other = ConceptFactory()
+        client.force_login(make_user("delete"))
+
+        response = client.post(delete_url(populated))
+
+        assert response.status_code == 302
+        assert response.url == reverse("controlled_vocabularies_ui:vocabulary-list")
+        assert message_levels(response) == [messages.SUCCESS]
+        assert not ConceptScheme.objects.filter(pk=populated.pk).exists()
+        assert not Concept.objects.filter(scheme_id=populated.pk).exists()
+        assert not Collection.objects.filter(scheme_id=populated.pk).exists()
+        assert Concept.objects.filter(pk=other.pk).exists()
+
+    def test_an_imported_vocabulary_can_be_deleted(self, client, make_user):
+        vocabulary = ConceptSchemeFactory(external=True)
+        client.force_login(make_user("delete"))
+
+        response = client.post(delete_url(vocabulary))
+
+        assert response.status_code == 302
+        assert not ConceptScheme.objects.exists()
+
+    def test_a_request_to_preview_the_in_use_page_changes_nothing(
+        self, client, make_user, populated
+    ):
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(populated), {"preview": "in-use"})
+
+        assert not response.context["is_protected"]
+        assert response.context["form"] is not None
+
+    def test_an_anonymous_visitor_is_sent_to_sign_in(self, client, populated):
+        response = client.post(delete_url(populated))
+
+        assert response.status_code == 302
+        assert response.url.startswith(f"{django_settings.LOGIN_URL}?next=")
+        assert ConceptScheme.objects.filter(pk=populated.pk).exists()
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    def test_a_user_without_the_permission_is_refused_and_nothing_is_deleted(
+        self, client, make_user, populated, method
+    ):
+        client.force_login(make_user("add", "change"))
+
+        response = getattr(client, method)(delete_url(populated))
+
+        assert response.status_code == 403
+        assert ConceptScheme.objects.filter(pk=populated.pk).exists()
+        assert Concept.objects.filter(scheme=populated).count() == 3
+
+    def test_back_goes_to_a_same_site_path(self, client, make_user, populated):
+        client.force_login(make_user("delete"))
+        edit = update_url(populated)
+
+        response = client.get(delete_url(populated), {"back": edit})
+
+        assert response.context["back_url"] == edit
+
+    @pytest.mark.parametrize(
+        "back",
+        ["//evil.example", "/\\evil.example", "https://evil.example/", "javascript:alert(1)"],
+    )
+    def test_back_falls_back_to_the_vocabularys_page_for_anything_off_site(
+        self, client, make_user, populated, back
+    ):
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(populated), {"back": back})
+
+        assert response.context["back_url"] == detail_url(populated.slug)
+
+    def test_back_without_a_parameter_goes_to_the_vocabularys_page(
+        self, client, make_user, populated
+    ):
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(populated))
+
+        assert response.context["back_url"] == detail_url(populated.slug)
