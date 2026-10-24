@@ -1,10 +1,14 @@
 """Tests for controlled_vocabularies.ui.views."""
 
 import datetime
+import inspect
 import re
+from pathlib import Path
 
 import pytest
 from bs4 import BeautifulSoup
+from django.conf import settings as django_settings
+from django.contrib import messages
 from django.db import connection
 from django.contrib.auth.models import Permission
 from django.http import Http404
@@ -34,7 +38,9 @@ from controlled_vocabularies.models import (
     ConceptLabel,
     ConceptNote,
     ConceptRelation,
+    ConceptScheme,
 )
+from controlled_vocabularies.ui import views as views_module
 from controlled_vocabularies.ui.views import (
     CollectionDetailView,
     ConceptDetailView,
@@ -43,6 +49,7 @@ from controlled_vocabularies.ui.views import (
     collection_property_rows,
     concept_property_rows,
 )
+from tests.i18n_sweep import visit_fields_checks_source
 from tests.factories import (
     CollectionFactory,
     ConceptFactory,
@@ -4083,3 +4090,85 @@ class TestEveryTooltipOpensToTheRight:
         assert tooltips, "the page rendered no tooltip at all"
         for tooltip in tooltips:
             assert "tooltip-right" in tooltip.get("class", [])
+
+
+def message_levels(response):
+    """Return the levels of the messages a response's request queued.
+
+    Args:
+        response: The test client's response.
+
+    Returns:
+        The message levels, in order.
+    """
+    return [message.level for message in messages.get_messages(response.wsgi_request)]
+
+
+CREATE_URL = "controlled_vocabularies_ui:vocabulary-create"
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyCreate:
+    def test_a_curator_sees_the_form(self, client, curator):
+        client.force_login(curator)
+
+        response = client.get(reverse(CREATE_URL))
+
+        assert response.status_code == 200
+        assert "name" in response.context["form"].fields
+
+    def test_a_valid_post_creates_the_vocabulary_and_lands_on_its_page(
+        self, client, curator
+    ):
+        client.force_login(curator)
+
+        response = client.post(
+            reverse(CREATE_URL), {"name": "Rock Types", "description": "Rocks."}
+        )
+
+        vocabulary = ConceptScheme.objects.get(name="Rock Types")
+        assert vocabulary.description == "Rocks."
+        assert response.status_code == 302
+        assert response.url == reverse(
+            "controlled_vocabularies_ui:vocabulary-detail", args=["rock-types"]
+        )
+        assert message_levels(response) == [messages.SUCCESS]
+
+    def test_an_invalid_post_creates_nothing_and_shows_the_error(self, client, curator):
+        ConceptSchemeFactory(name="Rock Types")
+        client.force_login(curator)
+
+        response = client.post(reverse(CREATE_URL), {"name": "rock types"})
+
+        assert response.status_code == 200
+        assert response.context["form"].errors.as_data()["name"][0].code == "slug_taken"
+        assert ConceptScheme.objects.count() == 1
+
+    def test_an_anonymous_visitor_is_sent_to_sign_in(self, client):
+        url = reverse(CREATE_URL)
+
+        response = client.get(url)
+
+        assert response.status_code == 302
+        assert response.url == f"{django_settings.LOGIN_URL}?next={url}"
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    def test_a_user_without_the_permission_is_refused_and_nothing_is_created(
+        self, client, make_user, method
+    ):
+        client.force_login(make_user("change", "delete"))
+
+        response = getattr(client, method)(reverse(CREATE_URL), {"name": "Rock Types"})
+
+        assert response.status_code == 403
+        assert not ConceptScheme.objects.exists()
+
+
+class TestViewsI18nSweep:
+    def test_module_carries_no_bare_user_visible_literal(self):
+        source = Path(inspect.getfile(views_module)).read_text()
+        visitor = visit_fields_checks_source(source)
+
+        assert visitor.bare_literals == []
+        assert visitor.positional_placeholders == []
