@@ -6,6 +6,8 @@ from django.views.generic import RedirectView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # Sign-in for the curator's pages. The package adds none of its own; a project provides it.
+    path("accounts/", include("django.contrib.auth.urls")),
     path("browse/", include("controlled_vocabularies.ui.urls")),
     # The endpoint behind the concept search control, which the package's system checks warn about
     # when a project never mounts it.

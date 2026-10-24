@@ -5,6 +5,8 @@ import socket
 import threading
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 
 from tests.factories import ConceptFactory, ConceptSchemeFactory
 
@@ -33,6 +35,50 @@ def single_language_scheme(db):
     ConceptFactory(scheme=scheme)
     ConceptFactory(scheme=scheme)
     return scheme
+
+
+@pytest.fixture
+def with_sessions(settings):
+    """Install the session, authentication and message middleware the test project omits."""
+    settings.MIDDLEWARE = [
+        "django.contrib.sessions.middleware.SessionMiddleware",
+        "django.contrib.auth.middleware.AuthenticationMiddleware",
+        "django.contrib.messages.middleware.MessageMiddleware",
+    ]
+
+
+@pytest.fixture
+def make_user(db):
+    """Return a factory for a user holding the named vocabulary permissions.
+
+    Returns:
+        A callable taking permission verbs (``"add"``, ``"change"``, ``"delete"``).
+    """
+    count = iter(range(1_000_000))
+
+    def make(*verbs):
+        user = get_user_model().objects.create_user(f"user-{next(count)}")
+        user.user_permissions.set(
+            Permission.objects.filter(
+                content_type__app_label="controlled_vocabularies",
+                codename__in=[f"{verb}_conceptscheme" for verb in verbs],
+            )
+        )
+        return user
+
+    return make
+
+
+@pytest.fixture
+def curator(make_user):
+    """A user who may add, change and delete vocabularies."""
+    return make_user("add", "change", "delete")
+
+
+@pytest.fixture
+def reader(make_user):
+    """A signed-in user holding no vocabulary permission."""
+    return make_user()
 
 
 class StubResponse:

@@ -1,10 +1,14 @@
 """Tests for controlled_vocabularies.ui.views."""
 
 import datetime
+import inspect
 import re
+from pathlib import Path
 
 import pytest
 from bs4 import BeautifulSoup
+from django.conf import settings as django_settings
+from django.contrib import messages
 from django.db import connection
 from django.contrib.auth.models import Permission
 from django.http import Http404
@@ -30,11 +34,14 @@ from controlled_vocabularies.exchange.mapping import (
 )
 from controlled_vocabularies.exchange.skos import import_skos
 from controlled_vocabularies.models import (
+    Collection,
     Concept,
     ConceptLabel,
     ConceptNote,
     ConceptRelation,
+    ConceptScheme,
 )
+from controlled_vocabularies.ui import views as views_module
 from controlled_vocabularies.ui.views import (
     CollectionDetailView,
     ConceptDetailView,
@@ -43,14 +50,34 @@ from controlled_vocabularies.ui.views import (
     collection_property_rows,
     concept_property_rows,
 )
+from tests.i18n_sweep import visit_fields_checks_source
 from tests.factories import (
     CollectionFactory,
     ConceptFactory,
     ConceptNoteFactory,
     ConceptRelationFactory,
     ConceptSchemeFactory,
+    DepositFactory,
+    SpecimenFactory,
     collection_with_members,
 )
+
+
+def alert_items(response):
+    """Return the text of each list item in the page's alerts.
+
+    Args:
+        response: The rendered page.
+
+    Returns:
+        The items' text, stripped.
+    """
+    soup = BeautifulSoup(response.content, "html.parser")
+    return [
+        item.get_text(" ", strip=True)
+        for alert in soup.select('[role="alert"]')
+        for item in alert.select("li")
+    ]
 
 ROW_TEMPLATE = "controlled_vocabularies/ui/conceptscheme_list_item.html"
 CONCEPT_ROW_TEMPLATE = "controlled_vocabularies/ui/concept_list_item.html"
@@ -4083,3 +4110,566 @@ class TestEveryTooltipOpensToTheRight:
         assert tooltips, "the page rendered no tooltip at all"
         for tooltip in tooltips:
             assert "tooltip-right" in tooltip.get("class", [])
+
+
+def message_levels(response):
+    """Return the levels of the messages a response's request queued.
+
+    Args:
+        response: The test client's response.
+
+    Returns:
+        The message levels, in order.
+    """
+    return [message.level for message in messages.get_messages(response.wsgi_request)]
+
+
+CREATE_URL = "controlled_vocabularies_ui:vocabulary-create"
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyCreate:
+    def test_a_curator_sees_the_form(self, client, curator):
+        client.force_login(curator)
+
+        response = client.get(reverse(CREATE_URL))
+
+        assert response.status_code == 200
+        assert "name" in response.context["form"].fields
+
+    def test_a_valid_post_creates_the_vocabulary_and_lands_on_its_page(
+        self, client, curator
+    ):
+        client.force_login(curator)
+
+        response = client.post(
+            reverse(CREATE_URL), {"name": "Rock Types", "description": "Rocks."}
+        )
+
+        vocabulary = ConceptScheme.objects.get(name="Rock Types")
+        assert vocabulary.description == "Rocks."
+        assert response.status_code == 302
+        assert response.url == reverse(
+            "controlled_vocabularies_ui:vocabulary-detail", args=["rock-types"]
+        )
+        assert message_levels(response) == [messages.SUCCESS]
+
+    def test_an_invalid_post_creates_nothing_and_shows_the_error(self, client, curator):
+        ConceptSchemeFactory(name="Rock Types")
+        client.force_login(curator)
+
+        response = client.post(reverse(CREATE_URL), {"name": "rock types"})
+
+        assert response.status_code == 200
+        assert response.context["form"].errors.as_data()["name"][0].code == "slug_taken"
+        assert ConceptScheme.objects.count() == 1
+
+    def test_an_anonymous_visitor_is_sent_to_sign_in(self, client):
+        url = reverse(CREATE_URL)
+
+        response = client.get(url)
+
+        assert response.status_code == 302
+        assert response.url == f"{django_settings.LOGIN_URL}?next={url}"
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    def test_a_user_without_the_permission_is_refused_and_nothing_is_created(
+        self, client, make_user, method
+    ):
+        client.force_login(make_user("change", "delete"))
+
+        response = getattr(client, method)(reverse(CREATE_URL), {"name": "Rock Types"})
+
+        assert response.status_code == 403
+        assert not ConceptScheme.objects.exists()
+
+
+class TestViewsI18nSweep:
+    def test_module_carries_no_bare_user_visible_literal(self):
+        source = Path(inspect.getfile(views_module)).read_text()
+        visitor = visit_fields_checks_source(source)
+
+        assert visitor.bare_literals == []
+        assert visitor.positional_placeholders == []
+
+
+def hrefs(response):
+    """Return every address a page links to.
+
+    Args:
+        response: The test client's response.
+
+    Returns:
+        The ``href`` of every anchor on the page.
+    """
+    soup = BeautifulSoup(response.content, "html.parser")
+    return {anchor["href"] for anchor in soup.find_all("a", href=True)}
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyListCreateAction:
+    def test_a_user_who_may_add_is_offered_creation(self, client, curator):
+        client.force_login(curator)
+
+        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
+
+        assert reverse(CREATE_URL) in hrefs(response)
+
+    def test_an_anonymous_visitor_is_not(self, client):
+        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
+
+        assert reverse(CREATE_URL) not in hrefs(response)
+
+    def test_a_user_without_the_permission_is_not(self, client, make_user):
+        client.force_login(make_user("change", "delete"))
+
+        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
+
+        assert reverse(CREATE_URL) not in hrefs(response)
+
+
+def update_url(vocabulary):
+    """Return the address of a vocabulary's edit page.
+
+    Args:
+        vocabulary: The vocabulary.
+
+    Returns:
+        The address.
+    """
+    return reverse(
+        "controlled_vocabularies_ui:vocabulary-update", args=[vocabulary.slug]
+    )
+
+
+def detail_url(slug):
+    """Return the address of a vocabulary's own page.
+
+    Args:
+        slug: The vocabulary's slug.
+
+    Returns:
+        The address.
+    """
+    return reverse("controlled_vocabularies_ui:vocabulary-detail", args=[slug])
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyUpdate:
+    def test_a_curator_sees_the_form_with_the_current_values(self, client, curator):
+        vocabulary = ConceptSchemeFactory(name="Rock Types", description="Rocks.")
+        client.force_login(curator)
+
+        response = client.get(update_url(vocabulary))
+
+        assert response.status_code == 200
+        form = response.context["form"]
+        assert form["name"].value() == "Rock Types"
+        assert form["description"].value() == "Rocks."
+
+    def test_changing_the_description_saves_it_and_lands_on_the_page(
+        self, client, curator
+    ):
+        vocabulary = ConceptSchemeFactory(name="Rock Types")
+        client.force_login(curator)
+
+        response = client.post(
+            update_url(vocabulary), {"name": "Rock Types", "description": "Rocks."}
+        )
+
+        vocabulary.refresh_from_db()
+        assert vocabulary.description == "Rocks."
+        assert response.status_code == 302
+        assert response.url == detail_url("rock-types")
+        assert message_levels(response) == [messages.SUCCESS]
+
+    def test_renaming_moves_the_address_and_the_old_one_is_gone(self, client, curator):
+        vocabulary = ConceptSchemeFactory(name="Rock Types")
+        client.force_login(curator)
+
+        response = client.post(update_url(vocabulary), {"name": "Stone Kinds"})
+
+        assert response.status_code == 302
+        assert response.url == detail_url("stone-kinds")
+        assert client.get(detail_url("rock-types")).status_code == 404
+        assert client.get(detail_url("stone-kinds")).status_code == 200
+
+    def test_an_invalid_post_shows_the_form_again_with_cancel_at_the_stored_address(
+        self, client, curator
+    ):
+        vocabulary = ConceptSchemeFactory(name="Rock Types")
+        ConceptSchemeFactory(name="Stone Kinds")
+        client.force_login(curator)
+
+        response = client.post(update_url(vocabulary), {"name": "stone kinds"})
+
+        assert response.status_code == 200
+        assert response.context["form"].errors.as_data()["name"][0].code == "slug_taken"
+        assert response.context["cancel_url"] == detail_url("rock-types")
+        vocabulary.refresh_from_db()
+        assert vocabulary.name == "Rock Types"
+
+    def test_a_new_name_with_another_field_invalid_still_cancels_to_the_stored_address(
+        self, client, curator
+    ):
+        vocabulary = ConceptSchemeFactory(name="Rock Types")
+        client.force_login(curator)
+
+        response = client.post(
+            update_url(vocabulary), {"name": "Stone Kinds", "modified": "not-a-date"}
+        )
+
+        assert response.status_code == 200
+        assert response.context["cancel_url"] == detail_url("rock-types")
+        assert response.context["page"]["subtitle"] == "Rock Types"
+        vocabulary.refresh_from_db()
+        assert vocabulary.name == "Rock Types"
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    def test_an_imported_vocabulary_is_refused_to_everyone_and_left_alone(
+        self, client, django_user_model, method
+    ):
+        vocabulary = ConceptSchemeFactory(name="Rock Types", external=True)
+        superuser = django_user_model.objects.create_superuser("root")
+        client.force_login(superuser)
+
+        response = getattr(client, method)(
+            update_url(vocabulary), {"name": "Changed", "description": "Changed."}
+        )
+
+        assert response.status_code == 403
+        vocabulary.refresh_from_db()
+        assert vocabulary.name == "Rock Types"
+        assert vocabulary.description != "Changed."
+
+    def test_an_anonymous_visitor_is_sent_to_sign_in(self, client):
+        vocabulary = ConceptSchemeFactory()
+
+        response = client.get(update_url(vocabulary))
+
+        assert response.status_code == 302
+        assert response.url == f"{django_settings.LOGIN_URL}?next={update_url(vocabulary)}"
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    def test_a_user_without_the_permission_is_refused_and_nothing_changes(
+        self, client, make_user, method
+    ):
+        vocabulary = ConceptSchemeFactory(name="Rock Types")
+        client.force_login(make_user("add", "delete"))
+
+        response = getattr(client, method)(update_url(vocabulary), {"name": "Changed"})
+
+        assert response.status_code == 403
+        vocabulary.refresh_from_db()
+        assert vocabulary.name == "Rock Types"
+
+    def test_a_vocabulary_deleted_after_the_form_was_opened_is_not_found_and_not_recreated(
+        self, client, curator
+    ):
+        vocabulary = ConceptSchemeFactory(name="Rock Types")
+        url = update_url(vocabulary)
+        client.force_login(curator)
+        client.get(url)
+        vocabulary.delete()
+
+        response = client.post(url, {"name": "Rock Types"})
+
+        assert response.status_code == 404
+        assert not ConceptScheme.objects.exists()
+
+    def test_delete_is_offered_only_to_a_user_who_may_delete(
+        self, client, make_user, curator
+    ):
+        vocabulary = ConceptSchemeFactory()
+
+        client.force_login(make_user("change"))
+        without = client.get(update_url(vocabulary)).context["delete_url"]
+        client.force_login(curator)
+        with_permission = client.get(update_url(vocabulary)).context["delete_url"]
+
+        assert without == ""
+        assert with_permission.startswith(
+            reverse(
+                "controlled_vocabularies_ui:vocabulary-delete", args=[vocabulary.slug]
+            )
+        )
+
+
+def delete_url(vocabulary):
+    """Return the address of a vocabulary's delete page.
+
+    Args:
+        vocabulary: The vocabulary.
+
+    Returns:
+        The address.
+    """
+    return reverse(
+        "controlled_vocabularies_ui:vocabulary-delete", args=[vocabulary.slug]
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyPageCuratorActions:
+    def test_edit_is_offered_to_a_user_who_may_change_a_vocabulary_held_here(
+        self, client, make_user
+    ):
+        vocabulary = ConceptSchemeFactory()
+        client.force_login(make_user("change"))
+
+        links = hrefs(client.get(detail_url(vocabulary.slug)))
+
+        assert update_url(vocabulary) in links
+        assert delete_url(vocabulary) not in links
+
+    def test_edit_is_not_offered_for_an_imported_vocabulary(self, client, make_user):
+        vocabulary = ConceptSchemeFactory(external=True)
+        client.force_login(make_user("change"))
+
+        assert update_url(vocabulary) not in hrefs(
+            client.get(detail_url(vocabulary.slug))
+        )
+
+    def test_edit_is_not_offered_without_the_permission(self, client, make_user):
+        vocabulary = ConceptSchemeFactory()
+        client.force_login(make_user("add", "delete"))
+
+        assert update_url(vocabulary) not in hrefs(
+            client.get(detail_url(vocabulary.slug))
+        )
+
+    @pytest.mark.parametrize("imported", [False, True])
+    def test_delete_is_offered_for_either_kind_to_a_user_who_may_delete(
+        self, client, make_user, imported
+    ):
+        vocabulary = ConceptSchemeFactory(external=imported)
+        client.force_login(make_user("delete"))
+
+        links = hrefs(client.get(detail_url(vocabulary.slug)))
+
+        assert delete_url(vocabulary) in links
+        assert update_url(vocabulary) not in links
+
+    def test_delete_is_not_offered_without_the_permission(self, client, make_user):
+        vocabulary = ConceptSchemeFactory()
+        client.force_login(make_user("add", "change"))
+
+        assert delete_url(vocabulary) not in hrefs(
+            client.get(detail_url(vocabulary.slug))
+        )
+
+    def test_neither_is_offered_to_an_anonymous_visitor(self, client):
+        vocabulary = ConceptSchemeFactory()
+
+        links = hrefs(client.get(detail_url(vocabulary.slug)))
+
+        assert update_url(vocabulary) not in links
+        assert delete_url(vocabulary) not in links
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyDelete:
+    @pytest.fixture
+    def populated(self):
+        vocabulary = ConceptSchemeFactory(name="Rock Types")
+        ConceptFactory.create_batch(3, scheme=vocabulary)
+        CollectionFactory.create_batch(2, scheme=vocabulary)
+        return vocabulary
+
+    def test_the_confirmation_page_counts_what_goes_with_the_vocabulary(
+        self, client, make_user, populated
+    ):
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(populated))
+
+        assert response.status_code == 200
+        assert response.context["concept_count"] == 3
+        items = alert_items(response)
+        assert any("3" in item for item in items)
+        assert any("2" in item for item in items)
+        assert response.context["collection_count"] == 2
+        assert not response.context["is_protected"]
+
+    def test_a_post_deletes_the_vocabulary_with_its_concepts_and_collections(
+        self, client, make_user, populated
+    ):
+        other = ConceptFactory()
+        client.force_login(make_user("delete"))
+
+        response = client.post(delete_url(populated))
+
+        assert response.status_code == 302
+        assert response.url == reverse("controlled_vocabularies_ui:vocabulary-list")
+        assert message_levels(response) == [messages.SUCCESS]
+        assert not ConceptScheme.objects.filter(pk=populated.pk).exists()
+        assert not Concept.objects.filter(scheme_id=populated.pk).exists()
+        assert not Collection.objects.filter(scheme_id=populated.pk).exists()
+        assert Concept.objects.filter(pk=other.pk).exists()
+
+    def test_an_imported_vocabulary_can_be_deleted(self, client, make_user):
+        vocabulary = ConceptSchemeFactory(external=True)
+        client.force_login(make_user("delete"))
+
+        response = client.post(delete_url(vocabulary))
+
+        assert response.status_code == 302
+        assert not ConceptScheme.objects.exists()
+
+    def test_a_request_to_preview_the_in_use_page_changes_nothing(
+        self, client, make_user, populated
+    ):
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(populated), {"preview": "in-use"})
+
+        assert not response.context["is_protected"]
+        assert response.context["form"] is not None
+
+    def test_an_anonymous_visitor_is_sent_to_sign_in(self, client, populated):
+        response = client.post(delete_url(populated))
+
+        assert response.status_code == 302
+        assert response.url.startswith(f"{django_settings.LOGIN_URL}?next=")
+        assert ConceptScheme.objects.filter(pk=populated.pk).exists()
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    def test_a_user_without_the_permission_is_refused_and_nothing_is_deleted(
+        self, client, make_user, populated, method
+    ):
+        client.force_login(make_user("add", "change"))
+
+        response = getattr(client, method)(delete_url(populated))
+
+        assert response.status_code == 403
+        assert ConceptScheme.objects.filter(pk=populated.pk).exists()
+        assert Concept.objects.filter(scheme=populated).count() == 3
+
+    def test_back_goes_to_a_same_site_path(self, client, make_user, populated):
+        client.force_login(make_user("delete"))
+        edit = update_url(populated)
+
+        response = client.get(delete_url(populated), {"back": edit})
+
+        assert response.context["back_url"] == edit
+
+    @pytest.mark.parametrize(
+        "back",
+        ["//evil.example", "/\\evil.example", "https://evil.example/", "javascript:alert(1)"],
+    )
+    def test_back_falls_back_to_the_vocabularys_page_for_anything_off_site(
+        self, client, make_user, populated, back
+    ):
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(populated), {"back": back})
+
+        assert response.context["back_url"] == detail_url(populated.slug)
+
+    def test_back_without_a_parameter_goes_to_the_vocabularys_page(
+        self, client, make_user, populated
+    ):
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(populated))
+
+        assert response.context["back_url"] == detail_url(populated.slug)
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyDeleteInUse:
+    @pytest.fixture
+    def vocabulary(self):
+        # The test app's fields name the "rock-type" vocabulary.
+        return ConceptSchemeFactory(name="Rock Type")
+
+    def specimens(self, vocabulary, number):
+        for _ in range(number):
+            SpecimenFactory(rock_type=ConceptFactory(scheme=vocabulary))
+
+    def deposit(self, vocabulary, concepts):
+        deposit = DepositFactory()
+        deposit.rock_types.add(
+            *[ConceptFactory(scheme=vocabulary) for _ in range(concepts)]
+        )
+        return deposit
+
+    def test_a_concept_held_by_a_concept_field_blocks_the_delete(
+        self, client, make_user, vocabulary
+    ):
+        self.specimens(vocabulary, 2)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert response.status_code == 200
+        assert response.context["is_protected"]
+        assert response.context["form"] is None
+        assert response.context["protected_kinds"] == [("Specimens", 2)]
+        items = alert_items(response)
+        assert any("Specimens" in item and "2" in item for item in items)
+
+    def test_a_concept_held_by_a_concepts_field_blocks_the_delete(
+        self, client, make_user, vocabulary
+    ):
+        self.deposit(vocabulary, concepts=1)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert response.context["is_protected"]
+        assert response.context["protected_kinds"] == [("Deposits", 1)]
+
+    def test_two_rows_from_one_record_count_once(self, client, make_user, vocabulary):
+        self.deposit(vocabulary, concepts=2)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert response.context["protected_kinds"] == [("Deposits", 1)]
+
+    def test_each_consuming_model_is_named_with_its_own_count_in_label_order(
+        self, client, make_user, vocabulary
+    ):
+        self.specimens(vocabulary, 1)
+        self.deposit(vocabulary, concepts=2)
+        self.deposit(vocabulary, concepts=1)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert response.context["protected_kinds"] == [
+            ("Deposits", 2),
+            ("Specimens", 1),
+        ]
+
+    def test_a_forced_post_deletes_nothing_and_says_why(
+        self, client, make_user, vocabulary
+    ):
+        self.specimens(vocabulary, 1)
+        client.force_login(make_user("delete"))
+
+        response = client.post(delete_url(vocabulary))
+
+        assert response.status_code == 200
+        assert response.context["is_protected"]
+        assert ConceptScheme.objects.filter(pk=vocabulary.pk).exists()
+        assert Concept.objects.filter(scheme=vocabulary).exists()
+        assert message_levels(response) == []
+
+    def test_a_vocabulary_nothing_uses_is_not_protected(
+        self, client, make_user, vocabulary
+    ):
+        ConceptFactory(scheme=vocabulary)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert not response.context["is_protected"]
+        assert response.context["protected_kinds"] == []

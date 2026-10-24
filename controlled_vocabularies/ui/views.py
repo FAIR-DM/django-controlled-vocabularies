@@ -1,15 +1,24 @@
 """Views for the opt-in vocabulary-browsing front end."""
 
 from itertools import count
+from urllib.parse import urlencode
 
-from django.db.models import Count, F, OuterRef, Prefetch, Subquery
+from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.core.exceptions import PermissionDenied
+from django.db.models import CASCADE, Count, F, OuterRef, Prefetch, Subquery
 from django.db.models.functions import Coalesce, Lower
 from django.http import Http404
 from django.urls import reverse
-from django.utils.text import Truncator
+from django.utils.text import Truncator, capfirst
 from django.utils.translation import get_language, get_language_info
 from django.utils.translation import gettext_lazy as _
-from mvp.views import MVPDetailView, MVPListView
+from mvp.views import (
+    MVPCreateView,
+    MVPDeleteView,
+    MVPDetailView,
+    MVPListView,
+    MVPUpdateView,
+)
 
 from controlled_vocabularies.exchange.mapping import (
     BROADER_CURIE,
@@ -40,6 +49,7 @@ from controlled_vocabularies.ui.filters import (
     VocabularyFilter,
     language_expression,
 )
+from controlled_vocabularies.ui.forms import VocabularyForm
 
 
 class _StrippedSearchMixin:
@@ -592,4 +602,198 @@ class VocabularyDetailView(_StrippedSearchMixin, MVPListView):
         context["collections"] = vocabulary.collections.annotate(
             member_count=Count("memberships")
         ).order_by(Lower("name"))
+        return context
+
+
+def vocabulary_list_url():
+    """Return the address of the list of vocabularies."""
+    return reverse("controlled_vocabularies_ui:vocabulary-list")
+
+
+def vocabulary_url(vocabulary):
+    """Return the address of a vocabulary's own page.
+
+    Args:
+        vocabulary: The vocabulary.
+
+    Returns:
+        The address.
+    """
+    return reverse(
+        "controlled_vocabularies_ui:vocabulary-detail", args=[vocabulary.slug]
+    )
+
+
+class VocabularyCreateView(PermissionRequiredMixin, MVPCreateView):
+    """A curator creates a vocabulary held on this site."""
+
+    permission_required = "controlled_vocabularies.add_conceptscheme"
+    model = ConceptScheme
+    form_class = VocabularyForm
+    template_name = "controlled_vocabularies/ui/conceptscheme_form.html"
+    page_title = _("New vocabulary")
+
+    def get_breadcrumbs(self):
+        """Return the trail back to the list of vocabularies."""
+        return [
+            {"text": _("Vocabularies"), "href": vocabulary_list_url()},
+            {"text": self.get_page_title()},
+        ]
+
+    def get_success_url(self):
+        """Land on the new vocabulary's page."""
+        return vocabulary_url(self.object)
+
+    def get_success_message(self, cleaned_data):
+        """Name the vocabulary that was created."""
+        return _("Created the vocabulary %(name)s.") % {"name": self.object.name}
+
+    def get_context_data(self, **kwargs):
+        """Add where Cancel leads and what the save button says."""
+        context = super().get_context_data(**kwargs)
+        context["cancel_url"] = vocabulary_list_url()
+        context["submit_label"] = _("Create vocabulary")
+        return context
+
+
+class VocabularyUpdateView(PermissionRequiredMixin, MVPUpdateView):
+    """A curator edits a vocabulary held on this site. An imported one is refused."""
+
+    permission_required = "controlled_vocabularies.change_conceptscheme"
+    model = ConceptScheme
+    form_class = VocabularyForm
+    template_name = "controlled_vocabularies/ui/conceptscheme_form.html"
+    page_title = _("Edit vocabulary")
+
+    def get_object(self, queryset=None):
+        """Refuse a vocabulary a publisher fixed the identifier of."""
+        vocabulary = super().get_object(queryset)
+        if vocabulary.static_uri:
+            raise PermissionDenied(_("An imported vocabulary cannot be edited here."))
+        # A form that fails to validate has already written its values onto the instance, so the
+        # page names the vocabulary by what is stored.
+        self.stored_name = vocabulary.name
+        return vocabulary
+
+    def get_page_subtitle(self):
+        """Name the vocabulary being edited."""
+        return self.stored_name
+
+    def get_breadcrumbs(self):
+        """Return the trail back through the vocabulary's page."""
+        return [
+            {"text": _("Vocabularies"), "href": vocabulary_list_url()},
+            {"text": self.stored_name, "href": vocabulary_url(self.object)},
+            {"text": _("Edit")},
+        ]
+
+    def get_success_url(self):
+        """Land on the vocabulary's page, at the address its name now produces."""
+        return vocabulary_url(self.object)
+
+    def get_success_message(self, cleaned_data):
+        """Name the vocabulary that was saved."""
+        return _("Saved your changes to %(name)s.") % {"name": self.object.name}
+
+    def get_delete_url(self):
+        """Offer deletion only to someone who may delete, and come back here on Back."""
+        if not self.request.user.has_perm(
+            "controlled_vocabularies.delete_conceptscheme"
+        ):
+            return ""
+        url = reverse(
+            "controlled_vocabularies_ui:vocabulary-delete", args=[self.object.slug]
+        )
+        return f"{url}?{urlencode({'back': self.request.path})}"
+
+    def get_context_data(self, **kwargs):
+        """Add where Cancel leads and what the save button says."""
+        context = super().get_context_data(**kwargs)
+        # The slug only changes inside save(), so it is the stored one even when the form is re-shown.
+        context["cancel_url"] = vocabulary_url(self.object)
+        context["submit_label"] = _("Save changes")
+        return context
+
+
+class VocabularyDeleteView(PermissionRequiredMixin, MVPDeleteView):
+    """A curator deletes a vocabulary, held here or imported, unless its concepts are in use."""
+
+    permission_required = "controlled_vocabularies.delete_conceptscheme"
+    model = ConceptScheme
+    template_name = "controlled_vocabularies/ui/conceptscheme_confirm_delete.html"
+    page_title = _("Delete vocabulary")
+
+    def get_page_subtitle(self):
+        """Name the vocabulary being deleted."""
+        return self.object.name
+
+    def get_breadcrumbs(self):
+        """Return the trail back through the vocabulary's page."""
+        return [
+            {"text": _("Vocabularies"), "href": vocabulary_list_url()},
+            {"text": self.object.name, "href": vocabulary_url(self.object)},
+            {"text": _("Delete")},
+        ]
+
+    def get_back_url(self):
+        """Go back to a same-site ``back`` address, else to the vocabulary's page."""
+        # django-mvp checks ``back`` against this site, and offers nothing else here: the package
+        # registers no route under its default list name, and a vocabulary has no absolute URL.
+        return super().get_back_url() or vocabulary_url(self.object)
+
+    def get_success_url(self):
+        """Land on the list of vocabularies."""
+        return vocabulary_list_url()
+
+    def get_success_message(self, cleaned_data):
+        """Name the vocabulary that was deleted."""
+        return _("Deleted the vocabulary %(name)s.") % {"name": self.object.name}
+
+    @staticmethod
+    def protected_kinds(protected_objects):
+        """Group the records holding the vocabulary's concepts by the model that owns them.
+
+        A ``ConceptsField`` holds a concept through a generated row, so that row is counted
+        against the model carrying the field, once per record however many concepts it holds.
+
+        Args:
+            protected_objects: The records whose foreign key blocked the delete.
+
+        Returns:
+            ``(label, count)`` pairs, sorted by label.
+        """
+        by_model = {}
+        for record in protected_objects:
+            owner = record._meta.auto_created or type(record)
+            by_model.setdefault(owner, []).append(record)
+        kinds = []
+        for owner, records in by_model.items():
+            if type(records[0]) is owner:
+                count = len({record.pk for record in records})
+            else:
+                # The collector loads a through row with its primary key only.
+                through = type(records[0])
+                owner_key = next(
+                    field.name
+                    for field in through._meta.fields
+                    if field.is_relation
+                    and field.remote_field.model is owner
+                    and field.remote_field.on_delete is CASCADE
+                )
+                count = (
+                    through.objects.filter(pk__in=[record.pk for record in records])
+                    .values(owner_key)
+                    .distinct()
+                    .count()
+                )
+            kinds.append((capfirst(owner._meta.verbose_name_plural), count))
+        return sorted(kinds)
+
+    def get_context_data(self, **kwargs):
+        """Add how much goes with the vocabulary, and what is using its concepts."""
+        context = super().get_context_data(**kwargs)
+        vocabulary = self.object
+        context["concept_count"] = vocabulary.concepts.count()
+        context["collection_count"] = vocabulary.collections.count()
+        context["protected_kinds"] = self.protected_kinds(context["protected_objects"])
         return context

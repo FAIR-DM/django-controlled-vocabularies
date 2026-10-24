@@ -1,0 +1,15 @@
+{% extends "mvp/base.html" %}
+{% load i18n crispy_forms_tags %}
+{% block content %}
+  <c-mvp.container>
+    <div class="max-w-sm mx-auto flex flex-col gap-6 py-8">
+      <h1 class="text-2xl font-semibold">{% trans "Sign in" %}</h1>
+      <form method="post" class="flex flex-col gap-4">
+        {% csrf_token %}
+        {{ form|crispy }}
+        <input type="hidden" name="next" value="{{ next }}">
+        <c-button text="{% trans "Sign in" %}" type="submit" variant="primary" only />
+      </form>
+    </div>
+  </c-mvp.container>
+{% endblock content %}

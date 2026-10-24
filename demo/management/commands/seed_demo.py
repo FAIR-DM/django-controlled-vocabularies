@@ -1,7 +1,8 @@
-"""Management command that reloads the demo's two seed vocabularies."""
+"""Management command that reloads the demo's seed vocabularies and sign-in accounts."""
 
 from pathlib import Path
 
+from django.contrib.auth.models import Permission, User
 from django.core.management.base import BaseCommand
 
 from controlled_vocabularies.exchange import import_skos
@@ -23,16 +24,16 @@ AUTHORED_DESCRIPTION = (
 
 
 class Command(BaseCommand):
-    """Delete every vocabulary and reload the demo's two seed vocabularies."""
+    """Delete every vocabulary and reload the demo's seed vocabularies and accounts."""
 
     help = (
-        "Delete every vocabulary, then reload the demo's two seed vocabularies: one imported "
-        "from a publisher, one authored here. Destructive: anything entered through the admin "
-        "is lost."
+        "Delete every vocabulary, then reload the demo's seed vocabularies (one imported from a "
+        "publisher, two held here) and the sign-in accounts. Destructive: anything entered "
+        "through the browsing pages or the admin is lost."
     )
 
     def handle(self, *args, **options):
-        """Delete every vocabulary, then load the imported and the authored seed vocabularies."""
+        """Delete every vocabulary, then load the seed vocabularies and accounts."""
         ConceptScheme.objects.all().delete()
 
         import_skos(IMPORTED_FILE)
@@ -43,4 +44,45 @@ class Command(BaseCommand):
         )
         import_skos(AUTHORED_FILE, scheme=authored_scheme)
 
-        self.stdout.write(self.style.SUCCESS("seed_demo loaded 2 vocabularies"))
+        # A vocabulary held here with nothing in it yet, whose default language can still change.
+        ConceptScheme.objects.create(
+            name="Sample Types",
+            description="Kinds of physical sample a dataset can be drawn from.",
+        )
+
+        seed_accounts()
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "seed_demo loaded 3 vocabularies and the sign-in accounts"
+            )
+        )
+
+
+#: The standard sign-in accounts, all with the password "password". A curator may add, change and
+#: delete vocabularies, and nothing else.
+ACCOUNTS = {
+    "regular.user": {},
+    "curator.user": {
+        "perms": ["add_conceptscheme", "change_conceptscheme", "delete_conceptscheme"]
+    },
+    "staff.user": {"is_staff": True},
+    "super.user": {"is_staff": True, "is_superuser": True},
+}
+
+
+def seed_accounts():
+    """Create or reset the standard sign-in accounts."""
+    for username, spec in ACCOUNTS.items():
+        user, _ = User.objects.get_or_create(username=username)
+        user.email = f"{username}@example.com"
+        user.is_staff = spec.get("is_staff", False)
+        user.is_superuser = spec.get("is_superuser", False)
+        user.set_password("password")
+        user.save()
+        user.user_permissions.set(
+            Permission.objects.filter(
+                content_type__app_label="controlled_vocabularies",
+                codename__in=spec.get("perms", []),
+            )
+        )

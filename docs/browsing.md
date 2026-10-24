@@ -196,6 +196,11 @@ Every vocabulary the site holds has its own address — the same one its identif
 the vocabulary's name, and its lead text is the vocabulary's description, truncated the same way
 and for the same reason as the list entry above. A vocabulary with no description has no lead text.
 
+A user who may curate sees **Edit** and **Delete** beside the title: Edit only for a vocabulary held
+here and only with `controlled_vocabularies.change_conceptscheme`, Delete for either kind and only
+with `controlled_vocabularies.delete_conceptscheme`. Everyone else sees neither. See
+[Curating vocabularies](curating.md).
+
 The main column is every concept the vocabulary holds, and only that vocabulary's, in one flat,
 alphabetical list: nothing several levels down a broader/narrower chain is nested under one above
 it. Alphabetical order follows the label actually shown, not necessarily the one stored: a concept
@@ -338,7 +343,8 @@ The concept's own identifier is shown as a link, the same treatment its vocabula
 a vocabulary's: an imported concept shows its publisher's identifier, one authored here shows this
 site's own composed address for it. Either way the page itself is **read-only** — it carries no
 editing or deletion control of its own, and no permission rule beyond what the project mounting
-these routes chooses to add.
+these routes chooses to add. Concepts are added by [importing](importing.md); only a vocabulary's
+own record is curated by hand, as [Curating vocabularies](curating.md) describes.
 
 An address naming no concept is reported not found, and so is one whose vocabulary segment names no
 vocabulary — the two are not distinguished. A concept slug held by more than one vocabulary resolves
@@ -376,7 +382,8 @@ than showing an empty membership row.
 Every record-valued row links to that record's own page here and discloses its canonical identifier
 the same way a concept's page does. The collection's own identifier leads the page beneath its
 title, its breadcrumb trail names the vocabulary holding it, and the page is equally **read-only**,
-carrying no editing or deletion control of its own.
+carrying no editing or deletion control of its own (see [Curating vocabularies](curating.md) for
+what can be changed by hand).
 
 An address naming no collection is reported not found, and so is one whose vocabulary segment names
 no vocabulary — the two are not distinguished, exactly as for a concept's page.
@@ -412,14 +419,15 @@ The three commands run through `uv run` so they use the environment the install 
 whatever `python` on the shell's path happens to be — on many systems there is no `python` there
 at all.
 
-`migrate` builds the database, `seed_demo` loads two small vocabularies into it, and `runserver`
-serves the site at `http://127.0.0.1:8000/`, which redirects straight to the populated,
+`migrate` builds the database, `seed_demo` loads three small vocabularies and a set of sign-in
+accounts into it, and `runserver` serves the site at `http://127.0.0.1:8000/`, which redirects straight to the populated,
 searchable vocabulary list at `http://127.0.0.1:8000/browse/`. An open page reloads itself when a
 template, static file or Python module changes, through `django-browser-reload` and
 `django-watchfiles` from the development dependencies. The seeded content shows both
 kinds of entry the list distinguishes: the DCMI Type Vocabulary, a real vocabulary published by
-the Dublin Core Metadata Initiative, imported from a SKOS file; and Data Collection Methods, a
-short vocabulary authored here, with no publisher of its own. Data Collection Methods' own page
+the Dublin Core Metadata Initiative, imported from a SKOS file; Data Collection Methods, a
+short vocabulary authored here, with no publisher of its own; and Sample Types, a vocabulary held
+here that has no concepts yet. Data Collection Methods' own page
 also carries one of each kind of collection — "Primary data collection methods" (unordered) and
 "Typical project workflow" (ordered) — both loaded through the same SKOS file, so the side panel's
 collections are never empty on a fresh checkout.
@@ -439,10 +447,12 @@ definition, exactly as [a concept's own page](#a-concepts-own-page) above descri
 
 `seed_demo` is destructive and idempotent: it clears every vocabulary before loading, so running
 it again returns the demo to the same seeded state whatever was added or removed before —
-including anything entered through the admin.
+including anything entered through the browsing pages or the admin.
 
-To add a vocabulary by hand and watch it appear on the list, give yourself an account first and
-sign in at `http://127.0.0.1:8000/admin/`:
+To create a vocabulary and watch it appear on the list, sign in at
+`http://127.0.0.1:8000/accounts/login/` as `curator.user` (password `password`) and follow
+[Curating vocabularies](curating.md#creating-a-vocabulary). To use the demo's admin instead, give
+yourself an account first and sign in at `http://127.0.0.1:8000/admin/`:
 
 ```bash
 uv run python manage.py createsuperuser

@@ -71,3 +71,28 @@ class TestCoreImportsNothingFromTheUIStack:
             )
         }
         assert not offending, f"{path} imports forbidden module(s): {offending}"
+
+
+def ui_modules():
+    """List every Python module under the ui subpackage.
+
+    Returns:
+        The module paths, sorted.
+    """
+    return sorted(UI_ROOT.rglob("*.py"))
+
+
+class TestUINeverImportsTheAdmin:
+    @pytest.mark.parametrize(
+        "path",
+        ui_modules(),
+        ids=lambda p: str(p.relative_to(PACKAGE_ROOT)),
+    )
+    def test_module_imports_nothing_from_the_admin(self, path):
+        offending = {
+            name
+            for name in imported_names(path)
+            if name == "django.contrib.admin"
+            or name.startswith("django.contrib.admin.")
+        }
+        assert not offending, f"{path} imports the admin: {offending}"

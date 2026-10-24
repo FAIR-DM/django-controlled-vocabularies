@@ -1,0 +1,20 @@
+{% extends "form_view.html" %}
+{% load i18n %}
+{% comment %}
+  The create and edit pages share one form. The buttons say what saving does, Cancel goes back
+  without saving, and on the edit page Delete sits at the far end, away from the save button, as
+  django-mvp places it.
+{% endcomment %}
+{% block actions %}
+  <c-button text="{{ submit_label }}" type="submit" variant="primary" only />
+  <c-button text="{% trans "Cancel" %}" href="{{ cancel_url }}" variant="ghost" only />
+  {% if delete_url %}
+    <div class="flex flex-col md:flex-row md:grow md:justify-end">
+      <c-button text="{% trans "Delete vocabulary" %}"
+                href="{{ delete_url }}"
+                icon="delete"
+                variant="error"
+                outline only />
+    </div>
+  {% endif %}
+{% endblock actions %}

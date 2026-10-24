@@ -61,6 +61,8 @@ Homepage = "https://github.com/FAIR-DM/django-controlled-vocabularies"
 ui = [
     "django-mvp>=0.31.0,<0.32.0; python_version >= '3.12'",
     "django-filter>=26.1,<27; python_version >= '3.12'",
+    # controlled_vocabularies/ui/forms.py imports it directly for the vocabulary form's layout.
+    "django-crispy-forms>=2.7,<3.0; python_version >= '3.12'",
 ]
 
 [dependency-groups]

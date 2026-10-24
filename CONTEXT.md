@@ -30,6 +30,7 @@ This is a seed — it grows as the code does.
 | Term | Definition | Notes / synonyms to avoid |
 |---|---|---|
 | **ConceptScheme** | A vocabulary: the `skos:ConceptScheme` container. A Django model. | The formal container. Don't call it a "namespace". |
+| **Curator** | A signed-in user who may create, edit or delete vocabularies on the browsing pages, by holding the `add_conceptscheme`, `change_conceptscheme` and `delete_conceptscheme` permissions. The package defines no group or role for it. | Not "admin" or "editor": the pages never need Django's admin. |
 | **Concept** | A term within a scheme — `skos:Concept`. A Django model whose editable state is a JSON **document**; core fields are projected into indexed columns. | Avoid "term"/"entry"; the type is **Concept**. |
 | **Collection** | A `skos:Collection` — a grouping of concepts within a scheme, optionally ordered. | Distinct from a scheme; a grouping *inside* it. |
 | **Label** | A language-tagged name for a concept: `prefLabel` (one per language), `altLabel` / `hiddenLabel` (many per language). Stored as translated JSON, indexed via a projected `pref_label` column. | Multi-valued per language — the reason plain per-object translation frameworks don't fit. |
