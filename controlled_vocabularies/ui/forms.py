@@ -5,22 +5,10 @@ from crispy_forms.layout import Fieldset, Layout
 from django import forms
 from django.conf import settings
 from django.utils.text import slugify
-from django.utils.translation import get_language_info
 from django.utils.translation import gettext_lazy as _
 
 from controlled_vocabularies.models import ConceptScheme
-
-
-def language_choices():
-    """Return the site's configured languages, each named in the reading language."""
-    choices = []
-    for code, name in settings.LANGUAGES:
-        try:
-            label = get_language_info(code)["name_translated"]
-        except KeyError:
-            label = name
-        choices.append((code, label))
-    return choices
+from controlled_vocabularies.ui.filters import language_name
 
 
 class VocabularyForm(forms.ModelForm):
@@ -61,16 +49,16 @@ class VocabularyForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         """Offer the configured languages, and fix the default language once concepts exist."""
         super().__init__(*args, **kwargs)
-        site_default = get_language_info(settings.LANGUAGE_CODE)["name_translated"]
         self.fields["default_language"] = forms.ChoiceField(
             label=_("Default language"),
             required=False,
             choices=[
                 (
                     "",
-                    _("The site's default (%(language)s)") % {"language": site_default},
+                    _("The site's default (%(language)s)")
+                    % {"language": language_name(settings.LANGUAGE_CODE)},
                 ),
-                *language_choices(),
+                *((code, language_name(code)) for code, _name in settings.LANGUAGES),
             ],
             help_text=_(
                 "The language a concept is identified by. It cannot be changed once the "
@@ -112,7 +100,8 @@ class VocabularyForm(forms.ModelForm):
             raise forms.ValidationError(
                 _(
                     "Use at least one letter or number, so the vocabulary has an address."
-                )
+                ),
+                code="empty_slug",
             )
         taken = ConceptScheme.objects.filter(slug=slug).exclude(pk=self.instance.pk)
         if taken.exists():
@@ -121,6 +110,7 @@ class VocabularyForm(forms.ModelForm):
                     '"%(name)s" would have the same address as the vocabulary "%(other)s". '
                     "Choose a different name."
                 ),
+                code="slug_taken",
                 params={"name": name, "other": taken.first().name},
             )
         return name
