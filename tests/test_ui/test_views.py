@@ -4172,3 +4172,39 @@ class TestViewsI18nSweep:
 
         assert visitor.bare_literals == []
         assert visitor.positional_placeholders == []
+
+
+def hrefs(response):
+    """Return every address a page links to.
+
+    Args:
+        response: The test client's response.
+
+    Returns:
+        The ``href`` of every anchor on the page.
+    """
+    soup = BeautifulSoup(response.content, "html.parser")
+    return {anchor["href"] for anchor in soup.find_all("a", href=True)}
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyListCreateAction:
+    def test_a_user_who_may_add_is_offered_creation(self, client, curator):
+        client.force_login(curator)
+
+        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
+
+        assert reverse(CREATE_URL) in hrefs(response)
+
+    def test_an_anonymous_visitor_is_not(self, client):
+        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
+
+        assert reverse(CREATE_URL) not in hrefs(response)
+
+    def test_a_user_without_the_permission_is_not(self, client, make_user):
+        client.force_login(make_user("change", "delete"))
+
+        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
+
+        assert reverse(CREATE_URL) not in hrefs(response)
