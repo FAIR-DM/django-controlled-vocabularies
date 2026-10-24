@@ -4,11 +4,24 @@
   django-mvp's list page with the results drawn as daisyUI list rows, as the vocabulary page draws its
   concepts. The toolbar, count row, filter panel, pager and empty states are django-mvp's own.
 {% endcomment %}
-{% block page.actions %}
-  {% if perms.controlled_vocabularies.add_conceptscheme %}
-    <c-button text="{% trans "New vocabulary" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-create' %}" icon="add" variant="primary" only />
-  {% endif %}
-{% endblock page.actions %}
+{% block page.title %}
+  {% comment %}
+    The curator's actions sit at the end of the title row, so they are there whether or not the
+    list below has anything in it. django-mvp's own page.actions block is inside the toolbar,
+    which is not drawn while the list is empty.
+  {% endcomment %}
+  <c-mvp.page.title :title="page.title"
+                    :subtitle="page.subtitle"
+                    :info="page.info"
+                    :info_actions="page.info_actions"
+                    inline_actions only>
+    <c-slot name="actions">
+      {% if perms.controlled_vocabularies.add_conceptscheme %}
+        <c-button text="{% trans "New vocabulary" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-create' %}" icon="add" variant="primary" only />
+      {% endif %}
+    </c-slot>
+  </c-mvp.page.title>
+{% endblock page.title %}
 {% block page.results %}
   {% if object_list %}
     <c-list>
