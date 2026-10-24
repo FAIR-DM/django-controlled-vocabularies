@@ -4375,3 +4375,76 @@ class TestVocabularyUpdate:
                 "controlled_vocabularies_ui:vocabulary-delete", args=[vocabulary.slug]
             )
         )
+
+
+def delete_url(vocabulary):
+    """Return the address of a vocabulary's delete page.
+
+    Args:
+        vocabulary: The vocabulary.
+
+    Returns:
+        The address.
+    """
+    return reverse(
+        "controlled_vocabularies_ui:vocabulary-delete", args=[vocabulary.slug]
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyPageCuratorActions:
+    def test_edit_is_offered_to_a_user_who_may_change_a_vocabulary_held_here(
+        self, client, make_user
+    ):
+        vocabulary = ConceptSchemeFactory()
+        client.force_login(make_user("change"))
+
+        links = hrefs(client.get(detail_url(vocabulary.slug)))
+
+        assert update_url(vocabulary) in links
+        assert delete_url(vocabulary) not in links
+
+    def test_edit_is_not_offered_for_an_imported_vocabulary(self, client, make_user):
+        vocabulary = ConceptSchemeFactory(external=True)
+        client.force_login(make_user("change"))
+
+        assert update_url(vocabulary) not in hrefs(
+            client.get(detail_url(vocabulary.slug))
+        )
+
+    def test_edit_is_not_offered_without_the_permission(self, client, make_user):
+        vocabulary = ConceptSchemeFactory()
+        client.force_login(make_user("add", "delete"))
+
+        assert update_url(vocabulary) not in hrefs(
+            client.get(detail_url(vocabulary.slug))
+        )
+
+    @pytest.mark.parametrize("imported", [False, True])
+    def test_delete_is_offered_for_either_kind_to_a_user_who_may_delete(
+        self, client, make_user, imported
+    ):
+        vocabulary = ConceptSchemeFactory(external=imported)
+        client.force_login(make_user("delete"))
+
+        links = hrefs(client.get(detail_url(vocabulary.slug)))
+
+        assert delete_url(vocabulary) in links
+        assert update_url(vocabulary) not in links
+
+    def test_delete_is_not_offered_without_the_permission(self, client, make_user):
+        vocabulary = ConceptSchemeFactory()
+        client.force_login(make_user("add", "change"))
+
+        assert delete_url(vocabulary) not in hrefs(
+            client.get(detail_url(vocabulary.slug))
+        )
+
+    def test_neither_is_offered_to_an_anonymous_visitor(self, client):
+        vocabulary = ConceptSchemeFactory()
+
+        links = hrefs(client.get(detail_url(vocabulary.slug)))
+
+        assert update_url(vocabulary) not in links
+        assert delete_url(vocabulary) not in links
