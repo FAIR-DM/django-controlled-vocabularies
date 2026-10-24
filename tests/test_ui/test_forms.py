@@ -4,12 +4,13 @@ import inspect
 from pathlib import Path
 
 import pytest
+from bs4 import BeautifulSoup
 from django.test import override_settings
 
 from controlled_vocabularies.models import ConceptScheme
 from controlled_vocabularies.ui import forms as forms_module
 from controlled_vocabularies.ui.forms import VocabularyForm
-from tests.factories import ConceptSchemeFactory
+from tests.factories import ConceptFactory, ConceptSchemeFactory
 from tests.i18n_sweep import visit_fields_checks_source
 
 DETAILS = {
@@ -126,6 +127,84 @@ class TestVocabularyFormDefaultLanguage:
         form = VocabularyForm(data={"name": "Rock Types"})
 
         assert form.is_valid(), form.errors
+
+
+@pytest.mark.django_db
+class TestVocabularyFormLanguageFixedOnceConceptsExist:
+    @pytest.fixture
+    def held(self):
+        vocabulary = ConceptSchemeFactory(name="Rock Types", default_language="de")
+        ConceptFactory(scheme=vocabulary)
+        return vocabulary
+
+    def test_the_widget_is_disabled(self, held):
+        select = BeautifulSoup(
+            str(VocabularyForm(instance=held)["default_language"]), "html.parser"
+        ).select_one("select")
+
+        assert select.has_attr("disabled")
+
+    def test_a_post_leaving_the_field_out_keeps_the_stored_language(self, held):
+        form = VocabularyForm(data={"name": "Rock Types"}, instance=held)
+
+        assert form.is_valid(), form.errors
+        form.save()
+        held.refresh_from_db()
+        assert held.default_language == "de"
+
+    def test_a_post_naming_the_stored_language_is_accepted(self, held):
+        form = VocabularyForm(
+            data={"name": "Rock Types", "default_language": "de"}, instance=held
+        )
+
+        assert form.is_valid(), form.errors
+
+    @pytest.mark.parametrize("submitted", ["fr", ""])
+    def test_a_post_naming_a_different_language_is_refused_and_saves_nothing(
+        self, held, submitted
+    ):
+        form = VocabularyForm(
+            data={"name": "Rock Types", "default_language": submitted}, instance=held
+        )
+
+        assert not form.is_valid()
+        assert error_codes(form, "default_language") == ["language_fixed"]
+        held.refresh_from_db()
+        assert held.default_language == "de"
+
+
+@pytest.mark.django_db
+class TestVocabularyFormLanguageFreeWhileEmpty:
+    def test_the_widget_is_not_disabled(self):
+        vocabulary = ConceptSchemeFactory(default_language="de")
+
+        select = BeautifulSoup(
+            str(VocabularyForm(instance=vocabulary)["default_language"]), "html.parser"
+        ).select_one("select")
+
+        assert not select.has_attr("disabled")
+
+    def test_a_changed_language_is_saved(self):
+        vocabulary = ConceptSchemeFactory(name="Rock Types", default_language="de")
+        form = VocabularyForm(
+            data={"name": "Rock Types", "default_language": "fr"}, instance=vocabulary
+        )
+
+        assert form.is_valid(), form.errors
+        form.save()
+        vocabulary.refresh_from_db()
+        assert vocabulary.default_language == "fr"
+
+    def test_choosing_the_site_default_saves_a_blank_language(self):
+        vocabulary = ConceptSchemeFactory(name="Rock Types", default_language="de")
+        form = VocabularyForm(
+            data={"name": "Rock Types", "default_language": ""}, instance=vocabulary
+        )
+
+        assert form.is_valid(), form.errors
+        form.save()
+        vocabulary.refresh_from_db()
+        assert vocabulary.default_language == ""
 
 
 class TestFormsI18nSweep:

@@ -69,7 +69,8 @@ class VocabularyForm(forms.ModelForm):
         self.language_fixed = bool(self.instance.pk) and self.instance.concepts.exists()
         if self.language_fixed:
             field = self.fields["default_language"]
-            field.disabled = True
+            # Not Django's disabled field, which would drop a submitted change without a word.
+            field.widget.attrs["disabled"] = True
             field.help_text = _(
                 "Fixed, because this vocabulary holds concepts and each one is identified by "
                 "its label in this language."
@@ -89,6 +90,27 @@ class VocabularyForm(forms.ModelForm):
                 "modified",
             ),
         )
+
+    def clean_default_language(self):
+        """Keep the stored language, and refuse another, once the vocabulary holds concepts."""
+        language = self.cleaned_data["default_language"]
+        if not self.language_fixed:
+            return language
+        stored = self.instance.default_language
+        widget = self.fields["default_language"].widget
+        # A disabled control is not submitted, so an absent value is the browser's way of keeping it.
+        if widget.value_omitted_from_data(
+            self.data, self.files, self.add_prefix("default_language")
+        ):
+            return stored
+        if language != stored:
+            raise forms.ValidationError(
+                _(
+                    "The default language cannot be changed while the vocabulary holds concepts."
+                ),
+                code="language_fixed",
+            )
+        return language
 
     def clean_name(self):
         """Refuse a name whose address is empty or already another vocabulary's."""
