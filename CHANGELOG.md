@@ -40,7 +40,7 @@ All notable changes to this project are documented in this file. The format foll
 - The project is built and developed with uv instead of Poetry. Contributors run `uv sync` in
   place of `poetry install`, and `uv run` in place of `poetry run`. Published packages are
   unaffected.
-- **Breaking:** the `ui` extra requires django-mvp 0.30.1 or later, below 0.31. A project
+- **Breaking:** the `ui` extra requires django-mvp 0.31.0 or later, below 0.32, which brings django-mvp-forms 0.8. A project
   installing it changes its settings to match. In `INSTALLED_APPS`, `"crispy_tailwind"` becomes
   `"mvp_forms"`, with `"daisy_cotton"` listed below `"mvp"` and `"django_filters"` added. Both
   `CRISPY_TEMPLATE_PACK` and `CRISPY_ALLOWED_TEMPLATE_PACKS` become `"daisyui"`. See "Wiring it
