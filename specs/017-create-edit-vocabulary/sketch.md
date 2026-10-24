@@ -62,3 +62,6 @@ Taste decisions taken for the first round, for review:
   places it.
 - The delete page states the counts in a warning above the button, rather than listing every
   record that goes.
+
+Approved by the maintainer on the first round, unchanged. The two questions raised with it, the
+`-` segment in the editing addresses and how the form's grouping is drawn, were left to the plan.
