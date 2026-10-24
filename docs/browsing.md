@@ -196,6 +196,11 @@ Every vocabulary the site holds has its own address — the same one its identif
 the vocabulary's name, and its lead text is the vocabulary's description, truncated the same way
 and for the same reason as the list entry above. A vocabulary with no description has no lead text.
 
+A user who may curate sees **Edit** and **Delete** beside the title: Edit only for a vocabulary held
+here and only with `controlled_vocabularies.change_conceptscheme`, Delete for either kind and only
+with `controlled_vocabularies.delete_conceptscheme`. Everyone else sees neither. See
+[Curating vocabularies](curating.md).
+
 The main column is every concept the vocabulary holds, and only that vocabulary's, in one flat,
 alphabetical list: nothing several levels down a broader/narrower chain is nested under one above
 it. Alphabetical order follows the label actually shown, not necessarily the one stored: a concept
@@ -338,7 +343,8 @@ The concept's own identifier is shown as a link, the same treatment its vocabula
 a vocabulary's: an imported concept shows its publisher's identifier, one authored here shows this
 site's own composed address for it. Either way the page itself is **read-only** — it carries no
 editing or deletion control of its own, and no permission rule beyond what the project mounting
-these routes chooses to add.
+these routes chooses to add. Concepts are added by [importing](importing.md); only a vocabulary's
+own record is curated by hand, as [Curating vocabularies](curating.md) describes.
 
 An address naming no concept is reported not found, and so is one whose vocabulary segment names no
 vocabulary — the two are not distinguished. A concept slug held by more than one vocabulary resolves
@@ -376,7 +382,8 @@ than showing an empty membership row.
 Every record-valued row links to that record's own page here and discloses its canonical identifier
 the same way a concept's page does. The collection's own identifier leads the page beneath its
 title, its breadcrumb trail names the vocabulary holding it, and the page is equally **read-only**,
-carrying no editing or deletion control of its own.
+carrying no editing or deletion control of its own (see [Curating vocabularies](curating.md) for
+what can be changed by hand).
 
 An address naming no collection is reported not found, and so is one whose vocabulary segment names
 no vocabulary — the two are not distinguished, exactly as for a concept's page.

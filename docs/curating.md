@@ -62,6 +62,33 @@ A few things the form decides for you:
 - **The default language** is offered from the languages your project configures in `LANGUAGES`.
   Leave it blank to use the site's own default.
 
+## Editing a vocabulary
+
+1. Sign in as a user holding `change_conceptscheme`.
+2. Open the vocabulary's page and choose **Edit**.
+3. Change what you need and choose **Save changes**, or **Cancel** to leave it as it was.
+
+You land back on the vocabulary's page, with a message confirming the save. The form offers the
+same fields as creating, with these differences:
+
+- **Renaming moves the address.** The address segment follows the name, so renaming "Rock Types"
+  to "Stone Kinds" moves the vocabulary from `rock-types` to `stone-kinds`. The old address stops
+  working: it is not redirected. A name whose address another vocabulary holds is refused, as when
+  creating. Identifiers other systems recorded from the old address no longer resolve, so rename a
+  vocabulary other people already cite with care.
+- **The default language is fixed once the vocabulary holds concepts.** Each concept is identified
+  by its label in that language, so changing it would change what the concepts are. The control is
+  shown but disabled, and a request that tries to change it is refused with a message saying why.
+  Until the first concept exists the language can still change, and choosing the blank "site
+  default" option clears it.
+- **An imported vocabulary cannot be edited.** A vocabulary that carries an identifier its
+  publisher fixed belongs to the publisher, so **Edit** is not offered for it. A request for its
+  edit page gets a 403 page, whoever asks and whatever they hold, a superuser included. To change
+  one, change the source and [import it again](importing.md), or delete it and create your own.
+
+A vocabulary deleted by someone else while you had its form open is reported as not found when you
+save; saving never recreates it.
+
 ## Trying it in the demo project
 
 The [demo project](browsing.md#try-it-the-demo-project) seeds a set of accounts, all with the
