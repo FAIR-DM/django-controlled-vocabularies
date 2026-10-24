@@ -113,7 +113,7 @@ says the pages are read-only. `CONTEXT.md` gains **Curator**. `CHANGELOG.md` get
 | Refusing a protected deletion | Installed package | `MVPDeleteView.post()`, `_collect_deletion_data()` |
 | The form | Django | `forms.ModelForm` over `ConceptScheme`, with crispy `Layout` (installed) |
 | Slug derivation in the form | Django | `django.utils.text.slugify`, as `ConceptScheme.save()` uses |
-| Language names | Django | `django.utils.translation.get_language_info`, as `VocabularyDetailView` uses |
+| Language names | This repo | `controlled_vocabularies/ui/filters.py` `language_name()` |
 | Date input | Browser | `<input type="date">` |
 | Grouping protected records by consuming model | New code | a few lines in `VocabularyDeleteView.get_context_data()` |
 | Templates for the form and the delete page | This repo and installed package | extend `form_view.html` and `delete_view.html` |

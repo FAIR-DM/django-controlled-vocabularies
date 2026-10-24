@@ -26,8 +26,8 @@ Nothing here adds a model, a field or a migration.
 
 - Article I (test first): every task names its test and the hunk it runs red against.
 - Untrusted input: names and publication details are model data rendered through Django's
-  autoescaping. The `back` parameter on the delete page is accepted only as a same-site path
-  (`/…`, never `//…`). The `next` parameter is django-mvp's own, open-redirect safe.
+  autoescaping. The `back` parameter on the delete page is checked with
+  `url_has_allowed_host_and_scheme`. The `next` parameter is django-mvp's own, open-redirect safe.
 - Translatable strings: every string the pages show goes through `gettext_lazy`.
 - The admin stays optional (ADR 0013): nothing imports `django.contrib.admin`.
 - No new model, field or migration.
@@ -45,8 +45,10 @@ controlled_vocabularies/ui/
     ├── conceptscheme_list.html           # "New vocabulary" action, kept
     └── conceptscheme_detail.html         # Edit and Delete actions, kept
 tests/test_ui/
-├── test_curation.py              # new: the three views
-└── test_vocabulary_form.py       # new: the form
+├── test_views.py                 # new classes for the three views and the page actions
+├── test_forms.py                 # new: the form
+└── test_architecture.py          # one more import scan (no admin)
+tests/conftest.py                 # curator fixtures
 docs/curating.md                  # new how-to page
 docs/adr/NNNN-…                   # the "-" segment, graduated at converge
 demo/                             # sign-in, accounts, a third vocabulary
@@ -60,14 +62,18 @@ demo/                             # sign-in, accounts, a third vocabulary
 default language and the five publication details. Never the slug, `slug_is_manual` or `static_uri`
 (FR-009).
 
-- `default_language` is a `ChoiceField`: a blank "site default" choice, then `settings.LANGUAGES`
-  named in the reading language.
+- `default_language` is a `ChoiceField`: a blank "site default" choice labelled with
+  `language_name(settings.LANGUAGE_CODE)`, then `[(code, language_name(code)) for code, _ in
+  settings.LANGUAGES]`. `language_name` is the existing helper in `controlled_vocabularies/ui/filters.py`,
+  which already falls back for a code Django does not know. The sketch's `language_choices()` is deleted.
 - `clean_name()` strips the name, refuses an empty slug (`code="empty_slug"`) and a slug another
   vocabulary holds (`code="slug_taken"`), skipping both for a `slug_is_manual` vocabulary (research
   R4).
 - **Changed from the sketch:** the default language is not a Django `disabled` field. When the bound
   instance holds concepts, the widget gets the HTML `disabled` attribute and the field's help text says
-  why. `clean_default_language()` returns the stored value when nothing was submitted, and refuses a
+  why. `clean_default_language()` returns the stored value when the field is absent from the submitted data
+  (`widget.value_omitted_from_data`), not merely blank, so choosing the blank site default still
+  saves `""`. It refuses a
   submitted value that differs from the stored one while the vocabulary holds concepts
   (`code="language_fixed"`). Research R3.
 - The crispy `Layout` keeps the approved grouping: name, description and default language untitled,
@@ -86,8 +92,8 @@ All three in `controlled_vocabularies/ui/views.py`, each `PermissionRequiredMixi
 | View | Permission | Notes |
 |---|---|---|
 | `VocabularyCreateView(MVPCreateView)` | `add_conceptscheme` | lands on the new vocabulary's page with a success message |
-| `VocabularyUpdateView(MVPUpdateView)` | `change_conceptscheme` | `get_object()` raises `PermissionDenied` for a vocabulary with `static_uri` (FR-008). Lands on the vocabulary's page at its current address. Cancel and the breadcrumb use the stored slug, never the unsaved one. Offers Delete only to a user with `delete_conceptscheme` |
-| `VocabularyDeleteView(MVPDeleteView)` | `delete_conceptscheme` | any vocabulary. Context adds `concept_count`, `collection_count` and `protected_kinds` (D4). Back goes to a same-site `back` path, else the vocabulary's page. Lands on the list |
+| `VocabularyUpdateView(MVPUpdateView)` | `change_conceptscheme` | `get_object()` raises `PermissionDenied` for a vocabulary with `static_uri` (FR-008). Lands on the vocabulary's page at its current address. Cancel and the breadcrumb use `self.object.slug`: the slug only changes inside `save()`, so no re-query is needed. Offers Delete only to a user with `delete_conceptscheme` |
+| `VocabularyDeleteView(MVPDeleteView)` | `delete_conceptscheme` | any vocabulary. Context adds `concept_count`, `collection_count` and `protected_kinds` (D4). Back goes to `back` when `url_has_allowed_host_and_scheme(back, {request.get_host()}, require_https=request.is_secure())` accepts it, as django-mvp's own `get_back_url()` checks, else the vocabulary's page. Lands on the list |
 
 The sketch's views are kept in shape. **Removed from the sketch:** the `?preview=in-use` branch in
 `VocabularyDeleteView.get_context_data()`.
@@ -100,8 +106,10 @@ creates a vocabulary (spec, Edge Cases).
 `protected_kinds` is a list of `(label, count)` pairs, sorted by label: each protected record is
 grouped under `record._meta.auto_created or type(record)` (the consuming model, for a `ConceptsField`
 through row as well as a `ConceptField` row), labelled with that model's capitalised
-`verbose_name_plural`, and counted by distinct source record (research R5). For a through row the
-source record is its foreign key to the consuming model.
+`verbose_name_plural`, and counted by distinct source record (research R5). For a `ConceptField` kind, the distinct pks of the
+records already in hand. For a through-model kind, one query:
+`through.objects.filter(pk__in=<protected pks>).values(<fk to the consumer>).distinct().count()`,
+because the collector loads through rows with their pk only.
 
 ### D5 — Routes
 

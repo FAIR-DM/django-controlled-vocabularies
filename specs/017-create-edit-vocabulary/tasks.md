@@ -27,29 +27,33 @@ with a one-line comment in the same style (plan D2). `uv lock`. Verified by the 
 
 ### T002 — The form accepts a name and the details, and refuses an unusable name
 
-**Files**: `controlled_vocabularies/ui/forms.py`, `tests/test_ui/test_vocabulary_form.py`
+**Files**: `controlled_vocabularies/ui/forms.py`, `tests/test_ui/test_forms.py`
 
 Tests: a name alone is valid and saves a vocabulary with no `static_uri`. Every detail given is saved.
 The default language offers blank plus the configured languages, and refuses one that is not
 configured. A punctuation-only name is refused (`empty_slug`). A name whose slug another vocabulary
 holds is refused (`slug_taken`), the other submitted values staying on the bound form. Saving an
 existing vocabulary under its own name is not refused. The form has no slug, `slug_is_manual` or
-`static_uri` field. Plan D1.
+`static_uri` field. A missing name is refused (`required`). An unknown `LANGUAGE_CODE` does not break the form. The existing translation sweep (`visit_fields_checks_source`) runs over `controlled_vocabularies/ui/forms.py`. Plan D1.
 
 ### T003 — Create view, route and permission
 
 **Files**: `controlled_vocabularies/ui/views.py`, `controlled_vocabularies/ui/urls.py`,
-`tests/test_ui/test_curation.py`
+`tests/test_ui/test_views.py`
 
 Tests (`TestVocabularyCreate`): with `add_conceptscheme`, GET is 200 and a valid POST creates the
 vocabulary, redirects to its page and adds a success message. An invalid POST creates nothing. An
 anonymous GET redirects to `settings.LOGIN_URL` with `next`. A signed-in user without the permission
-gets 403 on GET and POST and nothing is created. Plan D3, D5.
+gets 403 on GET and POST and nothing is created. The translation sweep runs over
+`controlled_vocabularies/ui/views.py`. In `tests/test_ui/test_architecture.py`, beside
+`TestCoreImportsNothingFromTheUIStack`, an import scan proves no module under
+`controlled_vocabularies/ui` imports `django.contrib.admin` (FR-019). Curator users come from
+fixtures in `tests/conftest.py`. Plan D3, D5.
 
 ### T004 — The list offers creation to a curator only
 
 **Files**: `controlled_vocabularies/ui/templates/controlled_vocabularies/ui/conceptscheme_list.html`,
-`tests/test_ui/test_curation.py`
+`tests/test_ui/test_views.py`
 
 Tests (`TestVocabularyListCreateAction`): the creation address appears on the list for a user with
 `add_conceptscheme` and not for an anonymous user or a user without it. Plan D6.
@@ -76,17 +80,17 @@ project mounts. `CONTEXT.md` gains **Curator**. `CHANGELOG.md` Added entry and t
 
 ### T007 — The default language is fixed once the vocabulary holds concepts
 
-**Files**: `controlled_vocabularies/ui/forms.py`, `tests/test_ui/test_vocabulary_form.py`
+**Files**: `controlled_vocabularies/ui/forms.py`, `tests/test_ui/test_forms.py`
 
 Replace the sketch's `field.disabled = True` (plan D1, research R3). Tests: with concepts, the
 widget renders `disabled`, a POST omitting the field keeps the stored language, and a POST with a
 different language is refused (`language_fixed`) with nothing saved. Without concepts, a changed
-language is saved.
+language is saved, and with a stored `de` a POST choosing the blank site default saves `""`.
 
 ### T008 — Edit view, route, permission and the imported refusal
 
 **Files**: `controlled_vocabularies/ui/views.py`, `controlled_vocabularies/ui/urls.py`,
-`tests/test_ui/test_curation.py`
+`tests/test_ui/test_views.py`
 
 Tests (`TestVocabularyUpdate`): with `change_conceptscheme`, GET on a vocabulary held here is 200 with
 its current values. A POST changing the description saves it, redirects to the vocabulary's page and
@@ -99,7 +103,7 @@ vocabulary is created. The delete link is present only with `delete_conceptschem
 ### T009 — The vocabulary page offers edit and delete by permission
 
 **Files**: `controlled_vocabularies/ui/templates/controlled_vocabularies/ui/conceptscheme_detail.html`,
-`tests/test_ui/test_curation.py`
+`tests/test_ui/test_views.py`
 
 Tests (`TestVocabularyPageCuratorActions`): the edit address appears only with `change_conceptscheme`
 on a vocabulary without `static_uri`. The delete address appears only with `delete_conceptscheme`,
@@ -120,23 +124,23 @@ the curating page.
 ### T011 — Delete view, counts and permission
 
 **Files**: `controlled_vocabularies/ui/views.py`, `controlled_vocabularies/ui/urls.py`,
-`tests/test_ui/test_curation.py`
+`tests/test_ui/test_views.py`
 
 Remove the sketch's `?preview=in-use` branch (plan D3). Tests (`TestVocabularyDelete`): with
 `delete_conceptscheme`, GET on a vocabulary holding concepts and a collection is 200 with
 `concept_count` and `collection_count` matching. POST deletes the vocabulary, its concepts and its
 collections, redirects to the list and adds a success message. An imported vocabulary can be deleted.
 Anonymous redirects to sign in. Without the permission, 403 on GET and POST and nothing is deleted.
-Back goes to a same-site `back` path, and an off-site or `//` value falls back to the vocabulary's page.
+Back goes to a same-site `back` path, and `//evil.example`, `/\evil.example` and an absolute off-site URL fall back to the vocabulary's page.
 
 ### T012 — A vocabulary in use is never deleted
 
-**Files**: `controlled_vocabularies/ui/views.py`, `tests/test_ui/test_curation.py`
+**Files**: `controlled_vocabularies/ui/views.py`, `tests/test_ui/test_views.py`
 
 Plan D4, research R5. Tests (`TestVocabularyDeleteInUse`), using `tests/testapp` models: a concept
 referenced by a `ConceptField` row, and one referenced by a `ConceptsField` through row. GET is 200
 with `is_protected`, no form and `protected_kinds` naming each consuming model with its count of
-distinct records (two through rows from one record count once). A forced POST deletes nothing.
+distinct records (two through rows from one record count once). A forced POST deletes nothing and re-renders with `is_protected` (the page says why).
 
 ### T013 — Documentation for deleting
 

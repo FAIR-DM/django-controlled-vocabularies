@@ -60,3 +60,22 @@ curator who needs the vocabulary gone takes it up with whoever owns those record
 #176 asks for when a single concept is removed.
 
 **ADR:** none. It applies the existing delete protection rather than setting a new rule.
+
+---
+
+## D4 — Design review findings carried as edits to the plan
+
+**Ambiguity**: the design review returned one high, three medium and six low findings, all verified.
+
+**Chosen**: every one applied as an edit to `plan.md`, `tasks.md` or `research.md`. Tests mirror the
+source tree (`test_views.py`, `test_forms.py`). The delete page's `back` is checked with
+`url_has_allowed_host_and_scheme`. The default language keeps a blank choice distinct from an
+absent field. Language names come from the existing `language_name()`. A test proves no `ui` module
+imports the admin, and the translation sweep covers the new modules. The edit view drops the
+re-query of the stored slug. Counting the records that use a vocabulary's concepts takes one query
+per consuming model.
+
+**Why defensible**: each remedy is the smallest edit that meets the requirement or standard the
+finding named, and none changes what the maintainer approved.
+
+**ADR:** none. Plan corrections, not standing rules.
