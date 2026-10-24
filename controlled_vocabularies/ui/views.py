@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, F, OuterRef, Prefetch, Subquery
+from django.db.models import CASCADE, Count, F, OuterRef, Prefetch, Subquery
 from django.db.models.functions import Coalesce, Lower
 from django.http import Http404
 from django.urls import reverse
@@ -752,15 +752,51 @@ class VocabularyDeleteView(PermissionRequiredMixin, MVPDeleteView):
         """Name the vocabulary that was deleted."""
         return _("Deleted the vocabulary %(name)s.") % {"name": self.object.name}
 
+    @staticmethod
+    def protected_kinds(protected_objects):
+        """Group the records holding the vocabulary's concepts by the model that owns them.
+
+        A ``ConceptsField`` holds a concept through a generated row, so that row is counted
+        against the model carrying the field, once per record however many concepts it holds.
+
+        Args:
+            protected_objects: The records whose foreign key blocked the delete.
+
+        Returns:
+            ``(label, count)`` pairs, sorted by label.
+        """
+        by_model = {}
+        for record in protected_objects:
+            owner = record._meta.auto_created or type(record)
+            by_model.setdefault(owner, []).append(record)
+        kinds = []
+        for owner, records in by_model.items():
+            if type(records[0]) is owner:
+                count = len({record.pk for record in records})
+            else:
+                # The collector loads a through row with its primary key only.
+                through = type(records[0])
+                owner_key = next(
+                    field.name
+                    for field in through._meta.fields
+                    if field.is_relation
+                    and field.remote_field.model is owner
+                    and field.remote_field.on_delete is CASCADE
+                )
+                count = (
+                    through.objects.filter(pk__in=[record.pk for record in records])
+                    .values(owner_key)
+                    .distinct()
+                    .count()
+                )
+            kinds.append((str(owner._meta.verbose_name_plural).capitalize(), count))
+        return sorted(kinds)
+
     def get_context_data(self, **kwargs):
         """Add how much goes with the vocabulary, and what is using its concepts."""
         context = super().get_context_data(**kwargs)
         vocabulary = self.object
         context["concept_count"] = vocabulary.concepts.count()
         context["collection_count"] = vocabulary.collections.count()
-        kinds = {}
-        for record in context["protected_objects"]:
-            label = type(record)._meta.verbose_name_plural.capitalize()
-            kinds[label] = kinds.get(label, 0) + 1
-        context["protected_kinds"] = sorted(kinds.items())
+        context["protected_kinds"] = self.protected_kinds(context["protected_objects"])
         return context

@@ -57,6 +57,8 @@ from tests.factories import (
     ConceptNoteFactory,
     ConceptRelationFactory,
     ConceptSchemeFactory,
+    DepositFactory,
+    SpecimenFactory,
     collection_with_members,
 )
 
@@ -4556,3 +4558,95 @@ class TestVocabularyDelete:
         response = client.get(delete_url(populated))
 
         assert response.context["back_url"] == detail_url(populated.slug)
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("with_sessions")
+class TestVocabularyDeleteInUse:
+    @pytest.fixture
+    def vocabulary(self):
+        # The test app's fields name the "rock-type" vocabulary.
+        return ConceptSchemeFactory(name="Rock Type")
+
+    def specimens(self, vocabulary, number):
+        for _ in range(number):
+            SpecimenFactory(rock_type=ConceptFactory(scheme=vocabulary))
+
+    def deposit(self, vocabulary, concepts):
+        deposit = DepositFactory()
+        deposit.rock_types.add(
+            *[ConceptFactory(scheme=vocabulary) for _ in range(concepts)]
+        )
+        return deposit
+
+    def test_a_concept_held_by_a_concept_field_blocks_the_delete(
+        self, client, make_user, vocabulary
+    ):
+        self.specimens(vocabulary, 2)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert response.status_code == 200
+        assert response.context["is_protected"]
+        assert response.context["form"] is None
+        assert response.context["protected_kinds"] == [("Specimens", 2)]
+
+    def test_a_concept_held_by_a_concepts_field_blocks_the_delete(
+        self, client, make_user, vocabulary
+    ):
+        self.deposit(vocabulary, concepts=1)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert response.context["is_protected"]
+        assert response.context["protected_kinds"] == [("Deposits", 1)]
+
+    def test_two_rows_from_one_record_count_once(self, client, make_user, vocabulary):
+        self.deposit(vocabulary, concepts=2)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert response.context["protected_kinds"] == [("Deposits", 1)]
+
+    def test_each_consuming_model_is_named_with_its_own_count_in_label_order(
+        self, client, make_user, vocabulary
+    ):
+        self.specimens(vocabulary, 1)
+        self.deposit(vocabulary, concepts=2)
+        self.deposit(vocabulary, concepts=1)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert response.context["protected_kinds"] == [
+            ("Deposits", 2),
+            ("Specimens", 1),
+        ]
+
+    def test_a_forced_post_deletes_nothing_and_says_why(
+        self, client, make_user, vocabulary
+    ):
+        self.specimens(vocabulary, 1)
+        client.force_login(make_user("delete"))
+
+        response = client.post(delete_url(vocabulary))
+
+        assert response.status_code == 200
+        assert response.context["is_protected"]
+        assert ConceptScheme.objects.filter(pk=vocabulary.pk).exists()
+        assert Concept.objects.filter(scheme=vocabulary).exists()
+        assert message_levels(response) == []
+
+    def test_a_vocabulary_nothing_uses_is_not_protected(
+        self, client, make_user, vocabulary
+    ):
+        ConceptFactory(scheme=vocabulary)
+        client.force_login(make_user("delete"))
+
+        response = client.get(delete_url(vocabulary))
+
+        assert not response.context["is_protected"]
+        assert response.context["protected_kinds"] == []
