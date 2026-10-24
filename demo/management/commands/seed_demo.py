@@ -1,4 +1,4 @@
-"""Management command that reloads the demo's two seed vocabularies."""
+"""Management command that reloads the demo's seed vocabularies and sign-in accounts."""
 
 from pathlib import Path
 
@@ -24,16 +24,16 @@ AUTHORED_DESCRIPTION = (
 
 
 class Command(BaseCommand):
-    """Delete every vocabulary and reload the demo's two seed vocabularies."""
+    """Delete every vocabulary and reload the demo's seed vocabularies and accounts."""
 
     help = (
-        "Delete every vocabulary, then reload the demo's two seed vocabularies: one imported "
-        "from a publisher, one authored here. Destructive: anything entered through the admin "
-        "is lost."
+        "Delete every vocabulary, then reload the demo's seed vocabularies (one imported from a "
+        "publisher, two held here) and the sign-in accounts. Destructive: anything entered "
+        "through the browsing pages or the admin is lost."
     )
 
     def handle(self, *args, **options):
-        """Delete every vocabulary, then load the imported and the authored seed vocabularies."""
+        """Delete every vocabulary, then load the seed vocabularies and accounts."""
         ConceptScheme.objects.all().delete()
 
         import_skos(IMPORTED_FILE)

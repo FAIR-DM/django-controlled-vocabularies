@@ -1,12 +1,16 @@
 """Tests for the demo project's ``seed_demo`` command."""
 
 import pytest
+from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.urls import reverse
 
 from controlled_vocabularies.models import Concept, ConceptScheme
 from demo.management.commands.seed_demo import Command
 from tests.factories import ConceptSchemeFactory
+
+AUTHORED_NAME = "Data Collection Methods"
+EMPTY_NAME = "Sample Types"
 
 
 def run_seed_demo():
@@ -18,7 +22,7 @@ def run_seed_demo():
 class TestSeedDemo:
     def test_both_vocabularies_exist_with_their_concepts_after_one_run(self):
         run_seed_demo()
-        schemes = list(ConceptScheme.objects.all())
+        schemes = list(ConceptScheme.objects.exclude(name=EMPTY_NAME))
         assert len(schemes) == 2
         for scheme in schemes:
             assert scheme.concepts.count() > 0
@@ -50,7 +54,9 @@ class TestSeedDemo:
         run_seed_demo()
 
         imported = ConceptScheme.objects.exclude(static_uri__isnull=True)
-        authored = ConceptScheme.objects.filter(static_uri__isnull=True)
+        authored = ConceptScheme.objects.filter(
+            static_uri__isnull=True, name=AUTHORED_NAME
+        )
 
         assert imported.count() == 1
         assert authored.count() == 1
@@ -85,7 +91,7 @@ class TestSeedDemo:
         # it.
         run_seed_demo()
 
-        authored = ConceptScheme.objects.get(static_uri__isnull=True)
+        authored = ConceptScheme.objects.get(name=AUTHORED_NAME)
         collections = {
             collection.name: collection for collection in authored.collections.all()
         }
@@ -100,13 +106,13 @@ class TestSeedDemo:
         run_seed_demo()
         run_seed_demo()
 
-        authored = ConceptScheme.objects.get(static_uri__isnull=True)
+        authored = ConceptScheme.objects.get(name=AUTHORED_NAME)
         assert authored.collections.count() == 2
 
     def test_both_seeded_collections_render_on_their_vocabularys_page(self, client):
         run_seed_demo()
 
-        authored = ConceptScheme.objects.get(static_uri__isnull=True)
+        authored = ConceptScheme.objects.get(name=AUTHORED_NAME)
         response = client.get(
             reverse(
                 "controlled_vocabularies_ui:vocabulary-detail",
@@ -117,3 +123,49 @@ class TestSeedDemo:
 
         for collection in authored.collections.all():
             assert collection.name in content
+
+
+@pytest.mark.django_db
+class TestSeedDemoAccounts:
+    def test_three_vocabularies_are_seeded_including_one_held_here_with_no_concepts(
+        self,
+    ):
+        run_seed_demo()
+
+        assert ConceptScheme.objects.count() == 3
+        empty = ConceptScheme.objects.get(name=EMPTY_NAME)
+        assert empty.static_uri is None
+        assert not empty.concepts.exists()
+
+    def test_the_standard_accounts_exist_and_sign_in_with_the_demo_password(
+        self, client
+    ):
+        run_seed_demo()
+
+        for username in ("regular.user", "curator.user", "staff.user", "super.user"):
+            assert User.objects.filter(username=username).exists()
+            assert client.login(username=username, password="password")
+
+    def test_the_curator_holds_exactly_the_three_vocabulary_permissions(self):
+        run_seed_demo()
+
+        curator = User.objects.get(username="curator.user")
+        assert set(curator.get_all_permissions()) == {
+            "controlled_vocabularies.add_conceptscheme",
+            "controlled_vocabularies.change_conceptscheme",
+            "controlled_vocabularies.delete_conceptscheme",
+        }
+        assert not curator.is_staff
+
+    def test_the_regular_user_holds_none(self):
+        run_seed_demo()
+
+        assert not User.objects.get(username="regular.user").get_all_permissions()
+
+    def test_a_second_run_resets_an_account_that_was_changed(self):
+        run_seed_demo()
+        User.objects.filter(username="curator.user").update(is_staff=True)
+
+        run_seed_demo()
+
+        assert not User.objects.get(username="curator.user").is_staff

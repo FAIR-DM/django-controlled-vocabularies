@@ -69,7 +69,7 @@ from controlled_vocabularies.models import ConceptScheme
 
 call_command(Command())
 
-authored = ConceptScheme.objects.get(static_uri__isnull=True)
+authored = ConceptScheme.objects.get(name="Data Collection Methods")
 imported = ConceptScheme.objects.get(static_uri__isnull=False)
 
 assert authored.uri == authored.local_url, authored.uri
