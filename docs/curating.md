@@ -32,7 +32,7 @@ The three pages are part of the browsing routes, so a project that already mount
 | Edit | `browse/<slug>/-/edit/` |
 | Delete | `browse/<slug>/-/delete/` |
 
-The `-` segment can never be a vocabulary's slug, so these addresses never take the place of a
+No slug the package derives can be `-`, so these addresses never take the place of a
 vocabulary or concept whose slug is `new`, `edit` or `delete`.
 
 The package provides no sign-in page. A project needs a working `LOGIN_URL`, for example

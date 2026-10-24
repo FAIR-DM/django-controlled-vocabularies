@@ -152,6 +152,20 @@ class TestVocabularyFormLanguageFixedOnceConceptsExist:
         held.refresh_from_db()
         assert held.default_language == "de"
 
+    def test_a_form_shown_again_with_an_error_still_shows_the_stored_language(
+        self, held
+    ):
+        form = VocabularyForm(
+            data={"name": "Rock Types", "modified": "x"}, instance=held
+        )
+
+        assert not form.is_valid()
+        selected = BeautifulSoup(
+            str(form["default_language"]), "html.parser"
+        ).select_one("option[selected]")
+        assert selected is not None
+        assert selected["value"] == "de"
+
     def test_a_post_naming_the_stored_language_is_accepted(self, held):
         form = VocabularyForm(
             data={"name": "Rock Types", "default_language": "de"}, instance=held
@@ -194,6 +208,15 @@ class TestVocabularyFormLanguageFreeWhileEmpty:
         form.save()
         vocabulary.refresh_from_db()
         assert vocabulary.default_language == "fr"
+
+    def test_a_post_leaving_the_field_out_keeps_the_stored_language(self):
+        vocabulary = ConceptSchemeFactory(name="Rock Types", default_language="de")
+        form = VocabularyForm(data={"name": "Rock Types"}, instance=vocabulary)
+
+        assert form.is_valid(), form.errors
+        form.save()
+        vocabulary.refresh_from_db()
+        assert vocabulary.default_language == "de"
 
     def test_choosing_the_site_default_saves_a_blank_language(self):
         vocabulary = ConceptSchemeFactory(name="Rock Types", default_language="de")

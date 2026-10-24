@@ -9,8 +9,7 @@ from django.db.models import CASCADE, Count, F, OuterRef, Prefetch, Subquery
 from django.db.models.functions import Coalesce, Lower
 from django.http import Http404
 from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
-from django.utils.text import Truncator
+from django.utils.text import Truncator, capfirst
 from django.utils.translation import get_language, get_language_info
 from django.utils.translation import gettext_lazy as _
 from mvp.views import (
@@ -671,17 +670,20 @@ class VocabularyUpdateView(PermissionRequiredMixin, MVPUpdateView):
         vocabulary = super().get_object(queryset)
         if vocabulary.static_uri:
             raise PermissionDenied(_("An imported vocabulary cannot be edited here."))
+        # A form that fails to validate has already written its values onto the instance, so the
+        # page names the vocabulary by what is stored.
+        self.stored_name = vocabulary.name
         return vocabulary
 
     def get_page_subtitle(self):
         """Name the vocabulary being edited."""
-        return self.object.name
+        return self.stored_name
 
     def get_breadcrumbs(self):
         """Return the trail back through the vocabulary's page."""
         return [
             {"text": _("Vocabularies"), "href": vocabulary_list_url()},
-            {"text": self.object.name, "href": vocabulary_url(self.object)},
+            {"text": self.stored_name, "href": vocabulary_url(self.object)},
             {"text": _("Edit")},
         ]
 
@@ -734,15 +736,10 @@ class VocabularyDeleteView(PermissionRequiredMixin, MVPDeleteView):
         ]
 
     def get_back_url(self):
-        """Go back to where the curator came from: the edit page, else the vocabulary's page."""
-        candidate = self.request.GET.get("back", "")
-        if url_has_allowed_host_and_scheme(
-            candidate,
-            allowed_hosts={self.request.get_host()},
-            require_https=self.request.is_secure(),
-        ):
-            return candidate
-        return vocabulary_url(self.object)
+        """Go back to a same-site ``back`` address, else to the vocabulary's page."""
+        # django-mvp checks ``back`` against this site, and offers nothing else here: the package
+        # registers no route under its default list name, and a vocabulary has no absolute URL.
+        return super().get_back_url() or vocabulary_url(self.object)
 
     def get_success_url(self):
         """Land on the list of vocabularies."""
@@ -789,7 +786,7 @@ class VocabularyDeleteView(PermissionRequiredMixin, MVPDeleteView):
                     .distinct()
                     .count()
                 )
-            kinds.append((str(owner._meta.verbose_name_plural).capitalize(), count))
+            kinds.append((capfirst(owner._meta.verbose_name_plural), count))
         return sorted(kinds)
 
     def get_context_data(self, **kwargs):

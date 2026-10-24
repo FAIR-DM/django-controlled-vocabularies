@@ -62,6 +62,23 @@ from tests.factories import (
     collection_with_members,
 )
 
+
+def alert_items(response):
+    """Return the text of each list item in the page's alerts.
+
+    Args:
+        response: The rendered page.
+
+    Returns:
+        The items' text, stripped.
+    """
+    soup = BeautifulSoup(response.content, "html.parser")
+    return [
+        item.get_text(" ", strip=True)
+        for alert in soup.select('[role="alert"]')
+        for item in alert.select("li")
+    ]
+
 ROW_TEMPLATE = "controlled_vocabularies/ui/conceptscheme_list_item.html"
 CONCEPT_ROW_TEMPLATE = "controlled_vocabularies/ui/concept_list_item.html"
 
@@ -4307,6 +4324,7 @@ class TestVocabularyUpdate:
 
         assert response.status_code == 200
         assert response.context["cancel_url"] == detail_url("rock-types")
+        assert response.context["page"]["subtitle"] == "Rock Types"
         vocabulary.refresh_from_db()
         assert vocabulary.name == "Rock Types"
 
@@ -4472,6 +4490,9 @@ class TestVocabularyDelete:
 
         assert response.status_code == 200
         assert response.context["concept_count"] == 3
+        items = alert_items(response)
+        assert any("3" in item for item in items)
+        assert any("2" in item for item in items)
         assert response.context["collection_count"] == 2
         assert not response.context["is_protected"]
 
@@ -4591,6 +4612,8 @@ class TestVocabularyDeleteInUse:
         assert response.context["is_protected"]
         assert response.context["form"] is None
         assert response.context["protected_kinds"] == [("Specimens", 2)]
+        items = alert_items(response)
+        assert any("Specimens" in item and "2" in item for item in items)
 
     def test_a_concept_held_by_a_concepts_field_blocks_the_delete(
         self, client, make_user, vocabulary

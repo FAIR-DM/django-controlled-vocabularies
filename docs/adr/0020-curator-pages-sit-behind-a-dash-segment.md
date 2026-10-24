@@ -24,12 +24,13 @@ Every page that acts on a record, rather than shows it, sits behind a `-` segmen
 a vocabulary, and `/<vocabulary>/-/edit/` and `/<vocabulary>/-/delete/` edit and delete one. Later
 editing pages follow the same pattern.
 
-`-` can never be a slug. Every slug this package mints goes through `slugify()`, which strips
-leading and trailing hyphens, so a slug is never a lone `-`. GitLab separates its own routes from
+No slug the package derives can be `-`. Every slug it mints goes through `slugify()`, which strips
+leading and trailing hyphens. A slug set by hand with `set_slug()` is the one way to reach `-`, and
+choosing it is the operator's to avoid (ADR 0004). GitLab separates its own routes from
 user-chosen names with the same segment for the same reason.
 
 ## Consequences
 
-No vocabulary or concept, imported or authored here, can ever be shadowed by an editing page, and no
+No vocabulary or concept with a derived slug, imported or authored here, can be shadowed by an editing page, and no
 word has to be reserved. The cost is an address that reads slightly oddly. These pages are for
 curators, never published as identifiers, so the oddness never reaches a linked-data consumer.

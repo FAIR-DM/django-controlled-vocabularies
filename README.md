@@ -22,8 +22,8 @@ supersedes and retires `skos-builder` and `django-research-vocabs`.
 **v0.1.0 covers the consuming half.** You can import a published SKOS vocabulary from a file or a
 URL, attach its concepts to your own models through a single field, pick one through a
 search-as-you-type control in your forms and in the Django admin, and browse what the site holds
-through an opt-in set of pages. A curator can also create, edit and delete a vocabulary from those
-pages. Managing the concepts inside a vocabulary and serving RDF back out at those addresses are the
+through an opt-in set of read-only pages. The next release adds creating, editing and deleting a
+vocabulary from those pages. Managing the concepts inside a vocabulary and serving RDF back out at those addresses are the
 next releases — see
 [the roadmap](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/ROADMAP.md).
 

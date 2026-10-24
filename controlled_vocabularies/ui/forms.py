@@ -66,6 +66,14 @@ class VocabularyForm(forms.ModelForm):
             ),
             initial=self.instance.default_language,
         )
+        # A disabled control is not submitted, so an absent value is the browser keeping the
+        # stored one. Put it back into the data, so it is both what is saved and what is shown
+        # when the form comes back with an error.
+        key = self.add_prefix("default_language")
+        widget = self.fields["default_language"].widget
+        if self.is_bound and widget.value_omitted_from_data(self.data, self.files, key):
+            self.data = self.data.copy()
+            self.data[key] = self.instance.default_language
         self.language_fixed = bool(self.instance.pk) and self.instance.concepts.exists()
         if self.language_fixed:
             field = self.fields["default_language"]
@@ -96,14 +104,7 @@ class VocabularyForm(forms.ModelForm):
         language = self.cleaned_data["default_language"]
         if not self.language_fixed:
             return language
-        stored = self.instance.default_language
-        widget = self.fields["default_language"].widget
-        # A disabled control is not submitted, so an absent value is the browser's way of keeping it.
-        if widget.value_omitted_from_data(
-            self.data, self.files, self.add_prefix("default_language")
-        ):
-            return stored
-        if language != stored:
+        if language != self.instance.default_language:
             raise forms.ValidationError(
                 _(
                     "The default language cannot be changed while the vocabulary holds concepts."
