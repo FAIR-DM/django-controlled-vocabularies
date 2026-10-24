@@ -79,3 +79,17 @@ per consuming model.
 finding named, and none changes what the maintainer approved.
 
 **ADR:** none. Plan corrections, not standing rules.
+
+---
+
+## D5 — The editing pages sit behind a `-` segment
+
+**Ambiguity**: the editing pages need addresses in the same space as vocabularies and concepts,
+whose slugs this package does not choose.
+
+**Chosen**: `/-/new/`, `/<vocabulary>/-/edit/` and `/<vocabulary>/-/delete/`. Research R7.
+
+**Why defensible**: `-` cannot be a slug, so nothing is shadowed and no word is reserved. The
+maintainer saw the addresses at the sketch gate and left the choice to the plan.
+
+**ADR:** docs/adr/0020-curator-pages-sit-behind-a-dash-segment.md
