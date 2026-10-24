@@ -29,6 +29,7 @@ class TestDjangoMVPIsOptOnly:
         assert [requirement.split(">")[0] for requirement in extras["ui"]] == [
             "django-mvp",
             "django-filter",
+            "django-crispy-forms",
         ]
 
     def test_django_mvp_is_absent_from_every_other_extra(self):
