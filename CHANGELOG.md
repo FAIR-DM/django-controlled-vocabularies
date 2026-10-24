@@ -8,11 +8,14 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Added
 
-- A user holding the `add_conceptscheme` permission can create a vocabulary from the browsing
-  pages, entering its name, description, default language and publication details. The list of
-  vocabularies offers **New vocabulary** to those users. The `ui` extra now requires
-  `django-crispy-forms`, which the form uses; a project that installs the extra picks it up on its
-  next install. See [Curating vocabularies](docs/curating.md).
+- A user holding the `add_conceptscheme`, `change_conceptscheme` or `delete_conceptscheme`
+  permission can create, edit or delete a vocabulary from the browsing pages, without the Django
+  admin. An imported vocabulary cannot be edited, a vocabulary's default language is fixed once it
+  holds concepts, and a vocabulary whose concepts are used by a `ConceptField` or `ConceptsField`
+  cannot be deleted. The list of vocabularies and a vocabulary's page offer each action only to a
+  user who may take it. The `ui` extra now requires `django-crispy-forms`, which the form uses; a
+  project that installs the extra picks it up on its next install. See
+  [Curating vocabularies](docs/curating.md).
 - Django 6.1 is supported, and tested on every change alongside 5.2 and 6.0.
 - An import keeps a vocabulary's publisher, creator, licence, version and last-modified date, from
   `dcterms:publisher`, `dcterms:creator`, `dcterms:license`, `owl:versionInfo` and

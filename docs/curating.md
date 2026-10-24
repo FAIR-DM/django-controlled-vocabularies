@@ -89,6 +89,32 @@ same fields as creating, with these differences:
 A vocabulary deleted by someone else while you had its form open is reported as not found when you
 save; saving never recreates it.
 
+## Deleting a vocabulary
+
+1. Sign in as a user holding `delete_conceptscheme`.
+2. Open the vocabulary's page, or its edit page, and choose **Delete**.
+3. Read what will go with it, then choose **Delete vocabulary**, or **Cancel** to keep it.
+
+You land on the list of vocabularies, with a message confirming the delete. Deleting cannot be
+undone, and it takes everything the vocabulary holds with it: every concept, with its labels,
+notes and relations, and every collection. The confirmation page says how many concepts and
+collections that is.
+
+An imported vocabulary can be deleted like any other. Importing the same file again creates it
+afresh, without whatever was added to it by hand.
+
+### A vocabulary in use is never deleted
+
+A concept that a record elsewhere on the site points at, through a `ConceptField` or a
+`ConceptsField`, is protected. While any concept of the vocabulary is in use, the confirmation page
+offers no **Delete vocabulary** button. It lists the models whose records use the vocabulary's
+concepts, with how many records of each. A record that holds several of the concepts counts once.
+A request sent to delete anyway deletes nothing and shows the same page.
+
+To delete the vocabulary, change those records to use other concepts, or remove them, then try
+again. The page lists the models, not the individual records, so look for them through those
+models' own pages.
+
 ## Trying it in the demo project
 
 The [demo project](browsing.md#try-it-the-demo-project) seeds a set of accounts, all with the
