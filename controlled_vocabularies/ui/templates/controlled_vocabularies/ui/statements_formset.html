@@ -1,0 +1,39 @@
+{% load i18n l10n static %}
+{% comment %}
+  The vocabulary's statements, drawn here rather than by <c-mvp.form.formset> because a row's value
+  control and language depend on its predicate. Adding and removing rows is the packaged behaviour,
+  through django-mvp's mvpFormset and mvpFormsetRow components. The kinds of the known predicates are
+  read by statement-row.js; a plain script, because Alpine is deferred and this must register first.
+{% endcomment %}
+{{ predicate_kinds|json_script:"statement-predicate-kinds" }}
+<div class="flex flex-col gap-4 mb-8"
+     x-data="mvpFormset({{ formset.total_form_count|unlocalize }}, {{ formset.max_num|unlocalize }})"
+     x-on:mvp-formset-row-removed="visible--">
+  {% if formset.non_form_errors %}
+    <c-alert variant="error" icon="error" only>{{ formset.non_form_errors }}</c-alert>
+  {% endif %}
+  {{ formset.management_form.INITIAL_FORMS }}
+  {{ formset.management_form.MIN_NUM_FORMS }}
+  {{ formset.management_form.MAX_NUM_FORMS }}
+  <input type="hidden"
+         name="{{ formset.management_form.TOTAL_FORMS.html_name }}"
+         value="{{ formset.management_form.TOTAL_FORMS.value|unlocalize }}"
+         :value="total">
+  {% for form in formset.forms %}
+    {% include "controlled_vocabularies/ui/statement_row.html" with first=forloop.first %}
+  {% endfor %}
+  <template>
+    {% include "controlled_vocabularies/ui/statement_row.html" with form=formset.empty_form first=False %}
+  </template>
+  <div>
+    <c-button type="button"
+              size="sm"
+              outline
+              icon="plus"
+              text="{% translate "Add statement" %}"
+              x-bind:disabled="!canAddRow"
+              x-on:click="addRow()" only />
+  </div>
+</div>
+<script src="{% static 'js/formset.js' %}"></script>
+<script src="{% static 'controlled_vocabularies/js/statement-row.js' %}"></script>

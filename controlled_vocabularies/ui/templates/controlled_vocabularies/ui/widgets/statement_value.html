@@ -1,0 +1,32 @@
+{% comment %}
+  One control for each kind of value, all under the field's name. The row's component (statement-row.js)
+  shows the one its predicate asks for and disables the others, so exactly one is submitted. The
+  others start hidden and disabled, so a row never sends two before the script has run.
+{% endcomment %}
+<textarea name="{{ widget.name }}"{% include "django/forms/widgets/attrs.html" %}
+          x-show="kind === 'literal'"
+          x-bind:disabled="kind !== 'literal'">{% if widget.value %}{{ widget.value }}{% endif %}</textarea>
+<input type="url"
+       name="{{ widget.name }}"
+       class="input w-full"
+       value="{{ widget.value|default_if_none:'' }}"
+       style="display: none"
+       disabled
+       x-show="kind === 'uri'"
+       x-bind:disabled="kind !== 'uri'">
+<input type="text"
+       name="{{ widget.name }}"
+       class="input w-full"
+       value="{{ widget.value|default_if_none:'' }}"
+       style="display: none"
+       disabled
+       x-show="kind === 'typed'"
+       x-bind:disabled="kind !== 'typed'">
+<input type="date"
+       name="{{ widget.name }}"
+       class="input w-full"
+       value="{{ widget.date_value }}"
+       style="display: none"
+       disabled
+       x-show="kind === 'date'"
+       x-bind:disabled="kind !== 'date'">

@@ -20,6 +20,7 @@ from mvp.views import (
 )
 
 from controlled_vocabularies.models import ConceptScheme, Record
+from controlled_vocabularies.predicates import PREDICATES
 from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
 from controlled_vocabularies.ui.forms import (
     StatementFormSet,
@@ -347,6 +348,9 @@ class _StatementsMixin:
         """Add the statements formset."""
         context = super().get_context_data(**kwargs)
         context["formset"] = self.get_statements(context["form"])
+        context["predicate_kinds"] = {
+            curie: spec.kind.value for curie, spec in PREDICATES.items()
+        }
         return context
 
     def form_valid(self, form):

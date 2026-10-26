@@ -11,12 +11,9 @@
   <link rel="stylesheet" href="{% static 'mvp_forms/tomselect.css' %}">
 {% endblock head %}
 {% block formset %}
-  <c-mvp.form.formset :formset="formset"
-                      layout="tabular"
-                      title="{% trans "Statements" %}"
-                      description="{% trans "Each row is one statement the vocabulary makes about itself. Give the name, and the description if there is one, then add whatever else it should say." %}"
-                      add-label="{% trans "Add statement" %}"
-                      remove-label="{% trans "Remove statement" %}" />
+  <c-divider class="my-8" only>{% trans "Statements" %}</c-divider>
+  <c-mvp.text muted size="sm" only>{% trans "Each row is one statement the vocabulary makes about itself. Give the name, and the description if there is one, then add whatever else it should say." %}</c-mvp.text>
+  {% include "controlled_vocabularies/ui/statements_formset.html" %}
 {% endblock formset %}
 {% block actions %}
   <c-button text="{{ submit_label }}" type="submit" variant="primary" only />

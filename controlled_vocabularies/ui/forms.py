@@ -4,6 +4,7 @@ import re
 from urllib.parse import urlsplit
 
 from crispy_forms.helper import FormHelper
+from crispy_forms.layout import Column, Layout, Row
 from django import forms
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -117,6 +118,24 @@ class VocabularyForm(forms.ModelForm):
         return language
 
 
+class StatementValueWidget(forms.Textarea):
+    """A statement's value, drawn as one control for each kind of predicate.
+
+    All of them share the field's name. The row's script shows one and disables the
+    rest, so the browser sends exactly one.
+    """
+
+    template_name = "controlled_vocabularies/ui/widgets/statement_value.html"
+
+    def get_context(self, name, value, attrs):
+        """Add the value as a date, or nothing when it is not one, for the date control."""
+        context = super().get_context(name, value, attrs)
+        context["widget"]["date_value"] = (
+            value if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value or "") else ""
+        )
+        return context
+
+
 class StatementForm(forms.Form):
     """One statement a vocabulary makes about itself: a predicate, a value, a language.
 
@@ -128,17 +147,37 @@ class StatementForm(forms.Form):
         label=_("Predicate"),
         help_text=_("Pick a known term, or enter a prefixed name or a full address."),
     )
-    language = forms.ChoiceField(required=False, label=_("Language"), choices=())
-    # A text area for every predicate, since a description or a note runs to sentences.
+    language = forms.ChoiceField(
+        required=False,
+        label=_("Language"),
+        choices=(),
+        widget=forms.Select(attrs={"x-bind:disabled": "kind !== 'literal'"}),
+    )
     value = forms.CharField(
-        required=False, label=_("Value"), widget=forms.Textarea(attrs={"rows": 2})
+        required=False, label=_("Value"), widget=StatementValueWidget(attrs={"rows": 2})
     )
 
     _CURIE = re.compile(r"(?P<prefix>[^:/\s]+):[\w.-]+")
 
     def __init__(self, *args, **kwargs):
-        """Offer the configured languages, and the row's own when it is not among them."""
+        """Offer the configured languages, and lay the row out: key and language, then value."""
         super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.disable_csrf = True
+        self.helper.layout = Layout(
+            Row(
+                # django-mvp's stylesheet has no utility for a 3:1 split, so the ratio is inline.
+                Column("predicate", style="flex: 3 1 0%"),
+                Column(
+                    "language",
+                    style="flex: 1 1 0%",
+                    **{"x-show": "kind === 'literal'"},
+                ),
+                css_class="sm:flex-row",
+            ),
+            "value",
+        )
         choices = [("", _("None"))] + [
             (code, language_name(code)) for code, _name in settings.LANGUAGES
         ]

@@ -1,0 +1,22 @@
+{% load i18n crispy_forms_tags %}
+{% comment %}
+  One statement. Its first element is the row, because mvpFormset clones the empty row's first
+  element when a row is added, and no <template> may sit inside it. The row's behaviour is
+  dcvStatement, in controlled_vocabularies/js/statement-row.js.
+{% endcomment %}
+<div class="space-y-4"
+     x-data="mvpFormsetRow({{ form.DELETE.value|yesno:'true,false,false' }})"
+     x-show="!removed">
+  {% if not first %}<c-mvp.rule only />{% endif %}
+  <div class="flex items-start gap-2" x-data="dcvStatement">
+    <div class="min-w-0 flex-1">{% crispy form form.helper %}</div>
+    <input type="hidden" name="{{ form.DELETE.html_name }}" :value="removed ? 'on' : ''">
+    <c-button type="button"
+              size="sm"
+              ghost
+              icon="trash"
+              aria-label="{% translate "Remove statement" %}"
+              class="mt-6 text-error"
+              x-on:click="remove()" only />
+  </div>
+</div>
