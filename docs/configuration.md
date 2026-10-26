@@ -15,7 +15,9 @@ CONTROLLED_VOCABULARIES = {
 Each `source` is a local path or an `http://`/`https://` address, with an optional `format` for a
 source whose name does not carry its serialization. Prefer a file shipped with the project: a
 deploy then never depends on a remote server being up. The setting is optional, and a site that
-loads its vocabularies with `import_skos` alone can leave it out.
+loads its vocabularies with `import_skos` alone can leave it out. Code of your own reads the
+declarations with `controlled_vocabularies.conf.get_declared_vocabularies()`, which returns the
+setting, or an empty dict when it is not set.
 [Importing a published vocabulary](importing.md) covers the command and what each run does.
 
 ## Identifiers
