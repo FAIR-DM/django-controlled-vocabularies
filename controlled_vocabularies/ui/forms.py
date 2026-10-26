@@ -128,8 +128,11 @@ class StatementForm(forms.Form):
         label=_("Predicate"),
         help_text=_("Pick a known term, or enter a prefixed name or a full address."),
     )
-    value = forms.CharField(required=False, label=_("Value"))
     language = forms.ChoiceField(required=False, label=_("Language"), choices=())
+    # A text area for every predicate, since a description or a note runs to sentences.
+    value = forms.CharField(
+        required=False, label=_("Value"), widget=forms.Textarea(attrs={"rows": 2})
+    )
 
     _CURIE = re.compile(r"(?P<prefix>[^:/\s]+):[\w.-]+")
 
