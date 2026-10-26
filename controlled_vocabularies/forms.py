@@ -15,7 +15,7 @@ from django_tomselect.widgets import TomSelectModelMultipleWidget, TomSelectMode
 
 from .admin import related_field_widget_wrapper_class
 from .checks import AUTOCOMPLETE_URL_NAME
-from .models import Concept
+from .models import Record
 
 _MISSING_ROUTE_MESSAGE = _(
     "controlled_vocabularies's URL configuration is not included in the project's "
@@ -50,8 +50,8 @@ class ConceptWidgetValidationMixin:
         # Built from the model field directly: the library's own version reads an ambient request,
         # whose GET carries no `field=` reference on a form POST, so every submission would fail.
         if self.model_field is None:
-            return Concept.objects.none()
-        return Concept.objects.complex_filter(self.model_field.get_limit_choices_to())
+            return Record.objects.none()
+        return Record.objects.complex_filter(self.model_field.get_limit_choices_to())
 
 
 class ConceptWidgetReferenceMixin:
@@ -89,7 +89,7 @@ class ConceptWidgetDisplayMixin:
         """Resolve the selected options against every concept, not the restricted queryset."""
         # Otherwise a concept the field no longer admits drops out of the render and is lost on
         # the next save. The shadow lasts one call, so validation still sees the restriction.
-        self.get_queryset = lambda: Concept.objects.all()
+        self.get_queryset = lambda: Record.objects.all()
         try:
             return super()._get_selected_options(value, autocomplete_view)
         finally:
@@ -98,7 +98,7 @@ class ConceptWidgetDisplayMixin:
     def get_label_for_object(self, obj, autocomplete_view):
         """Label a concept with its ``display_label()``."""
         # display_label is a method, so the library's getattr would render the bound method.
-        if isinstance(obj, Concept):
+        if isinstance(obj, Record):
             return escape(obj.display_label())
         return super().get_label_for_object(obj, autocomplete_view)
 

@@ -3,34 +3,24 @@
 from typing import TYPE_CHECKING
 
 from django.apps import apps
-from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import OuterRef, Q, QuerySet, Subquery
-from django.utils.translation import get_language
+from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
 from django_tomselect.autocompletes import AutocompleteModelView
 
 from .fields import ConceptFieldMixin
-from .models import Collection, CollectionMember, Concept, ConceptLabel
+from .models import Record
 
 if TYPE_CHECKING:
     # Guarded the same way as the base view's import of it.
     from django_tomselect._types import PaginatedResponse
 
-#: Label kinds a typed string matches in the active language. The default-language ``label``
-#: column is matched separately, whatever the active language.
-_SEARCHED_LABEL_KINDS = [
-    ConceptLabel.Kind.PREFERRED,
-    ConceptLabel.Kind.ALTERNATIVE,
-    ConceptLabel.Kind.HIDDEN,
-]
-
 
 class ConceptAutocompleteView(AutocompleteModelView):
-    """Search-as-you-type endpoint for :class:`~controlled_vocabularies.models.Concept`."""
+    """Search-as-you-type endpoint for the concepts of :class:`~controlled_vocabularies.models.Record`."""
 
-    model = Concept
+    model = Record
     page_size = 20
-    ordering = ("label", "pk")
+    ordering = ("pref_label", "pk")
     allow_anonymous = True
     allowed_filter_fields = []
     allowed_ordering_fields = []
@@ -38,27 +28,17 @@ class ConceptAutocompleteView(AutocompleteModelView):
     virtual_fields = ["display_label", "vocabulary"]
 
     def search(self, queryset: QuerySet, query: str) -> QuerySet:
-        """Match the query against a concept's names in the active language and its default label."""
-        # Replaces search_lookups, a flat list of lookups that cannot say "active-language labels
-        # of three kinds, or the default-language column". distinct() keeps a concept that
-        # matches several labels to one row (FS-011).
+        """Match the query against every label of a concept and its preferred label."""
+        # Replaces search_lookups, a flat list of lookups that cannot say "either column".
         if not query:
             return queryset
-        active_language = get_language() or settings.LANGUAGE_CODE
         return queryset.filter(
-            Q(label__icontains=query)
-            | Q(
-                labels__language=active_language,
-                labels__kind__in=_SEARCHED_LABEL_KINDS,
-                labels__text__icontains=query,
-            )
-        ).distinct()
+            Q(search_text__icontains=query) | Q(pref_label__icontains=query)
+        )
 
     def hook_queryset(self, queryset):
         """Preload what results need, then narrow to the requested field declaration's restriction."""
-        # display_label() walks the labels, so without the prefetch a page costs a query per row.
-        queryset = queryset.select_related("scheme").prefetch_related("labels")
-        return self._restrict_to_declaration(queryset)
+        return self._restrict_to_declaration(queryset.select_related("scheme"))
 
     def _resolve_declared_field(self) -> ConceptFieldMixin | None:
         """Return the concept field the request's ``field=`` reference names.
@@ -87,7 +67,7 @@ class ConceptAutocompleteView(AutocompleteModelView):
         """Narrow a queryset to what the requested field declaration admits.
 
         Args:
-            queryset: The concepts to narrow.
+            queryset: The records to narrow.
 
         Returns:
             The narrowed queryset, or an empty one when the declaration does not resolve,
@@ -101,8 +81,7 @@ class ConceptAutocompleteView(AutocompleteModelView):
 
     def order_queryset(self, queryset: QuerySet) -> QuerySet:
         """Order by an ordered collection's own sequence while the search box is empty."""
-        # order_queryset() is the hook the base get_queryset() calls; the library has no
-        # apply_ordering(). A typed query wants relevance, not the curator's browsing sequence.
+        # A typed query wants relevance, not the curator's browsing sequence.
         if self.query:
             return super().order_queryset(queryset)
 
@@ -111,21 +90,21 @@ class ConceptAutocompleteView(AutocompleteModelView):
             return super().order_queryset(queryset)
 
         (vocabulary,) = field.vocabulary
-        is_ordered_collection = Collection.objects.filter(
-            slug=field.collection, scheme__slug=vocabulary, ordered=True
-        ).exists()
-        if not is_ordered_collection:
+        collection = Record.objects.filter(
+            scheme__slug=vocabulary,
+            slug=field.collection,
+            type=Record.Type.ORDERED_COLLECTION,
+        ).first()
+        if collection is None:
             return super().order_queryset(queryset)
 
-        # A subquery rather than a collection_memberships__ join: a concept can belong to several
-        # collections, and the join would duplicate rows in a queryset filtered with a bare
-        # complex_filter() (FS-016).
-        position = Subquery(
-            CollectionMember.objects.filter(
-                concept=OuterRef("pk"),
-                collection__slug=field.collection,
-                collection__scheme__slug=vocabulary,
-            ).values("position")[:1]
+        position = Case(
+            *(
+                When(uri=uri, then=Value(index))
+                for index, uri in enumerate(collection.linked_uris("skos:memberList"))
+            ),
+            default=Value(-1),
+            output_field=IntegerField(),
         )
         # Annotated so mypy can resolve the ``Self`` that QuerySet.annotate() returns.
         annotated: QuerySet = queryset.annotate(_collection_position=position)
@@ -159,7 +138,7 @@ class ConceptAutocompleteView(AutocompleteModelView):
             {
                 "id": concept.pk,
                 "display_label": concept.display_label(),
-                "vocabulary": concept.scheme.name,
+                "vocabulary": concept.scheme.display_label(),
             }
             for concept in results
         ]
