@@ -37,9 +37,20 @@ All notable changes to this project are documented in this file. The format foll
   notations and mappings are no longer discarded. A run is refused only for a subject with no usable
   identifier (a blank node, or a `javascript:`, `data:` or `vbscript:` URI) or a file whose
   vocabulary cannot be determined.
-- **Breaking:** `ImportReport` has `created`, `updated`, `absent_from_source` and `fatal`. Its
-  `set_aside` and `normalized` buckets, `SetAsideReason`, `NormalizedReason` and their entries are
-  gone, and the `import_skos` command no longer prints counts or reasons for them.
+- An import leaves alone a concept the file places in another vocabulary, and a record
+  another vocabulary holds unless the file places it in this one. Both are named in the report's new
+  `held_elsewhere` list.
+- A blank node a statement points at is stored embedded in the entry, holding its own statements,
+  so a skos-xl label or a creator given as a blank node is kept.
+- An identifier longer than the 500 characters the `uri` column holds refuses the run with
+  `FatalReason.IDENTIFIER_TOO_LONG`, before anything is written.
+- A vocabulary's page lists top concepts, and its rows name a broader concept, when the hierarchy is
+  stated with `skos:narrower` as well as with `skos:broader`.
+- An identifier is shown as a link on the browsing pages only when it is an `http` or `https`
+  address. A `urn:` or any other identifier is shown as text.
+- **Breaking:** `ImportReport` has `created`, `updated`, `absent_from_source`, `held_elsewhere` and
+  `fatal`. Its `set_aside` and `normalized` buckets, `SetAsideReason`, `NormalizedReason` and their
+  entries are gone, and the `import_skos` command no longer prints counts or reasons for them.
 - The package's stated scope is importing published vocabularies and referencing their concepts
   from your own models. Authoring vocabularies and publishing them as RDF are set aside until a
   project needs them. See [GOALS.md](GOALS.md) and [the roadmap](docs/ROADMAP.md).

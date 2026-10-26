@@ -89,8 +89,20 @@ indistinguishably, and a slug shared across vocabularies resolves to exactly one
 `{scheme.local_url}/collection/{slug}`. The routes are therefore:
 
 ```python
-path("<str:slug>/collection/<str:collection_slug>/", CollectionDetailView.as_view(), name="collection-detail"),
-path("<str:slug>/<str:concept_slug>/", ConceptDetailView.as_view(), name="concept-detail"),
+(
+    path(
+        "<str:slug>/collection/<str:collection_slug>/",
+        CollectionDetailView.as_view(),
+        name="collection-detail",
+    ),
+)
+(
+    path(
+        "<str:slug>/<str:concept_slug>/",
+        ConceptDetailView.as_view(),
+        name="concept-detail",
+    ),
+)
 ```
 
 `<str:…>` rather than `<slug:…>` for the same reason the vocabulary route uses it: the models

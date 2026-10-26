@@ -5,11 +5,13 @@ The surface this feature fixes. A vocabulary and a record each have one `uri`.
 ## The identifier
 
 ```python
-scheme.uri            # -> str   the vocabulary's identity
-record.uri            # -> str   the concept's or collection's identity
+scheme.uri  # -> str   the vocabulary's identity
+record.uri  # -> str   the concept's or collection's identity
 
-Record.objects.get(uri=uri)           # -> Record, raises Record.DoesNotExist
-ConceptScheme.objects.get(uri=uri)    # -> ConceptScheme, raises ConceptScheme.DoesNotExist
+Record.objects.get(uri=uri)  # -> Record, raises Record.DoesNotExist
+ConceptScheme.objects.get(
+    uri=uri
+)  # -> ConceptScheme, raises ConceptScheme.DoesNotExist
 ```
 
 `uri` is a `CharField` of at most 500 characters, unique for each model, and indexed by that
@@ -20,30 +22,41 @@ the first save.
 
 ```python
 # A row that arrived from elsewhere keeps its identifier, verbatim and forever.
-c = Record.objects.create(scheme=s, type=Record.Type.CONCEPT,
-                          uri="http://vocabs.example.org/rock/granite",
-                          data={"skos:prefLabel": [{"@value": "Granite", "@language": "en"}]})
-c.uri                      # "http://vocabs.example.org/rock/granite"
-c.slug                     # "granite" — from the last segment of the URI, once
-c.data = {"skos:prefLabel": [{"@value": "Granite (coarse)", "@language": "en"}]}; c.save()
-c.uri                      # unchanged
+c = Record.objects.create(
+    scheme=s,
+    type=Record.Type.CONCEPT,
+    uri="http://vocabs.example.org/rock/granite",
+    data={"skos:prefLabel": [{"@value": "Granite", "@language": "en"}]},
+)
+c.uri  # "http://vocabs.example.org/rock/granite"
+c.slug  # "granite" — from the last segment of the URI, once
+c.data = {"skos:prefLabel": [{"@value": "Granite (coarse)", "@language": "en"}]}
+c.save()
+c.uri  # unchanged
 # and unchanged again after settings.CONTROLLED_VOCABULARIES_BASE_URI changes.
 
 # A row created without one is given its identifier once, on the first save.
-d = Record.objects.create(scheme=s, type=Record.Type.CONCEPT,
-                          data={"skos:prefLabel": [{"@value": "Basalt", "@language": "en"}]})
-d.uri                      # "{base}/{scheme-slug}/basalt"
-d.slug                     # "basalt"
+d = Record.objects.create(
+    scheme=s,
+    type=Record.Type.CONCEPT,
+    data={"skos:prefLabel": [{"@value": "Basalt", "@language": "en"}]},
+)
+d.uri  # "{base}/{scheme-slug}/basalt"
+d.slug  # "basalt"
 # renaming it, or changing the configured base address, and saving does not move d.uri.
 
 # An imported row still has a place on this site.
-reverse("controlled_vocabularies_ui:concept-detail",
-        kwargs={"slug": s.slug, "concept_slug": c.slug})   # "{mount}/{scheme-slug}/granite"
+reverse(
+    "controlled_vocabularies_ui:concept-detail",
+    kwargs={"slug": s.slug, "concept_slug": c.slug},
+)  # "{mount}/{scheme-slug}/granite"
 
 # Lookup answers for both kinds.
-Record.objects.get(uri="http://vocabs.example.org/rock/granite")   # -> c
-Record.objects.get(uri=d.uri)                                      # -> d
-Record.objects.get(uri="http://vocabs.example.org/nothing")        # raises Record.DoesNotExist
+Record.objects.get(uri="http://vocabs.example.org/rock/granite")  # -> c
+Record.objects.get(uri=d.uri)  # -> d
+Record.objects.get(
+    uri="http://vocabs.example.org/nothing"
+)  # raises Record.DoesNotExist
 ```
 
 ## Import refusals

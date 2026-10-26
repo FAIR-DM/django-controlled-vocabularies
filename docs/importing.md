@@ -49,6 +49,10 @@ and `xsd`. Each value is a list of entries in the shape JSON-LD uses:
 - A literal is `{"@value": ...}`, with an `@language` when it has one, or an `@type` when it has a
   datatype other than a plain string.
 - A link to another resource is `{"@id": ...}`.
+- A blank node has no identifier that survives a re-import, so it is stored embedded in the entry,
+  as an object holding its own statements in the same shape:
+  `{"http://www.w3.org/2008/05/skos-xl#literalForm": [{"@value": "Granite", "@language": "en"}]}`.
+  A concept's page shows it as one line of text.
 - A list under `skos:memberList` keeps its sequence. Every other list is stored in a fixed order,
   so importing the same file again stores the same text.
 
@@ -59,8 +63,14 @@ setting plays no part: a vocabulary published in sixty languages imports into al
 
 A subject becomes a record when the file types it as `skos:Concept`, `skos:Collection` or
 `skos:OrderedCollection`. A subject with no type that states `skos:inScheme` or `skos:topConceptOf`
-towards the vocabulary becomes a concept. Any other subject in the file is not a record, and the
-statements it makes are not kept.
+towards the vocabulary, or that the vocabulary names with `skos:hasTopConcept`, becomes a concept.
+Any other subject in the file is not a record, and the statements it makes are not kept.
+
+A file often describes a concept of another vocabulary it maps to. A subject the file places in
+another vocabulary, with `skos:inScheme`, `skos:topConceptOf` or that vocabulary's
+`skos:hasTopConcept`, is left to that vocabulary's own import. So is a record another vocabulary
+already holds, unless the file places it in this one. Both are named in the report's
+`held_elsewhere`, and neither is changed.
 
 Two columns are copies, filled in from the document each time a row is saved:
 
@@ -128,8 +138,9 @@ is correct and stays correct, which is what every consumer of a URL needs from i
 readable address that can move under data already pointing at it is worse than a stable one that
 cannot.
 
-A record whose URI is already held by another vocabulary moves into the vocabulary being imported,
-and takes a new slug there, because a URI is held once.
+A record another vocabulary holds moves into the vocabulary being imported only when the file places
+it there with `skos:inScheme`, `skos:topConceptOf` or `skos:hasTopConcept`. It takes a new slug in
+its new vocabulary, because a URI is held once.
 
 ## The report
 
@@ -138,6 +149,8 @@ inspect what happened without parsing anything:
 
 - `created` / `updated` — the URIs of every vocabulary and record the run wrote.
 - `absent_from_source` — the URIs of records that exist here but that the file no longer mentions.
+- `held_elsewhere` — the URIs of subjects the file describes that belong to another vocabulary, left
+  untouched.
 - `fatal` — populated only on a failed run: a `FatalFinding` per reason the whole import was
   refused. A failed run raises `SkosImportFailed`, carrying this same report, and leaves the
   database exactly as it was before the run started.
@@ -149,11 +162,13 @@ A run is refused for one of these reasons, each a member of `FatalReason`:
 - `REFUSED_IDENTITY` — a concept, a collection or the vocabulary has an identifier that starts with
   `javascript:`, `data:` or `vbscript:`. A stored identifier is rendered as a link, and these can
   carry executable content.
+- `IDENTIFIER_TOO_LONG` — an identifier is longer than the 500 characters the `uri` column holds.
 - `VOCABULARY_UNDETERMINED` — the file declares no vocabulary of its own and none was named.
 - `VOCABULARY_TARGET_MISMATCH` — the file declares a vocabulary other than the one named.
 - `VOCABULARY_AMBIGUOUS` — the file declares more than one vocabulary and none was named.
 
-Nothing else refuses a run. A run either succeeds in full or changes nothing: every problem in a
+Nothing else in this list refuses a run, and a file that cannot be read as SKOS at all raises
+`SkosImportError` (below). A run either succeeds in full or changes nothing: every problem in a
 file is collected before any of it is written, and a fatal one rolls the whole run back. The
 `import_skos` management command wraps this for use from a terminal (see below). There is no
 web-facing entry point yet.
@@ -178,8 +193,8 @@ reference, imports normally.
 
 `import_skos()` raises one of two exceptions, both `ValidationError` subclasses carrying a
 translatable message. `SkosImportError` covers every reason a file cannot be turned into usable SKOS
-at all: not found, not in a supported serialization, unparseable, or refused by the safety scan
-above. `SkosImportFailed` covers the case where the file parses but the run collects one or more
+at all: not found, not in a supported serialization, unparseable, a `skos:memberList` whose
+`rdf:rest` chain loops back on itself, or refused by the safety scan above. `SkosImportFailed` covers the case where the file parses but the run collects one or more
 fatal problems, and carries the same `ImportReport` its `fatal` bucket names them in.
 `UnsafeRdfXmlError` and `UnsafeJsonLdError`, the two exceptions the safety scan itself raises, are
 exported `SkosImportError` subclasses, so code that only catches `(SkosImportError,
@@ -208,7 +223,8 @@ the first import created rather than making a second copy.
   then leaves the database exactly as it was beforehand — useful for seeing what a file would
   create and update before running it for real.
 - `--verbosity`, Django's own option, prints how many records were created, updated, and absent
-  from the source, then names each absent record. A dry run adds a line saying nothing was kept. At
+  from the source, then names each absent record, then how many belong to another vocabulary and
+  were left untouched, naming each. A dry run adds a line saying nothing was kept. At
   `0` nothing prints at all, as with any Django command.
 
 A refusal exits non-zero and prints every reason the run was refused.

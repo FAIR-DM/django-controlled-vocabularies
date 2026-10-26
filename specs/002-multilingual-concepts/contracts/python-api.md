@@ -20,7 +20,12 @@ Names and descriptions live in `record.data`, a mapping of predicate to a list o
         {"@value": "Wärmefluss", "@language": "de"},
     ],
     "skos:altLabel": [{"@value": "Terrestrial heat flow", "@language": "en"}],
-    "skos:definition": [{"@value": "The rate of heat loss through the Earth's surface.", "@language": "en"}],
+    "skos:definition": [
+        {
+            "@value": "The rate of heat loss through the Earth's surface.",
+            "@language": "en",
+        }
+    ],
 }
 ```
 

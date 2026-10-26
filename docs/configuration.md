@@ -13,8 +13,9 @@ CONTROLLED_VOCABULARIES_BASE_URI = "https://vocab.example.org/vocabularies"
 
 If you leave it unset, the app falls back to `http://localhost:8000/vocabularies` so it still
 runs out of the box. Set a real address before you rely on it anywhere it is seen. A vocabulary's
-composed URI is `{base}/{vocabulary-slug}`, and a concept's or collection's is
-`{base}/{vocabulary-slug}/{record-slug}`.
+composed URI is `{base}/{vocabulary-slug}`, a concept's is `{base}/{vocabulary-slug}/{record-slug}`,
+and a collection's is `{base}/{vocabulary-slug}/collection/{record-slug}`, matching the addresses
+their pages are served at.
 
 A row's slug is made once, when the row is first saved, and is never changed afterwards. For a row
 that arrives with a URI, the slug comes from the last part of that URI: its fragment where it has

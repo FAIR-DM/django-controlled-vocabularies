@@ -18,7 +18,7 @@ and carries:
 - its description, cut to 30 words
 - how many concepts it holds, how many collections when it has any, and when it was last updated
   when it gives a date
-- its identifier (`ConceptScheme.uri`), as a link
+- its identifier (`ConceptScheme.uri`), as a link when it is a web address
 
 A site holding no vocabularies says so rather than showing an empty list.
 
@@ -200,6 +200,7 @@ Each row in the list carries:
 - its label, linking to [the concept's own page](#a-concepts-own-page)
 - its definition, in the reader's language or the vocabulary's default language, cut to 30 words
 - its identifier (`Record.uri`), as a link to that identifier itself rather than to the page here
+  when it is a web address
 - the collections that hold it, each linking to [the collection's own page](#a-collections-own-page)
 
 Anything a concept does not have is left out of its row. Alternative and hidden labels are never
@@ -208,14 +209,16 @@ state, and the rest of the page still renders.
 
 Beside the list, a side panel describes the vocabulary itself:
 
-- its identifier, as a link
+- its identifier, as a link when it is a web address
 - its default language
 - its publication details: its publisher, its creator, its licence, its version and when it last
   changed (see "The vocabulary's own details" in [importing](importing.md#the-vocabularys-own-details)).
   A detail held as a web address is a link to it, and a detail the vocabulary does not have is shown
   as a dash.
 - how many concepts it holds
-- its top concepts, the ones with no broader concept, each linking to its page. A vocabulary with
+- its top concepts, the ones with no broader concept, each linking to its page. A concept has a
+  broader concept when it states one with `skos:broader` or another concept names it with
+  `skos:narrower`. A vocabulary with
   no broader/narrower relations at all lists none, since every concept would be listed twice
 - its collections (`skos:Collection` / `skos:OrderedCollection`), each linking to its page, with
   how many members it has and whether those members carry a deliberate order. A vocabulary
@@ -330,7 +333,9 @@ language, one language at a time, never every language a value was recorded in, 
 that carry no language. Every other predicate shows all its values.
 
 The concept's own identifier is shown as a link, the same treatment its vocabulary's own page gives
-a vocabulary's: for an imported concept it is its publisher's identifier. The page is
+a vocabulary's: for an imported concept it is its publisher's identifier. An identifier is a link
+only when it is an `http` or `https` address. One in any other scheme, such as a `urn:`, is shown as
+text, so nothing an imported file names is handed to another program by a click. The page is
 **read-only**, it carries no editing or deletion control, and it has no permission rule beyond what
 the project mounting these routes chooses to add. Concepts are added by [importing](importing.md).
 

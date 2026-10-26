@@ -30,8 +30,20 @@ template carrying an in-site link.
 The two `path()` declarations exactly as plan.md §2 gives them, the collection route first:
 
 ```python
-path("<str:slug>/collection/<str:collection_slug>/", CollectionDetailView.as_view(), name="collection-detail"),
-path("<str:slug>/<str:concept_slug>/", ConceptDetailView.as_view(), name="concept-detail"),
+(
+    path(
+        "<str:slug>/collection/<str:collection_slug>/",
+        CollectionDetailView.as_view(),
+        name="collection-detail",
+    ),
+)
+(
+    path(
+        "<str:slug>/<str:concept_slug>/",
+        ConceptDetailView.as_view(),
+        name="concept-detail",
+    ),
+)
 ```
 
 `<str:…>` and not `<slug:…>`, for the reason the vocabulary route already documents: the models

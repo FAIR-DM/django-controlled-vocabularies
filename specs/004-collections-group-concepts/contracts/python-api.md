@@ -8,7 +8,7 @@ The programmatic surface a downstream developer touches. Acceptance tests drive 
 ```python
 c = Record.objects.create(
     scheme=vocab,
-    type=Record.Type.COLLECTION,                   # unordered
+    type=Record.Type.COLLECTION,  # unordered
     data={
         "skos:prefLabel": [{"@value": "Common igneous rocks", "@language": "en"}],
         "skos:member": [{"@id": granite.uri}, {"@id": basalt.uri}],
@@ -16,15 +16,15 @@ c = Record.objects.create(
 )
 o = Record.objects.create(
     scheme=vocab,
-    type=Record.Type.ORDERED_COLLECTION,           # ordered
+    type=Record.Type.ORDERED_COLLECTION,  # ordered
     data={
         "skos:prefLabel": [{"@value": "Reading order", "@language": "en"}],
         "skos:memberList": [{"@id": basalt.uri}, {"@id": granite.uri}],
     },
 )
-c.uri        # "{scheme.uri}/{slug}" when created without one — composed once, on the first save
-c.slug       # derived from its name on the first save; unique among the scheme's records
-c.is_collection   # True for either collection type
+c.uri  # "{scheme.uri}/{slug}" when created without one — composed once, on the first save
+c.slug  # derived from its name on the first save; unique among the scheme's records
+c.is_collection  # True for either collection type
 ```
 
 - Creating two records of one scheme whose names slugify to the same value takes a numeric suffix for
