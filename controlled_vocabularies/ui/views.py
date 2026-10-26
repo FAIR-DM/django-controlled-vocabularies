@@ -1,6 +1,6 @@
 """Views for the opt-in vocabulary-browsing front end."""
 
-from django.db.models import Count, F, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import Http404
 from django.urls import reverse
@@ -9,7 +9,7 @@ from django.utils.translation import get_language, get_language_info
 from django.utils.translation import gettext_lazy as _
 from mvp.views import MVPDetailView, MVPListView
 
-from controlled_vocabularies.models import ConceptScheme, Record
+from controlled_vocabularies.models import ConceptScheme, Link, Record
 from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
 from controlled_vocabularies.ui.rows import PropertyRows, PublicationDetails
 
@@ -232,14 +232,7 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
             context["language_name"] = vocabulary.default_language
         concepts = vocabulary.records.filter(type=Record.Type.CONCEPT)
         context["concept_count"] = concepts.count()
-        # A concept with no broader concept is a way into the hierarchy. A flat vocabulary has
-        # nothing but top concepts, so listing them would only repeat the concept list.
-        self.parents = self.parent_uris(concepts)
-        context["top_concepts"] = (
-            concepts.exclude(uri__in=self.parents).order_by(Lower("pref_label"), "pk")
-            if self.parents
-            else []
-        )
+        context["top_concepts"] = self.top_concepts(concepts)
         collections = list(
             vocabulary.records.filter(type__in=Record.COLLECTION_TYPES).order_by(
                 Lower("pref_label"), "pk"
@@ -251,29 +244,41 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
         self.describe_rows(context, collections)
         return context
 
-    @staticmethod
-    def parent_uris(concepts):
-        """Map each concept with a broader concept to the first one, from either end.
+    def concept_links(self):
+        """Return the links the vocabulary's concepts state.
+
+        Returns:
+            The ``Link`` rows whose source is a concept of the vocabulary.
+        """
+        return Link.objects.filter(
+            source__scheme=self.vocabulary, source__type=Record.Type.CONCEPT
+        )
+
+    def top_concepts(self, concepts):
+        """Return the concepts with no broader concept, from either end.
 
         A file may state a hierarchy only with ``skos:broader``, only with
-        ``skos:narrower``, or with both, as a concept's own page reads it.
+        ``skos:narrower``, or with both, as a concept's own page reads it. A flat
+        vocabulary has nothing but top concepts, so listing them would only repeat the
+        concept list.
 
         Args:
             concepts: The vocabulary's concepts.
 
         Returns:
-            The URI of each concept that has a broader concept, mapped to that concept's
-            URI.
+            The concepts that state no ``skos:broader`` and that no concept names with
+            ``skos:narrower``, by name, or none when the vocabulary states no hierarchy.
         """
-        parents = {}
-        for parent in concepts.filter(data__has_key="skos:narrower"):
-            for child in parent.linked_uris("skos:narrower"):
-                parents.setdefault(child, parent.uri)
-        for child in concepts.filter(data__has_key="skos:broader"):
-            stated = child.linked_uris("skos:broader")
-            if stated:
-                parents[child.uri] = stated[0]
-        return parents
+        links = self.concept_links()
+        if not links.filter(predicate__in=["skos:broader", "skos:narrower"]).exists():
+            return []
+        states_broader = links.filter(source=OuterRef("pk"), predicate="skos:broader")
+        named_narrower = links.filter(target=OuterRef("uri"), predicate="skos:narrower")
+        return (
+            concepts.exclude(Exists(states_broader))
+            .exclude(Exists(named_narrower))
+            .order_by(Lower("pref_label"), "pk")
+        )
 
     def describe_rows(self, context, collections):
         """Give each concept on the page what its row names beyond its own label.
@@ -290,11 +295,31 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
         members = {
             collection.pk: set(collection.member_uris()) for collection in collections
         }
-        broader = {concept: self.parents.get(concept.uri) for concept in concepts}
+        stated = {
+            concept: next(iter(concept.linked_uris("skos:broader")), None)
+            for concept in concepts
+        }
+        # A concept that states no parent is placed by a concept naming it narrower.
+        naming = (
+            self.concept_links()
+            .filter(
+                target__in={c.uri for c, parent in stated.items() if parent is None},
+                predicate="skos:narrower",
+            )
+            .order_by("source_id", "pk")
+            .values_list("target", "source__uri")
+        )
+        named_by: dict[str, str] = {}
+        for target, parent_uri in naming:
+            named_by.setdefault(target, parent_uri)
+        broader = {
+            concept: parent or named_by.get(concept.uri)
+            for concept, parent in stated.items()
+        }
         labels = {
             record.uri: record.display_label()
             for record in Record.objects.filter(
-                scheme=self.vocabulary, uri__in=set(broader.values())
+                scheme=self.vocabulary, uri__in=set(broader.values()) - {None}
             )
         }
         for concept in concepts:
