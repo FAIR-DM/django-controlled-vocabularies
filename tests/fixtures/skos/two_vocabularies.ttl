@@ -4,11 +4,8 @@
 # A file declaring two vocabularies with an equal claim on its concepts: one
 # concept belongs to each. Nothing in the file says which one the import is
 # about, so a run naming no target is refused rather than resolved by the
-# alphabet. Naming either vocabulary as the target resolves it.
-#
-# Contrast tests/fixtures/skos/mixed_scheme_membership.ttl, which also types
-# two vocabularies but is not ambiguous — three of its concepts belong to
-# "minerals" and one claims a foreign vocabulary, which is set aside.
+# alphabet. Naming one of them as the target refuses the other as a mismatch,
+# since its own statements would have nowhere to go.
 
 <http://example.org/alpha/>
     a skos:ConceptScheme ;

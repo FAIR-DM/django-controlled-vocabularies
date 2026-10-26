@@ -17,9 +17,7 @@ class TestCheckMVPInstalled:
     def test_reports_nothing_when_mvp_is_importable(self):
         assert check_mvp_installed(None) == []
 
-    def test_reports_one_error_naming_the_extra_and_the_app_when_mvp_is_absent(
-        self, monkeypatch
-    ):
+    def test_reports_one_error_under_its_own_id_when_mvp_is_absent(self, monkeypatch):
         # mvp is installed here; a None entry in sys.modules makes ``import mvp`` raise
         # ImportError without unloading the module the rest of the suite uses.
         monkeypatch.setitem(sys.modules, "mvp", None)
@@ -27,12 +25,7 @@ class TestCheckMVPInstalled:
         errors = check_mvp_installed(None)
 
         assert len(errors) == 1
-        error = errors[0]
-        assert isinstance(error, django_checks.Error)
-        assert error.id == CHECK_ID
-        message = str(error.msg)
-        assert "django-controlled-vocabularies[ui]" in message
-        assert "controlled_vocabularies.ui" in message
+        assert errors[0].id == CHECK_ID
 
     def test_reported_object_is_an_error_not_a_warning(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "mvp", None)

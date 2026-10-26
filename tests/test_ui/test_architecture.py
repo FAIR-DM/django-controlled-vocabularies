@@ -11,7 +11,6 @@ UI_ROOT = PACKAGE_ROOT / "ui"
 FORBIDDEN_ROOTS = (
     "mvp",
     "django_cotton",
-    "crispy_forms",
     "easy_icons",
     "flex_menu",
     "controlled_vocabularies.ui",

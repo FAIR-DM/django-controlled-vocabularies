@@ -16,7 +16,7 @@ from controlled_vocabularies.exchange.safety import (
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "security"
 
 
-def _read(name: str) -> bytes:
+def read_fixture(name: str) -> bytes:
     """Return the bytes of a security fixture file.
 
     Args:
@@ -34,7 +34,7 @@ class TestScanRdfXml:
         # previous one five times, expand ~500 bytes into a single 781,250-character
         # literal.
         with pytest.raises(UnsafeRdfXmlError) as excinfo:
-            scan_rdf_xml(_read("entity_bomb.rdf"))
+            scan_rdf_xml(read_fixture("entity_bomb.rdf"))
         err = excinfo.value
         assert isinstance(err, ValidationError)
         assert isinstance(err.message, Promise), (
@@ -51,7 +51,7 @@ class TestScanRdfXml:
         )
 
     def test_an_ordinary_rdf_xml_document_passes_untouched(self):
-        assert scan_rdf_xml(_read("ordinary.rdf")) is None
+        assert scan_rdf_xml(read_fixture("ordinary.rdf")) is None
 
     def test_a_document_declaring_an_external_entity_is_refused_not_silently_emptied(
         self,
@@ -59,7 +59,7 @@ class TestScanRdfXml:
         # Before the scan this parsed cleanly, the reference resolving to an empty
         # string. Declaring the entity at all is now enough to refuse the document.
         with pytest.raises(UnsafeRdfXmlError) as excinfo:
-            scan_rdf_xml(_read("external_entity.rdf"))
+            scan_rdf_xml(read_fixture("external_entity.rdf"))
         err = excinfo.value
         assert isinstance(err.message, Promise), (
             "external-entity refusal message is not lazily translatable"
@@ -71,7 +71,7 @@ class TestScanRdfXml:
     def test_a_document_referencing_an_external_dtd_subset_is_refused(self):
         # No entity is declared, but the doctype itself points at an external resource.
         with pytest.raises(UnsafeRdfXmlError) as excinfo:
-            scan_rdf_xml(_read("external_dtd.rdf"))
+            scan_rdf_xml(read_fixture("external_dtd.rdf"))
         err = excinfo.value
         assert isinstance(err.message, Promise), (
             "external-DTD refusal message is not lazily translatable"
@@ -85,7 +85,7 @@ class TestScanRdfXml:
 class TestScanJsonLd:
     def test_a_string_context_naming_a_remote_location_is_refused(self):
         with pytest.raises(UnsafeJsonLdError) as excinfo:
-            scan_json_ld(_read("remote_context_string.jsonld"))
+            scan_json_ld(read_fixture("remote_context_string.jsonld"))
         err = excinfo.value
         assert isinstance(err, ValidationError)
         assert isinstance(err.message, Promise), (
@@ -98,13 +98,13 @@ class TestScanJsonLd:
 
     def test_a_remote_string_inside_an_array_context_is_refused(self):
         with pytest.raises(UnsafeJsonLdError) as excinfo:
-            scan_json_ld(_read("remote_context_array.jsonld"))
+            scan_json_ld(read_fixture("remote_context_array.jsonld"))
         err = excinfo.value
         assert err.params == {"context": "http://127.0.0.1:1/x.json"}
         assert err.code == "jsonld_remote_context_forbidden"
 
     def test_an_inline_object_context_is_unaffected(self):
-        assert scan_json_ld(_read("inline_context.jsonld")) is None
+        assert scan_json_ld(read_fixture("inline_context.jsonld")) is None
 
     def test_a_document_with_no_context_at_all_is_unaffected(self):
         assert scan_json_ld(b'{"@id": "http://example.org/rocks/"}') is None
@@ -119,7 +119,7 @@ class TestScanJsonLdRefusesContextImport:
         # A dict @context once bypassed the scan entirely and rdflib resolved its
         # @import.
         with pytest.raises(UnsafeJsonLdError) as excinfo:
-            scan_json_ld(_read("exfil_via_import.jsonld"))
+            scan_json_ld(read_fixture("exfil_via_import.jsonld"))
         err = excinfo.value
         assert isinstance(err, ValidationError)
         assert isinstance(err.message, Promise), (
@@ -133,7 +133,7 @@ class TestScanJsonLdRefusesContextImport:
         # An array @context may mix inline objects with string references, so a dict
         # entry carrying its own @import is the same hole one level deeper.
         with pytest.raises(UnsafeJsonLdError) as excinfo:
-            scan_json_ld(_read("context_import_array.jsonld"))
+            scan_json_ld(read_fixture("context_import_array.jsonld"))
         assert excinfo.value.params == {"context": "exfil_secret.jsonld"}
         assert excinfo.value.code == "jsonld_context_import_forbidden"
 
@@ -141,31 +141,31 @@ class TestScanJsonLdRefusesContextImport:
         # A term definition may carry an @context scoped to that term, which rdflib
         # loads like any other context.
         with pytest.raises(UnsafeJsonLdError) as excinfo:
-            scan_json_ld(_read("context_import_nested_term.jsonld"))
+            scan_json_ld(read_fixture("context_import_nested_term.jsonld"))
         assert excinfo.value.params == {"context": "exfil_secret.jsonld"}
         assert excinfo.value.code == "jsonld_context_import_forbidden"
 
     def test_context_import_on_a_node_inside_graph_is_refused(self):
         # Any node object in @graph may carry its own @context, read the same way.
         with pytest.raises(UnsafeJsonLdError) as excinfo:
-            scan_json_ld(_read("context_import_graph_node.jsonld"))
+            scan_json_ld(read_fixture("context_import_graph_node.jsonld"))
         assert excinfo.value.params == {"context": "exfil_secret.jsonld"}
         assert excinfo.value.code == "jsonld_context_import_forbidden"
 
     def test_an_ordinary_inline_object_context_with_no_import_still_passes(self):
-        assert scan_json_ld(_read("inline_context.jsonld")) is None
+        assert scan_json_ld(read_fixture("inline_context.jsonld")) is None
 
 
 class TestScanJsonLdWalksNestedArrayContexts:
     def test_a_remote_string_inside_a_nested_array_context_is_refused(self):
         with pytest.raises(UnsafeJsonLdError) as excinfo:
-            scan_json_ld(_read("remote_context_nested_array.jsonld"))
+            scan_json_ld(read_fixture("remote_context_nested_array.jsonld"))
         assert excinfo.value.params == {"context": "http://127.0.0.1:1/x.json"}
         assert excinfo.value.code == "jsonld_remote_context_forbidden"
 
     def test_a_context_import_inside_a_nested_array_context_is_refused(self):
         with pytest.raises(UnsafeJsonLdError) as excinfo:
-            scan_json_ld(_read("context_import_nested_array.jsonld"))
+            scan_json_ld(read_fixture("context_import_nested_array.jsonld"))
         assert excinfo.value.params == {"context": "exfil_secret.jsonld"}
         assert excinfo.value.code == "jsonld_context_import_forbidden"
 
@@ -190,7 +190,7 @@ class TestRefusalMessagesUseOnlyNamedPlaceholders:
         self, uses_only_named_placeholders
     ):
         with pytest.raises(UnsafeRdfXmlError) as excinfo:
-            scan_rdf_xml(_read("entity_bomb.rdf"))
+            scan_rdf_xml(read_fixture("entity_bomb.rdf"))
         err = excinfo.value
         assert isinstance(err.message, Promise)
         assert uses_only_named_placeholders(str(err.message))
@@ -205,7 +205,7 @@ class TestRefusalMessagesUseOnlyNamedPlaceholders:
         self, uses_only_named_placeholders
     ):
         with pytest.raises(UnsafeRdfXmlError) as excinfo:
-            scan_rdf_xml(_read("external_dtd.rdf"))
+            scan_rdf_xml(read_fixture("external_dtd.rdf"))
         err = excinfo.value
         assert isinstance(err.message, Promise)
         assert uses_only_named_placeholders(str(err.message))
@@ -218,7 +218,7 @@ class TestRefusalMessagesUseOnlyNamedPlaceholders:
         self, uses_only_named_placeholders
     ):
         with pytest.raises(UnsafeJsonLdError) as excinfo:
-            scan_json_ld(_read("remote_context_string.jsonld"))
+            scan_json_ld(read_fixture("remote_context_string.jsonld"))
         err = excinfo.value
         assert isinstance(err.message, Promise)
         assert uses_only_named_placeholders(str(err.message))

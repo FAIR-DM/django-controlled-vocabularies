@@ -69,13 +69,10 @@ from controlled_vocabularies.models import ConceptScheme
 
 call_command(Command())
 
-authored = ConceptScheme.objects.get(name="Data Collection Methods")
-imported = ConceptScheme.objects.get(static_uri__isnull=False)
+authored = ConceptScheme.objects.get(pref_label="Data Collection Methods")
+imported = ConceptScheme.objects.exclude(pk=authored.pk).get()
 
-assert authored.uri == authored.local_url, authored.uri
 assert authored.uri.startswith(settings.CONTROLLED_VOCABULARIES_BASE_URI), authored.uri
-
-assert imported.uri == imported.static_uri, imported.uri
 assert not imported.uri.startswith(settings.CONTROLLED_VOCABULARIES_BASE_URI), imported.uri
 
 print("DEMO_BASE_ADDRESS_OK")

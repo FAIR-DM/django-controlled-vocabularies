@@ -3,11 +3,10 @@
 import subprocess
 import sys
 
-# Runs in a fresh interpreter because django.setup() runs once per process. Walks the
-# documented instruction end to end: a bare registration would pass a registered-only
-# check yet refuse the form, since slug is required.
+# Runs in a fresh interpreter because django.setup() runs once per process. Submits the
+# admin form end to end, so a registration that is present but refuses the form fails.
 ADMIN_SCRIPT = """
-import os, tempfile
+import json, os, tempfile
 os.environ["DJANGO_SETTINGS_MODULE"] = "demo.settings"
 os.environ["DEMO_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "db.sqlite3")
 import django
@@ -27,11 +26,12 @@ call_command("migrate", verbosity=0)
 client = Client()
 client.force_login(get_user_model().objects.create_superuser("demo", "demo@example.com", "pw"))
 
+document = {"skos:prefLabel": [{"@value": "Added By Hand", "@language": "en"}]}
 add_url = reverse("admin:controlled_vocabularies_conceptscheme_add")
 assert client.get(add_url).status_code == 200, "the admin serves no form for adding a vocabulary"
 
-client.post(add_url, {"name": "Added By Hand", "description": "Typed in.", "default_language": "", "static_uri": ""})
-assert ConceptScheme.objects.filter(name="Added By Hand").exists(), "the submitted form stored nothing"
+client.post(add_url, {"default_language": "en", "data": json.dumps(document)})
+assert ConceptScheme.objects.filter(pref_label="Added By Hand").exists(), "the submitted form stored nothing"
 
 listing = client.get(reverse("controlled_vocabularies_ui:vocabulary-list")).content.decode()
 assert "Added By Hand" in listing, "the hand-added vocabulary is absent from the list"

@@ -35,37 +35,30 @@ def visible_text(element) -> str:
 TEMPLATES_ROOT = (
     Path(__file__).resolve().parents[2] / "controlled_vocabularies" / "ui" / "templates"
 )
-ROW_TEMPLATE_PATH = (
-    TEMPLATES_ROOT / "controlled_vocabularies" / "ui" / "conceptscheme_list_item.html"
-)
-CONCEPT_ROW_TEMPLATE_PATH = (
-    TEMPLATES_ROOT / "controlled_vocabularies" / "ui" / "concept_list_item.html"
-)
-CONCEPTSCHEME_DETAIL_TEMPLATE_PATH = (
-    TEMPLATES_ROOT / "controlled_vocabularies" / "ui" / "conceptscheme_detail.html"
-)
 PROPERTY_ROW_TEMPLATE = "cotton/controlled_vocabularies/property_row.html"
 PROPERTY_ROW_TEMPLATE_PATH = (
     TEMPLATES_ROOT / "cotton" / "controlled_vocabularies" / "property_row.html"
 )
-# Every template that carries an in-site link (FS-015).
-IN_SITE_LINK_TEMPLATE_PATHS = [
-    ROW_TEMPLATE_PATH,
-    CONCEPT_ROW_TEMPLATE_PATH,
-    PROPERTY_ROW_TEMPLATE_PATH,
-]
 # mvp is a namespace package with no __file__, so __path__ is the only way to find it.
 MVP_CSS_PATH = Path(mvp.__path__[0]) / "static" / "css" / "django-mvp.css"
 
+GRANITE_URI = "http://publisher.example.org/concept/granite"
+GRANITE_LINK = {
+    "text": "geology:granite",
+    "uri": GRANITE_URI,
+    "href": "/vocabularies/geology/granite/",
+    "identifier_id": "identifier-0",
+}
+
 # Django syntax stripped before the reader-visible-text scan: comments, blocktrans blocks,
 # any remaining tag (a `{% trans %}` carries its translated text inside the tag) and variables.
-_COMMENT_RE = re.compile(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}", re.DOTALL)
-_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
-_BLOCKTRANS_RE = re.compile(r"{%\s*blocktrans.*?{%\s*endblocktrans\s*%}", re.DOTALL)
-_TAG_RE = re.compile(r"{%.*?%}", re.DOTALL)
-_VAR_RE = re.compile(r"{{.*?}}", re.DOTALL)
-_TEXT_NODE_RE = re.compile(r">([^<{]+)<")
-_WORD_RE = re.compile(r"[A-Za-z]{2,}")
+COMMENT_RE = re.compile(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}", re.DOTALL)
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+BLOCKTRANS_RE = re.compile(r"{%\s*blocktrans.*?{%\s*endblocktrans\s*%}", re.DOTALL)
+TAG_RE = re.compile(r"{%.*?%}", re.DOTALL)
+VAR_RE = re.compile(r"{{.*?}}", re.DOTALL)
+TEXT_NODE_RE = re.compile(r">([^<{]+)<")
+WORD_RE = re.compile(r"[A-Za-z]{2,}")
 
 
 def bare_reader_visible_text_nodes(source: str) -> list[str]:
@@ -80,24 +73,12 @@ def bare_reader_visible_text_nodes(source: str) -> list[str]:
     Returns:
         Fragments containing letters, which a translation tag should have wrapped.
     """
-    stripped = _COMMENT_RE.sub("", source)
-    stripped = _HTML_COMMENT_RE.sub("", stripped)
-    stripped = _BLOCKTRANS_RE.sub("", stripped)
-    stripped = _TAG_RE.sub("", stripped)
-    stripped = _VAR_RE.sub("", stripped)
-    return [node for node in _TEXT_NODE_RE.findall(stripped) if _WORD_RE.search(node)]
-
-
-class TestRowPartialLinksToTheVocabulary:
-    def test_the_row_partial_source_reverses_the_vocabularys_own_route(self):
-        source = ROW_TEMPLATE_PATH.read_text()
-        assert "{% url 'controlled_vocabularies_ui:vocabulary-detail'" in source
-
-    def test_the_row_partial_source_contains_no_local_url_reference(self):
-        # The base address is a public identifier and may point at another site's publisher,
-        # so the in-site link is reversed from the route name instead.
-        source = ROW_TEMPLATE_PATH.read_text()
-        assert "local_url" not in source
+    stripped = COMMENT_RE.sub("", source)
+    stripped = HTML_COMMENT_RE.sub("", stripped)
+    stripped = BLOCKTRANS_RE.sub("", stripped)
+    stripped = TAG_RE.sub("", stripped)
+    stripped = VAR_RE.sub("", stripped)
+    return [node for node in TEXT_NODE_RE.findall(stripped) if WORD_RE.search(node)]
 
 
 class TestRenderedPageLinksToEachVocabulary:
@@ -119,41 +100,6 @@ class TestRenderedPageLinksToEachVocabulary:
             )
 
 
-class TestConceptRowPartialLinksToItsOwnPage:
-    def test_the_row_partial_source_reverses_the_concepts_own_route(self):
-        # The row renders in a fresh context holding only the object, so the address comes
-        # from object.scheme and object.slug alone.
-        source = CONCEPT_ROW_TEMPLATE_PATH.read_text()
-        assert "{% url 'controlled_vocabularies_ui:concept-detail'" in source
-
-    def test_the_row_partial_source_contains_no_local_url_reference(self):
-        source = CONCEPT_ROW_TEMPLATE_PATH.read_text()
-        assert "local_url" not in source
-
-
-class TestConceptSchemeDetailCollectionsLinkToTheirOwnPages:
-    def test_the_page_source_reverses_the_collections_own_route(self):
-        source = CONCEPTSCHEME_DETAIL_TEMPLATE_PATH.read_text()
-        assert "{% url 'controlled_vocabularies_ui:collection-detail'" in source
-
-    def test_the_page_source_contains_no_local_url_reference_for_a_collection(self):
-        source = CONCEPTSCHEME_DETAIL_TEMPLATE_PATH.read_text()
-        assert "local_url" not in source
-
-
-class TestEveryTemplateCarryingAnInSiteLinkContainsNoLocalUrlReference:
-    @pytest.mark.parametrize(
-        "path",
-        IN_SITE_LINK_TEMPLATE_PATHS,
-        ids=lambda p: str(p.relative_to(TEMPLATES_ROOT)),
-    )
-    def test_the_template_source_contains_no_local_url_reference(self, path):
-        # Comment blocks are stripped first: property_row.html explains in a comment why it
-        # avoids local_url.
-        markup = _COMMENT_RE.sub("", path.read_text())
-        assert "local_url" not in markup
-
-
 class TestEveryShippedTemplateWrapsReaderVisibleTextInATranslationTag:
     @pytest.mark.parametrize(
         "path",
@@ -169,7 +115,11 @@ class TestPropertyRowRendersAPlainValue:
     def test_emits_a_dt_dd_pair_carrying_the_term_and_the_value(self):
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
-            {"term": "skos:definition", "value": "A coarse-grained igneous rock."},
+            {
+                "term": "skos:definition",
+                "term_uri": "http://www.w3.org/2004/02/skos/core#definition",
+                "entries": [{"text": "A coarse-grained igneous rock."}],
+            },
         )
         soup = BeautifulSoup(html, "html.parser")
 
@@ -177,22 +127,47 @@ class TestPropertyRowRendersAPlainValue:
         dd = soup.find("dd")
         assert dt is not None
         assert dd is not None
-        assert dt.get_text(strip=True) == "skos:definition"
+        assert visible_text(dt).strip() == "skos:definition"
         assert "A coarse-grained igneous rock." in dd.get_text()
-        # A plain value never composes a link — that only happens for a record-valued row.
+        # A plain value never composes a link, which only a link entry does.
         assert dd.find("a") is None
 
-
-class TestPropertyRowRendersARecordValue:
-    def test_renders_the_short_form_as_the_in_site_links_own_text(self):
+    def test_a_term_with_several_values_lists_each_in_order(self):
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
             {
-                "term": "skos:broader",
-                "short_form": "geology:granite",
-                "uri": "http://publisher.example.org/concept/granite",
-                "href": "/vocabularies/geology/granite/",
+                "term": "skos:altLabel",
+                "term_uri": "http://www.w3.org/2004/02/skos/core#altLabel",
+                "entries": [{"text": "granitic rock"}, {"text": "granite stone"}],
             },
+        )
+        soup = BeautifulSoup(html, "html.parser")
+
+        assert [li.get_text(strip=True) for li in soup.find("dd")("li")] == [
+            "granitic rock",
+            "granite stone",
+        ]
+
+    def test_a_value_containing_markup_is_escaped(self):
+        html = render_to_string(
+            PROPERTY_ROW_TEMPLATE,
+            {
+                "term": "skos:note",
+                "term_uri": "http://www.w3.org/2004/02/skos/core#note",
+                "entries": [{"text": "<b>bold</b>"}],
+            },
+        )
+        soup = BeautifulSoup(html, "html.parser")
+
+        assert soup.find("b") is None
+        assert soup.find("dd").get_text(strip=True) == "<b>bold</b>"
+
+
+class TestPropertyRowRendersALinkValue:
+    def test_renders_the_entrys_text_as_the_in_site_links_own_text(self):
+        html = render_to_string(
+            PROPERTY_ROW_TEMPLATE,
+            {"term": "skos:broader", "term_uri": "", "entries": [GRANITE_LINK]},
         )
         soup = BeautifulSoup(html, "html.parser")
 
@@ -205,38 +180,24 @@ class TestPropertyRowRendersARecordValue:
         # is disclosed through a tooltip plus aria-describedby naming a hidden span.
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
-            {
-                "term": "skos:broader",
-                "short_form": "geology:granite",
-                "uri": "http://publisher.example.org/concept/granite",
-                "href": "/vocabularies/geology/granite/",
-                "identifier_id": "identifier-0",
-            },
+            {"term": "skos:broader", "term_uri": "", "entries": [GRANITE_LINK]},
         )
         soup = BeautifulSoup(html, "html.parser")
         dd = soup.find("dd")
 
-        assert "http://publisher.example.org/concept/granite" not in visible_text(dd)
+        assert GRANITE_URI not in visible_text(dd)
         anchor = dd.find("a")
         assert anchor.get("title") is None
         hidden_span = soup.find(id=anchor.get("aria-describedby"))
         assert hidden_span is not None
-        assert hidden_span.get_text() == "http://publisher.example.org/concept/granite"
+        assert hidden_span.get_text() == GRANITE_URI
 
-
-class TestPropertyRowRecordValueDisclosesIdentifierOnHover:
     def test_the_tooltip_wraps_the_link_rather_than_a_class_on_it(self):
         # daisyUI reveals a tooltip on a focused descendant, so the tooltip element has to
         # wrap the link or a keyboard user tabbing to it never sees the identifier.
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
-            {
-                "term": "skos:broader",
-                "short_form": "geology:granite",
-                "uri": "http://publisher.example.org/concept/granite",
-                "href": "/vocabularies/geology/granite/",
-                "identifier_id": "identifier-0",
-            },
+            {"term": "skos:broader", "term_uri": "", "entries": [GRANITE_LINK]},
         )
         soup = BeautifulSoup(html, "html.parser")
         dd = soup.find("dd")
@@ -244,64 +205,61 @@ class TestPropertyRowRecordValueDisclosesIdentifierOnHover:
 
         assert anchor is not None
         assert "tooltip" not in anchor.get("class", [])
-        assert anchor.get("title") is None
 
         wrapper = anchor.find_parent("span", class_="tooltip")
         assert wrapper is not None
-        assert wrapper.get("data-tip") == "http://publisher.example.org/concept/granite"
+        assert wrapper.get("data-tip") == GRANITE_URI
 
         hidden_id = anchor.get("aria-describedby")
         assert hidden_id
         hidden_span = wrapper.find("span", id=hidden_id)
         assert hidden_span is not None
         assert "sr-only" in hidden_span.get("class", [])
-        assert hidden_span.get_text() == "http://publisher.example.org/concept/granite"
-        assert "http://publisher.example.org/concept/granite" not in visible_text(dd)
+        assert hidden_span.get_text() == GRANITE_URI
 
 
 class TestPropertyRowTermDisclosesItsOwnURI:
-    def test_the_dt_carries_neither_text_xs_nor_uppercase(self):
+    TERM_URI = "http://publisher.example.org/broader"
+
+    def render_term(self):
         html = render_to_string(
             PROPERTY_ROW_TEMPLATE,
             {
                 "term": "skos:broader",
-                "term_uri": "http://publisher.example.org/broader",
-                "value": "x",
+                "term_uri": self.TERM_URI,
+                "entries": [{"text": "x"}],
             },
         )
-        soup = BeautifulSoup(html, "html.parser")
-        dt = soup.find("dt")
+        return BeautifulSoup(html, "html.parser").find("dt")
 
-        classes = dt.get("class", [])
+    def test_the_dt_carries_neither_text_xs_nor_uppercase(self):
+        classes = self.render_term().get("class", [])
+
         assert "text-xs" not in classes
         assert "uppercase" not in classes
 
     def test_the_terms_uri_is_reachable_as_text_and_carries_no_title(self):
-        html = render_to_string(
-            PROPERTY_ROW_TEMPLATE,
-            {
-                "term": "skos:broader",
-                "term_uri": "http://publisher.example.org/broader",
-                "value": "x",
-            },
-        )
-        soup = BeautifulSoup(html, "html.parser")
-        dt = soup.find("dt")
+        dt = self.render_term()
 
         assert dt.get("title") is None
         assert dt.find(attrs={"title": True}) is None
         hidden_span = dt.find("span", class_="sr-only")
         assert hidden_span is not None
-        assert hidden_span.get_text() == "http://publisher.example.org/broader"
-        assert "http://publisher.example.org/broader" not in visible_text(dt)
+        assert hidden_span.get_text() == self.TERM_URI
+        assert self.TERM_URI not in visible_text(dt)
+
+    def test_the_terms_uri_is_disclosed_by_a_tooltip(self):
+        dt = self.render_term()
+
+        assert dt.find("span", class_="tooltip").get("data-tip") == self.TERM_URI
 
 
 # A class name ends at one of these in the stylesheet, so "tooltip-right" cannot match
 # "tooltip-rightmost".
-_SELECTOR_BOUNDARY = r"[{>:,\[)\s]"
+SELECTOR_BOUNDARY = r"[{>:,\[)\s]"
 
 
-def _tailwind_selector_pattern(class_token: str) -> re.Pattern[str]:
+def tailwind_selector_pattern(class_token: str) -> re.Pattern[str]:
     """Build a regex matching a class as the shipped stylesheet spells it.
 
     Tailwind backslash-escapes a colon or slash in a compiled class name, and daisyUI's
@@ -315,7 +273,7 @@ def _tailwind_selector_pattern(class_token: str) -> re.Pattern[str]:
         A pattern matching the class at a selector boundary.
     """
     escaped = re.escape(class_token.replace("/", r"\/").replace(":", r"\:"))
-    return re.compile(rf"\.{escaped}(?={_SELECTOR_BOUNDARY})")
+    return re.compile(rf"\.{escaped}(?={SELECTOR_BOUNDARY})")
 
 
 class TestPropertyRowClasses:
@@ -333,21 +291,21 @@ class TestPropertyRowClasses:
             "the component names no class at all — nothing for this test to prove"
         )
         for token in tokens:
-            assert _tailwind_selector_pattern(token).search(css), (
+            assert tailwind_selector_pattern(token).search(css), (
                 f"{token!r} is not in the shipped stylesheet"
             )
 
     def test_a_class_shipped_only_inside_a_compound_selector_is_still_found(self):
         # tooltip-right only ships inside compound selectors such as ".tooltip-right:after".
         css = MVP_CSS_PATH.read_text()
-        assert _tailwind_selector_pattern("tooltip-right").search(css)
+        assert tailwind_selector_pattern("tooltip-right").search(css)
 
     def test_the_presence_check_discriminates_rather_than_passing_regardless(self):
         # A class the build never emits proves the check can tell a real class from an absent
         # one.
         css = MVP_CSS_PATH.read_text()
         assert (
-            _tailwind_selector_pattern("cv-property-row-invented-class").search(css)
+            tailwind_selector_pattern("cv-property-row-invented-class").search(css)
             is None
         )
 
@@ -356,11 +314,11 @@ class TestPropertyRowClasses:
     ):
         # A stylesheet naming only ".tooltip-rightmost" does not ship "tooltip-right".
         css = ".tooltip-rightmost{color:red}"
-        assert _tailwind_selector_pattern("tooltip-right").search(css) is None
+        assert tailwind_selector_pattern("tooltip-right").search(css) is None
 
 
 # The tag name only, so the underscored variables in ``<c-vars term term_uri>`` never match.
-_COTTON_TAG_NAME_RE = re.compile(r"</?c-([A-Za-z0-9_.:-]*)")
+COTTON_TAG_NAME_RE = re.compile(r"</?c-([A-Za-z0-9_.:-]*)")
 
 
 class TestNoTemplateNamesACottonComponentWithAnUnderscore:
@@ -371,9 +329,7 @@ class TestNoTemplateNamesACottonComponentWithAnUnderscore:
     )
     def test_no_cotton_tag_name_contains_an_underscore(self, path):
         offenders = [
-            name
-            for name in _COTTON_TAG_NAME_RE.findall(path.read_text())
-            if "_" in name
+            name for name in COTTON_TAG_NAME_RE.findall(path.read_text()) if "_" in name
         ]
         assert offenders == [], (
             f"{path.relative_to(TEMPLATES_ROOT)} names a cotton tag with an underscore: {offenders}"
