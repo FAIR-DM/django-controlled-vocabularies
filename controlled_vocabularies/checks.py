@@ -39,7 +39,7 @@ def concept_fields():
 
 
 def check_concept_field_vocabularies(app_configs, **kwargs):
-    """Warn about every vocabulary a concept field names that is absent from the database."""
+    """Warn about every vocabulary a concept field names that is not in the database."""
     fields = concept_fields()
     slugs = {slug for field in fields for slug in field.vocabulary}
     if not slugs:
@@ -76,7 +76,7 @@ def check_concept_field_vocabularies(app_configs, **kwargs):
 
 
 def check_concept_field_restriction_targets(app_configs, **kwargs):
-    """Warn about every collection restriction naming a collection absent from its vocabulary."""
+    """Warn about every collection restriction naming a collection that is missing."""
     targets = [
         (field, field.vocabulary[0], field.collection)
         for field in concept_fields()
@@ -85,9 +85,9 @@ def check_concept_field_restriction_targets(app_configs, **kwargs):
     if not targets:
         return []
 
-    # A collection slug is unique only within its vocabulary, so the pair is the key: a flat set
-    # of slugs would call a mistyped slug present whenever another vocabulary uses it.
-    # Same DatabaseError guard as check_concept_field_vocabularies.
+    # A collection slug is unique only within its vocabulary, so the pair is the key: a
+    # flat set of slugs would call a mistyped slug present whenever another vocabulary
+    # uses it. Same DatabaseError guard as check_concept_field_vocabularies.
     try:
         existing = set(
             Record.objects.filter(

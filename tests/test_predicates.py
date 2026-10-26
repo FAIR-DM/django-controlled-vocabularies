@@ -54,4 +54,4 @@ class TestNamespaces:
 
 class TestPredicateTables:
     def test_every_translated_predicate_is_one_the_pages_order(self):
-        assert TRANSLATED_PREDICATES <= set(PREDICATE_ORDER)
+        assert set(PREDICATE_ORDER) >= TRANSLATED_PREDICATES

@@ -39,7 +39,7 @@ def labelled(name, language="en", statements=None):
 
 
 class ConceptSchemeFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`ConceptScheme` named in English with an app-wide-unique name.
+    """Build a saved :class:`ConceptScheme` with an app-wide-unique English name.
 
     Pass ``name`` to choose the name, or ``data`` to give the whole document.
     """
@@ -116,9 +116,10 @@ def collection_with_members(
     Args:
         scheme: The vocabulary to build in. A new one is created when omitted.
         labels: The label of each concept to create, in member order.
-        ordered: Build an ordered collection, listing its members in ``skos:memberList``.
-        name: The collection's name. Leave it out for a generated one, and pass it when a
-            consuming model's ``collection=`` restriction has to name its slug.
+        ordered: Build an ordered collection, listing its members in
+            ``skos:memberList``.
+        name: The collection's name. Leave it out for a generated one, and pass it when
+            a consuming model's ``collection=`` restriction has to name its slug.
 
     Returns:
         A ``(collection, members)`` tuple, ``members`` being the concepts in order.

@@ -4,8 +4,9 @@ import re
 
 from rdflib.namespace import DCTERMS, OWL, RDF, RDFS, SKOS, XSD
 
-#: The prefixes a stored key may use. A key outside these namespaces is stored as a full URI.
-#: Fixed rather than configurable, because the keys of every stored document are written with it.
+#: The prefixes a stored key may use. A key outside these namespaces is stored as a full
+#: URI. Fixed rather than configurable, because the keys of every stored document are
+#: written with it.
 PREFIXES: dict[str, str] = {
     "skos": str(SKOS),
     "dcterms": str(DCTERMS),
@@ -15,7 +16,8 @@ PREFIXES: dict[str, str] = {
     "xsd": str(XSD),
 }
 
-#: Known predicates in the order the pages show them. Any other predicate is shown after these.
+#: Known predicates in the order the pages show them. Any other predicate is shown after
+#: these.
 PREDICATE_ORDER: tuple[str, ...] = (
     "skos:prefLabel",
     "skos:altLabel",

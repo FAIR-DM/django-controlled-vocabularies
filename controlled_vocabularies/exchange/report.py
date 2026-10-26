@@ -50,7 +50,8 @@ FATAL_TEMPLATES: dict[FatalReason, Promise] = {
         "'%(subject)s' has no identifier that survives re-serialization (a blank node); the run was refused."
     ),
     FatalReason.REFUSED_IDENTITY: _(
-        "'%(subject)s' uses a scheme that can carry executable content; the run was refused."
+        "'%(subject)s' uses a scheme that can carry executable content; "
+        "the run was refused."
     ),
     FatalReason.IDENTIFIER_TOO_LONG: _(
         "'%(subject)s' is longer than the %(limit)s characters an identifier is stored "

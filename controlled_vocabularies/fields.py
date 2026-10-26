@@ -25,9 +25,9 @@ __all__ = [
 class ConceptFieldMixin:
     """The ``vocabulary`` and ``collection`` contract shared by both concept fields.
 
-    Holds what the two arguments accept, the ``limit_choices_to`` derived from them and how
-    they survive :meth:`deconstruct`. Declare it before the Django field in the bases so
-    ``deconstruct()``'s ``super()`` reaches the Django field's own.
+    Holds what the two arguments accept, the ``limit_choices_to`` derived from them and
+    how they survive :meth:`deconstruct`. Declare it before the Django field in the
+    bases so ``deconstruct()``'s ``super()`` reaches the Django field's own.
     """
 
     #: Static, because ``%`` on a lazy string would evaluate it immediately and lose
@@ -85,12 +85,14 @@ class ConceptFieldMixin:
         if collection is not None:
             if not isinstance(collection, str) or not collection:
                 raise TypeError(
-                    f"{type(self).__name__}() collection must be a non-empty string; got {collection!r}."
+                    f"{type(self).__name__}() collection must be a non-empty "
+                    f"string; got {collection!r}."
                 )
             if len(self.vocabulary) != 1:
                 raise TypeError(
                     f"{type(self).__name__}() a collection restriction requires the "
-                    f"declaration to name exactly one vocabulary; got {len(self.vocabulary)}."
+                    "declaration to name exactly one vocabulary; got "
+                    f"{len(self.vocabulary)}."
                 )
         self.collection = collection
 
@@ -196,7 +198,7 @@ class ConceptFieldMixin:
         return super().formfield(**kwargs)
 
     def deconstruct(self):
-        """Record ``vocabulary`` and ``collection`` instead of the kwargs this package fixes."""
+        """Record ``vocabulary`` and ``collection`` rather than the kwargs it fixes."""
         # Field.clone() rebuilds from these kwargs, so they must be ones __init__ accepts.
         name, path, args, kwargs = super().deconstruct()
         kwargs.pop("to", None)
@@ -209,11 +211,12 @@ class ConceptFieldMixin:
 
 
 class ConceptField(ConceptFieldMixin, ForeignKey):
-    """A ``ForeignKey`` to ``controlled_vocabularies.Record``, limited to concepts of named vocabularies.
+    """A ``ForeignKey`` to ``controlled_vocabularies.Record`` in named vocabularies.
 
     ``to`` is always the string ``"controlled_vocabularies.Record"`` and ``on_delete``
     is always ``PROTECT``, so a concept a row holds cannot be deleted. The consumer
-    supplies neither, nor ``limit_choices_to``, which is derived from the arguments below.
+    supplies neither, nor ``limit_choices_to``, which is derived from the arguments
+    below.
 
     Args:
         vocabulary: One vocabulary slug, several, or ``None`` for no restriction.
@@ -315,8 +318,9 @@ def create_membership_model(field, cls):
         to = f"to_{to}"
         from_ = f"from_{from_}"
 
-    # Mirrors Django's create_many_to_many_intermediary_model, except the foreign key to the
-    # concept is PROTECT (FS-010). auto_created keeps the model out of migration state and deconstruct().
+    # Mirrors Django's create_many_to_many_intermediary_model, except the foreign key to
+    # the concept is PROTECT (FS-010). auto_created keeps the model out of migration
+    # state and deconstruct().
     meta = type(
         "Meta",
         (),
@@ -402,7 +406,7 @@ def refuse_concepts_the_restriction_does_not_admit(
 
 
 class ConceptsField(ConceptFieldMixin, ManyToManyField):
-    """A ``ManyToManyField`` to ``controlled_vocabularies.Record``, limited to concepts of named vocabularies.
+    """A ``ManyToManyField`` to a ``controlled_vocabularies.Record`` set.
 
     The generated through model protects its concepts from deletion, so ``through`` is
     not the consumer's to supply, nor are ``to`` and ``limit_choices_to``. Takes the
@@ -452,7 +456,7 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
         def full_clean(
             self, exclude=None, validate_unique=True, validate_constraints=True
         ):
-            """Run the wrapped ``full_clean()``, then report each empty required field."""
+            """Run the wrapped ``full_clean()``, then report each empty required one."""
             try:
                 original_full_clean(
                     self,

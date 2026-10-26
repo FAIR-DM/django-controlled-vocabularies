@@ -172,7 +172,7 @@ class TestConceptAutocompleteSearch:
         assert result_ids(response) == [concept.pk]
         assert json.loads(response.content)["results"][0]["display_label"] == "Granite"
 
-    def test_a_fragment_of_a_preferred_label_in_any_language_finds_the_concept_shown_by_the_active_one(
+    def test_a_fragment_of_a_preferred_label_in_any_language_finds_the_concept(
         self,
     ):
         concept = RecordFactory(
@@ -194,7 +194,7 @@ class TestConceptAutocompleteSearch:
             result = json.loads(response.content)["results"][0]
             assert result["display_label"] == "Granitgestein"
 
-    def test_a_concept_with_no_active_language_label_is_found_and_shown_by_its_default_label(
+    def test_a_concept_with_no_active_language_label_is_found_by_its_default_label(
         self,
     ):
         concept = RecordFactory(label="Granite")
@@ -455,8 +455,8 @@ class TestConceptAutocompletePagination:
         assert body["has_more"] is True
 
     def test_both_ordering_columns_reach_the_database(self):
-        # Records are unique by label only within a vocabulary, so ties are possible, and
-        # SQLite returns tied rows in insertion order, which masks a missing "pk"
+        # Records are unique by label only within a vocabulary, so ties are possible,
+        # and SQLite returns tied rows in insertion order, which masks a missing "pk"
         # tie-break in any paging test. The SQL issued is asserted instead.
         for name in ("Mineral", "Rock Type", "Lithology"):
             RecordFactory(scheme=ConceptSchemeFactory(name=name), label="Tied label")

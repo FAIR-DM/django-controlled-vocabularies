@@ -23,17 +23,19 @@ HIDDEN_CURIES = frozenset({"skos:hiddenLabel", "rdf:type"})
 class PropertyRows:
     """Build the property rows of a concept's or collection's own page.
 
-    One row per predicate the record states, in the order of the predicate table and then
-    any other predicate as stored. A link to a record or vocabulary held here is a link to
-    its page. Each row is a dict of ``term``, ``term_uri`` and ``entries``, where an entry
-    holds ``text`` and, for a link, ``uri``, ``href`` and ``identifier_id``.
+    One row per predicate the record states, in the order of the predicate table and
+    then any other predicate as stored. A link to a record or vocabulary held here is a
+    link to its page. Each row is a dict of ``term``, ``term_uri`` and ``entries``,
+    where an entry holds ``text`` and, for a link, ``uri``, ``href`` and
+    ``identifier_id``.
 
     Args:
         record: The record to describe, with its vocabulary loaded.
         language: The language being read.
     """
 
-    #: Each hierarchy and association predicate, and the predicate it reads as from the other end.
+    #: Each hierarchy and association predicate, and the predicate it reads as from the
+    #: other end.
     INVERSES: ClassVar[dict[str, str]] = {
         "skos:broader": "skos:narrower",
         "skos:narrower": "skos:broader",
@@ -76,7 +78,8 @@ class PropertyRows:
         Args:
             entries: Every entry stored under the predicate.
             language: The language being read.
-            default_language: The vocabulary's default, used when there is no entry in ``language``.
+            default_language: The vocabulary's default, used when there is no entry in
+                ``language``.
 
         Returns:
             The entries in the reading language, else in the default language, else the
@@ -120,7 +123,8 @@ class PropertyRows:
         Returns:
             The row.
         """
-        # A hovered CURIE answers which URI it abbreviates; a key with no prefix is a URI already.
+        # A hovered CURIE answers which URI it abbreviates; a key with no prefix is a
+        # URI already.
         return {"term": curie, "term_uri": Namespaces.expand(curie), "entries": entries}
 
     def entries(self, curie: str) -> list[dict]:
@@ -137,7 +141,8 @@ class PropertyRows:
             stored = self.in_reading_language(
                 stored, self.language, self.scheme.default_language
             )
-        # A file often states a hierarchy from one side only, and skos:related is symmetric.
+        # A file often states a hierarchy from one side only, and skos:related is
+        # symmetric.
         stated = {entry.get("@id") for entry in stored}
         stored = stored + [
             {"@id": uri} for uri in self.inferred.get(curie, []) if uri not in stated
@@ -178,8 +183,8 @@ class PropertyRows:
             uri: The URI linked to.
 
         Returns:
-            The entry. A link to something not held here points at the URI itself when it is
-            a web address, and is plain text otherwise.
+            The entry. A link to something not held here points at the URI itself when
+            it is a web address, and is plain text otherwise.
         """
         entry = {"text": uri, "uri": uri, "href": None}
         found = self.records.get(uri)
@@ -203,16 +208,18 @@ class PropertyRows:
             entry["href"] = uri
         else:
             return {"text": uri}
-        # Only a link has a hidden span for aria-describedby to name, and its id must be unique.
+        # Only a link has a hidden span for aria-describedby to name, and its id must be
+        # unique.
         entry["identifier_id"] = f"identifier-{next(self.identifier_ids)}"
         return entry
 
     def inferred_links(self) -> dict[str, list[str]]:
-        """Find the links other concepts of the vocabulary make to this one, turned around.
+        """Find the links other concepts of the vocabulary make to this one, reversed.
 
         Returns:
-            For each of ``skos:broader``, ``skos:narrower`` and ``skos:related``, the URIs of
-            the concepts that state the inverse link to this concept, by preferred label.
+            For each of ``skos:broader``, ``skos:narrower`` and ``skos:related``, the
+            URIs of the concepts that state the inverse link to this concept, by
+            preferred label.
         """
         inferred: dict[str, list[str]] = {curie: [] for curie in self.INVERSES.values()}
         candidates = Record.objects.filter(

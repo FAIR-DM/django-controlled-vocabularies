@@ -483,7 +483,7 @@ class TestVocabularyListOrdering:
     # Each test gives the vocabulary whose name sorts last a slug that sorts first, so a
     # slug-ordered page and a name-ordered one cannot agree by accident.
 
-    def test_a_name_beginning_with_a_lowercase_letter_sorts_before_an_uppercase_one_later_in_the_alphabet(
+    def test_a_lowercase_name_sorts_before_an_uppercase_one_later_in_the_alphabet(
         self, client
     ):
         zebra = ConceptSchemeFactory(name="Zebra", slug="aaa-sorts-first-by-slug")
@@ -500,7 +500,8 @@ class TestVocabularyListOrdering:
         assert listed_pks(client.get(LIST_URL)) == listed_pks(client.get(LIST_URL))
 
     def test_two_vocabularies_sharing_a_name_are_ordered_by_creation(self, client):
-        # The first sorts last by slug, so only a real primary key tiebreak gives this order.
+        # The first sorts last by slug, so only a real primary key tiebreak gives this
+        # order.
         first = ConceptSchemeFactory(name="Duplicate", slug="zzz-sorts-last-by-slug")
         second = ConceptSchemeFactory(name="Duplicate")
 
@@ -1265,9 +1266,7 @@ class TestVocabularyDetailConceptRow:
         assert "granitic rock" not in row_text
         assert "granate" not in row_text
 
-    def test_a_concept_with_no_definition_broader_concept_or_collection_shows_only_its_label_and_identifier(
-        self, client
-    ):
+    def test_a_concept_with_no_extras_shows_only_its_label_and_identifier(self, client):
         concept = RecordFactory(label="Granite")
 
         row = self.row_for(client, concept)
@@ -1346,7 +1345,7 @@ class TestVocabularyDetailConceptLabel:
         assert "Kristallgestein" in content
         assert "Granite" not in content
 
-    def test_a_concept_with_no_label_in_the_active_language_falls_back_to_its_stored_one(
+    def test_a_concept_with_no_active_language_label_falls_back_to_its_stored_one(
         self, client
     ):
         scheme = ConceptSchemeFactory()
@@ -1405,7 +1404,8 @@ class TestVocabularyDetailConceptOrder:
 
     def test_two_identically_labelled_concepts_are_ordered_by_creation(self, client):
         scheme = ConceptSchemeFactory()
-        # The first sorts last by slug, so only a real primary key tiebreak gives this order.
+        # The first sorts last by slug, so only a real primary key tiebreak gives this
+        # order.
         first = RecordFactory(scheme=scheme, label="Duplicate", slug="zzz-sorts-last")
         second = RecordFactory(scheme=scheme, label="Duplicate")
 
@@ -1574,8 +1574,8 @@ class TestVocabularyDetailConceptSearch:
         RecordFactory(scheme=scheme, label="Basalt")
 
         response = client.get(vocabulary_page(scheme), {"q": "granate"})
-        # Read from the result rows: the applied-search chip repeats what the reader typed,
-        # which is the term and not the concept's label.
+        # Read from the result rows: the applied-search chip repeats what the reader
+        # typed, which is the term and not the concept's label.
         rows_text = " ".join(
             row.get_text() for row in soup_of(response).select(CONCEPT_ROWS)
         )
@@ -2490,7 +2490,7 @@ class TestConceptDetailBroaderNarrowerAndRelated:
         assert follow.status_code == 200
         assert follow.context["object"] in (child_one, child_two)
 
-    def test_a_concept_narrower_of_another_shows_it_as_broader_though_only_narrower_is_stored(
+    def test_a_concept_narrower_of_another_shows_as_broader_when_only_narrower_stored(
         self, client
     ):
         scheme = ConceptSchemeFactory()
@@ -2614,8 +2614,8 @@ class TestTranslatableStrings:
 
 @pytest.mark.django_db
 class TestRecordValuesReachTheReaderEscaped:
-    # Each test parses the response: a raw substring check passes for an unescaped payload
-    # too, since it is a substring of the escaped one.
+    # Each test parses the response: a raw substring check passes for an unescaped
+    # payload too, since it is a substring of the escaped one.
 
     # Matches the injected payload only, never the shell's own theme-toggle script.
     INJECTED_SCRIPT = re.compile(r"alert\(1\)")

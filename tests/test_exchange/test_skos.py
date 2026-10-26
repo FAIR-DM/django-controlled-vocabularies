@@ -155,8 +155,9 @@ def write_turtle(tmp_path: Path, body: str, name: str = "vocabulary.ttl") -> Pat
 def write_deeply_nested_jsonld(tmp_path: Path, depth: int) -> Path:
     """Write a JSON-LD document nesting one object inside another ``depth`` times.
 
-    Built as raw text because ``json.dump`` hits Python's recursion limit before the file
-    is written, at a depth well below what reproduces the parser's own recursion failure.
+    Built as raw text because ``json.dump`` hits Python's recursion limit before the
+    file is written, at a depth well below what reproduces the parser's own recursion
+    failure.
 
     Args:
         tmp_path: Directory to write the file into.
@@ -269,8 +270,8 @@ class TestReadGraph:
     @pytest.mark.django_db
     def test_a_json_ld_context_import_cannot_pull_in_a_local_file(self):
         # An inline @context's "@import" was once resolved through urlopen, reading a
-        # local file of the document's own choosing. Run through import_skos so the whole
-        # pipeline is covered.
+        # local file of the document's own choosing. Run through import_skos so the
+        # whole pipeline is covered.
         with pytest.raises(UnsafeJsonLdError):
             import_skos(SECURITY_FIXTURES / "exfil_via_import.jsonld")
 
@@ -1024,7 +1025,8 @@ class TestRecordMovingBetweenVocabularies:
             "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
             "<http://b.org/vocab> a skos:ConceptScheme ;\n"
             '    skos:prefLabel "B"@en .\n'
-            "<http://b.org/rock> a skos:Concept ; skos:inScheme <http://b.org/vocab> ;\n"
+            "<http://b.org/rock> a skos:Concept ; "
+            "skos:inScheme <http://b.org/vocab> ;\n"
             '    skos:prefLabel "Rock"@en ; skos:exactMatch <http://a.org/granite> .\n'
             "<http://a.org/granite> a skos:Concept ;\n"
             "    skos:inScheme <http://a.org/vocab> ;\n"
@@ -1260,9 +1262,11 @@ class TestRefusedRuns:
                 skos:inScheme <http://example.org/mixed/> ;
                 skos:prefLabel "Ordinary"@en .
             [] a skos:Concept ;
-                skos:inScheme <http://example.org/mixed/> ; skos:prefLabel "Nameless"@en .
+                skos:inScheme <http://example.org/mixed/> ;
+                skos:prefLabel "Nameless"@en .
             <javascript:alert(1)> a skos:Concept ;
-                skos:inScheme <http://example.org/mixed/> ; skos:prefLabel "Refused"@en .
+                skos:inScheme <http://example.org/mixed/> ;
+                skos:prefLabel "Refused"@en .
             """,
         )
 

@@ -27,8 +27,8 @@ class Command(BaseCommand):
     """Delete every vocabulary and reload the demo's seed vocabularies and accounts."""
 
     help = (
-        "Delete every vocabulary, then reload the demo's two seed vocabularies and the sign-in "
-        "accounts. Destructive: anything entered through the admin is lost."
+        "Delete every vocabulary, then reload the demo's two seed vocabularies and "
+        "the sign-in accounts. Destructive: anything entered through the admin is lost."
     )
 
     def handle(self, *args, **options):

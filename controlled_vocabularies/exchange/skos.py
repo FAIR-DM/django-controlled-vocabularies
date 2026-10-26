@@ -43,7 +43,7 @@ RECORD_CLASSES = (
 
 
 class SkosImporter:
-    """Run one import: read the graph, then upsert the vocabulary and its records by URI.
+    """Run one import: read the graph, then upsert the vocabulary and its records.
 
     Every predicate on a subject is kept in its record's document, in every language, so
     nothing a file says is set aside. Re-running upserts: a record the file contains is
@@ -52,10 +52,11 @@ class SkosImporter:
 
     Args:
         file: Path of the SKOS file to import.
-        serialization: The file's serialization (``turtle``, ``xml`` or ``json-ld``), guessed
-            from its extension when omitted.
+        serialization: The file's serialization (``turtle``, ``xml`` or ``json-ld``),
+            guessed from its extension when omitted.
         scheme: The vocabulary to import into, for a file that declares none of its own.
-        base_uri: The address a fetched document was published at, used as the parse base.
+        base_uri: The address a fetched document was published at, used as the parse
+            base.
     """
 
     def __init__(
@@ -75,8 +76,8 @@ class SkosImporter:
     def run(self) -> ImportReport:
         """Import the file and return the run's report.
 
-        The whole run is one transaction. Fatal findings are collected before anything is
-        written, so a file with several problems reports all of them.
+        The whole run is one transaction. Fatal findings are collected before anything
+        is written, so a file with several problems reports all of them.
 
         Returns:
             The report of what the run created and updated.
@@ -107,7 +108,8 @@ class SkosImporter:
                 record = held.get(str(node))
                 if record is not None and record.scheme_id != scheme.pk:
                     if node not in claimed:
-                        # Described here, held by another vocabulary: its own import owns it.
+                        # Described here, held by another vocabulary: its own import
+                        # owns it.
                         self.report.held_elsewhere.append(str(node))
                         continue
                     # The file says the record belongs here, so its publisher moved it.
@@ -122,7 +124,8 @@ class SkosImporter:
     def read_graph(self) -> rdflib.Graph:
         """Read the file into a graph, scanning RDF/XML and JSON-LD first.
 
-        The scan runs before rdflib sees the bytes (docs/adr/0007-outbound-fetches-are-restricted-by-removing-handlers.md).
+        The scan runs before rdflib sees the bytes
+        (docs/adr/0007-outbound-fetches-are-restricted-by-removing-handlers.md).
 
         Returns:
             The parsed graph.
@@ -134,7 +137,8 @@ class SkosImporter:
             UnsafeJsonLdError: The JSON-LD document fails the safety scan.
         """
         path = Path(self.file)
-        # A fetched document's temporary file is gone by the time an operator reads a message.
+        # A fetched document's temporary file is gone by the time an operator reads a
+        # message.
         source_name = str(self.base_uri or path)
         if not path.is_file():
             raise SkosImportError(
@@ -179,7 +183,7 @@ class SkosImporter:
     def declared_scheme(
         self, graph: rdflib.Graph, source_label: str
     ) -> rdflib.URIRef | None:
-        """Find the scheme node the file declares, recording a fatal finding when it is unusable.
+        """Find the scheme node the file declares, or record a fatal finding.
 
         Args:
             graph: The parsed graph.
@@ -217,8 +221,9 @@ class SkosImporter:
     ) -> dict[rdflib.URIRef, str]:
         """Find the subjects that become records, and the type each becomes.
 
-        Typed subjects are records, and so are untyped subjects that say they belong to the
-        scheme. A blank node cannot be identified again on a re-import, so it is fatal.
+        Typed subjects are records, and so are untyped subjects that say they belong to
+        the scheme. A blank node cannot be identified again on a re-import, so it is
+        fatal.
 
         Args:
             graph: The parsed graph.
@@ -292,12 +297,12 @@ class SkosImporter:
         return bool(schemes - {scheme_node})
 
     def identifiable(self, node: rdflib.term.Node) -> TypeGuard[rdflib.URIRef]:
-        """Return whether a subject's URI can be stored, recording a fatal finding when not.
+        """Return whether a subject's URI can be stored, or record a fatal finding.
 
-        A blank node cannot be identified again on a re-import. A ``javascript:``, ``data:``
-        or ``vbscript:`` URI is refused because the pages render a record's URI as a link,
-        and one longer than the ``uri`` column because the database would refuse it
-        partway through the run.
+        A blank node cannot be identified again on a re-import. A ``javascript:``,
+        ``data:`` or ``vbscript:`` URI is refused because the pages render a record's
+        URI as a link, and one longer than the ``uri`` column because the database would
+        refuse it partway through the run.
 
         Args:
             node: The subject.
@@ -334,9 +339,9 @@ class SkosImporter:
                 ends instead of recursing forever.
 
         Returns:
-            The document: CURIE (or full URI) to a list of entries. Entries are sorted so
-            a re-import of the same file stores the same text; ``skos:memberList`` keeps
-            its sequence.
+            The document: CURIE (or full URI) to a list of entries. Entries are sorted
+            so a re-import of the same file stores the same text; ``skos:memberList``
+            keeps its sequence.
 
         Raises:
             SkosImportError: A ``skos:memberList`` loops back on itself.
@@ -404,7 +409,7 @@ class SkosImporter:
         declared: rdflib.URIRef | None,
         documents: dict[rdflib.URIRef, dict],
     ) -> ConceptScheme:
-        """Return the vocabulary the records go into, creating or refreshing it from the file.
+        """Return the vocabulary the records go into, created or refreshed from file.
 
         A vocabulary the run creates takes the most common language of its records'
         preferred labels as its default. One passed in, or already held, keeps its own.
@@ -449,7 +454,7 @@ class SkosImporter:
         document: dict,
         record: Record | None,
     ) -> None:
-        """Create the record for ``node``, or replace the document of the one holding its URI.
+        """Create the record for ``node``, or replace the document of the URI's holder.
 
         Args:
             scheme: The vocabulary the record belongs to.

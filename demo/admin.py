@@ -9,7 +9,7 @@ from controlled_vocabularies.models import ConceptScheme, Record
 # for itself.
 @admin.register(ConceptScheme)
 class ConceptSchemeAdmin(admin.ModelAdmin):
-    """Admin for vocabularies; the name lives in the document, so it is searched there."""
+    """Admin for vocabularies; the name is in the document, so it is searched there."""
 
     list_display = ("pref_label", "slug", "uri")
     search_fields = ("pref_label", "uri")

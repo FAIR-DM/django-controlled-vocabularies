@@ -182,8 +182,8 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
     template_name = "controlled_vocabularies/ui/conceptscheme_detail.html"
     list_item_template = "controlled_vocabularies/ui/concept_list_item.html"
 
-    # By the preferred label in the default language, which the column holds. `pk` makes the
-    # order total for pagination (#140).
+    # By the preferred label in the default language, which the column holds. `pk` makes
+    # the order total for pagination (#140).
     ordering = [Lower("pref_label"), "pk"]
 
     filterset_class = ConceptFilter
@@ -199,8 +199,8 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
             self.vocabulary = ConceptScheme.objects.get(slug=kwargs["slug"])
         except ConceptScheme.DoesNotExist as exc:
             raise Http404(_("No vocabulary matches this address.")) from exc
-        # select_related: the row partial reverses its links from `object.scheme.slug` in an
-        # isolated context, so without the join it costs a query per row.
+        # select_related: the row partial reverses its links from `object.scheme.slug`
+        # in an isolated context, so without the join it costs a query per row.
         self.queryset = Record.objects.filter(
             scheme=self.vocabulary, type=Record.Type.CONCEPT
         ).select_related("scheme")
@@ -220,7 +220,7 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
         return Truncator(entries[0]["@value"] if entries else "").words(40)
 
     def get_context_data(self, **kwargs):
-        """Add the vocabulary, what the side panel says about it, and what each row names."""
+        """Add the vocabulary, its side panel text, and what each row names."""
         context = super().get_context_data(**kwargs)
         vocabulary = self.vocabulary
         context["vocabulary"] = vocabulary
@@ -263,7 +263,8 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
             concepts: The vocabulary's concepts.
 
         Returns:
-            The URI of each concept that has a broader concept, mapped to that concept's URI.
+            The URI of each concept that has a broader concept, mapped to that concept's
+            URI.
         """
         parents = {}
         for parent in concepts.filter(data__has_key="skos:narrower"):
@@ -278,8 +279,9 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
     def describe_rows(self, context, collections):
         """Give each concept on the page what its row names beyond its own label.
 
-        Reads the broader concept's label, the definition and the collections holding the
-        concept, so the row partial, which sees only the object, costs no query per row.
+        Reads the broader concept's label, the definition and the collections holding
+        the concept, so the row partial, which sees only the object, costs no query per
+        row.
 
         Args:
             context: The page's context, whose ``object_list`` is replaced by a list.

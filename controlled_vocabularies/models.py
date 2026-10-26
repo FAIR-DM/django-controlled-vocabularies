@@ -1,4 +1,4 @@
-"""Models for vocabularies and the records they hold, each keeping its SKOS statements in JSON."""
+"""Models for vocabularies and the records they hold, with SKOS statements in JSON."""
 
 import json
 from urllib.parse import urlsplit
@@ -94,9 +94,9 @@ class Resource(models.Model):
         blank=True,
         verbose_name=_("URI"),
         help_text=_(
-            "The identifier, fixed when the row is created and never rewritten. An imported "
-            "row keeps the URI its publisher gave it; leave blank to have one made from this "
-            "site's address."
+            "The identifier, fixed when the row is created and never rewritten. An "
+            "imported row keeps the URI its publisher gave it; leave blank to have one "
+            "made from this site's address."
         ),
     )
     slug = models.SlugField(
@@ -114,7 +114,8 @@ class Resource(models.Model):
         blank=True,
         verbose_name=_("preferred label"),
         help_text=_(
-            "A copy of the preferred label in the default language, refreshed on every save."
+            "A copy of the preferred label in the default language, refreshed on "
+            "every save."
         ),
     )
     data = models.JSONField(
@@ -123,9 +124,10 @@ class Resource(models.Model):
         validators=[validate_document],
         verbose_name=_("data"),
         help_text=_(
-            "Every statement about this row. Each key is a predicate, written as a CURIE "
-            "such as skos:prefLabel, and holds a list of entries like "
-            '{"@value": "Granite", "@language": "en"} or {"@id": "https://example.org/x"}.'
+            "Every statement about this row. Each key is a predicate, written as a "
+            "CURIE such as skos:prefLabel, and holds a list of entries like "
+            '{"@value": "Granite", "@language": "en"} or '
+            '{"@id": "https://example.org/x"}.'
         ),
     )
 
@@ -170,7 +172,11 @@ class Resource(models.Model):
         return None
 
     def display_label(self) -> str:
-        """Return the name in the active language, else the stored preferred label."""
+        """Return the name in the active language, else the stored preferred label.
+
+        Returns:
+            The label in the active language, or ``pref_label`` when it has none.
+        """
         return self.label(get_language() or "") or self.pref_label
 
     def linked_uris(self, curie: str) -> list[str]:
@@ -199,11 +205,15 @@ class Resource(models.Model):
         )
 
     def minted_uri(self) -> str:
-        """Return the URI for a row authored on this site, from its slug."""
+        """Return the URI for a row authored on this site, from its slug.
+
+        Returns:
+            The URI to store when none was given.
+        """
         raise NotImplementedError
 
     def save(self, *args, **kwargs):
-        """Refresh the derived columns and mint the URI and slug before the first write."""
+        """Refresh the derived columns, then mint the URI and slug on first write."""
         self.pref_label = self.name_in_default_language()
         self.mint_identity()
         update_fields = kwargs.get("update_fields")
@@ -212,10 +222,15 @@ class Resource(models.Model):
         super().save(*args, **kwargs)
 
     def name_in_default_language(self) -> str:
-        """Return the name for ``pref_label``, cut to the column."""
+        """Return the name for ``pref_label``, cut to the column.
+
+        Returns:
+            The default-language name, or the first available one, truncated.
+        """
         name = self.label(self.default_language)
         if name is None:
-            # A row published without a name in the default language is still worth listing.
+            # A row published without a name in the default language is still worth
+            # listing.
             name = next(
                 (
                     str(entry["@value"])
@@ -228,7 +243,7 @@ class Resource(models.Model):
         return name[:PREF_LABEL_MAX_LENGTH]
 
     def mint_identity(self) -> None:
-        """Give the row the URI and slug it has not got yet, and never change one it has."""
+        """Give the row the URI and slug it lacks, and never change one it has."""
         if self.uri and self.slug:
             return
         if self.uri:
@@ -263,7 +278,11 @@ class Resource(models.Model):
         return slug
 
     def siblings(self) -> models.QuerySet:
-        """Return the rows whose slugs must differ from this one's."""
+        """Return the rows whose slugs must differ from this one's.
+
+        Returns:
+            A queryset of every row of this model.
+        """
         return type(self)._default_manager.all()
 
 
@@ -296,7 +315,11 @@ class ConceptScheme(Resource):
         return self.display_label() or self.uri
 
     def minted_uri(self) -> str:
-        """Return the URI for a vocabulary authored on this site."""
+        """Return the URI for a vocabulary authored on this site.
+
+        Returns:
+            The base URI followed by the slug.
+        """
         return f"{conf.get_base_uri()}/{self.slug}"
 
 
@@ -306,8 +329,8 @@ class RecordQuerySet(models.QuerySet):
     def mentioning(self, uri: str) -> "RecordQuerySet":
         """Narrow to records whose document may link to ``uri``.
 
-        A cheap pre-filter on the stored text, which can match a record that holds the URI
-        as a plain literal; callers check the links in Python.
+        A cheap pre-filter on the stored text, which can match a record that holds the
+        URI as a plain literal; callers check the links in Python.
 
         Args:
             uri: The URI to look for.
@@ -315,8 +338,9 @@ class RecordQuerySet(models.QuerySet):
         Returns:
             The candidate records.
         """
-        # The stored text is JSON, so the quoted form is what appears in it. SQLite keeps
-        # non-ASCII characters escaped and PostgreSQL's jsonb does not, so both are tried.
+        # The stored text is JSON, so the quoted form is what appears in it. SQLite
+        # keeps non-ASCII characters escaped and PostgreSQL's jsonb does not, so both
+        # are tried.
         return self.filter(
             models.Q(data__icontains=json.dumps(uri))
             | models.Q(data__icontains=json.dumps(uri, ensure_ascii=False))
@@ -390,7 +414,11 @@ class Record(Resource):
         return self.type in self.COLLECTION_TYPES
 
     def member_uris(self) -> list[str]:
-        """Return the URIs of a collection's members, ordered ones in their sequence."""
+        """Return the URIs of a collection's members, ordered ones in their sequence.
+
+        Returns:
+            Each member URI once, ``skos:memberList`` entries first.
+        """
         # A publisher may state a member both ways, so each is listed once.
         return list(
             dict.fromkeys(
@@ -401,14 +429,21 @@ class Record(Resource):
     def minted_uri(self) -> str:
         """Return the URI for a record authored on this site.
 
-        A collection's sits under a ``collection`` segment, as its page does, so it never
-        names the same address as a concept with the same slug.
+        A collection's sits under a ``collection`` segment, as its page does, so it
+        never names the same address as a concept with the same slug.
+
+        Returns:
+            The URI built from the base URI, vocabulary slug and record slug.
         """
         segment = "collection/" if self.is_collection else ""
         return f"{conf.get_base_uri()}/{self.scheme.slug}/{segment}{self.slug}"
 
     def siblings(self) -> models.QuerySet:
-        """Return the other records of the same vocabulary."""
+        """Return the other records of the same vocabulary.
+
+        Returns:
+            A queryset of the records sharing this one's vocabulary.
+        """
         return Record.objects.filter(scheme_id=self.scheme_id)
 
     def save(self, *args, **kwargs):

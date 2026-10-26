@@ -31,7 +31,9 @@ add_url = reverse("admin:controlled_vocabularies_conceptscheme_add")
 assert client.get(add_url).status_code == 200, "the admin serves no form for adding a vocabulary"
 
 client.post(add_url, {"default_language": "en", "data": json.dumps(document)})
-assert ConceptScheme.objects.filter(pref_label="Added By Hand").exists(), "the submitted form stored nothing"
+assert ConceptScheme.objects.filter(pref_label="Added By Hand").exists(), (
+    "the submitted form stored nothing"
+)
 
 listing = client.get(reverse("controlled_vocabularies_ui:vocabulary-list")).content.decode()
 assert "Added By Hand" in listing, "the hand-added vocabulary is absent from the list"

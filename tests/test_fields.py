@@ -1040,7 +1040,7 @@ class TestConceptsFieldDeleteGuard:
 
         assert not Record.objects.filter(pk=concept.pk).exists()
 
-    def test_deleting_the_consuming_row_removes_only_its_memberships_and_every_concept_survives(
+    def test_deleting_the_consuming_row_removes_only_its_memberships_not_concepts(
         self,
     ):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -1282,7 +1282,7 @@ class TestConceptsFieldRequiredSet:
 
         assert form.is_valid(), form.errors
 
-    def test_a_saved_rows_valid_submission_is_accepted_though_its_relation_is_still_empty(
+    def test_a_saved_rows_valid_submission_is_accepted_with_its_relation_empty(
         self,
     ):
         # #124: ModelForm calls instance.full_clean() before save_m2m(), so a saved

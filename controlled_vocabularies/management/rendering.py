@@ -31,7 +31,7 @@ class ReportRenderer:
         self.verbosity = verbosity
 
     def render(self) -> Iterator[str]:
-        """Yield the report's lines: the counts, each record left untouched, then any notice.
+        """Yield the report's lines: the counts, each untouched record, then any notice.
 
         Yields:
             One translated line at a time, and none at all at ``--verbosity 0``.

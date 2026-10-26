@@ -177,8 +177,8 @@ class SourceResolver:
 
         Raises:
             CommandError: The response was too large or took too long.
-            self.retrieval_error: Opening the connection or reading the body failed, as a
-                ``CommandError`` built by :meth:`retrieval_error`.
+            self.retrieval_error: Opening the connection or reading the body failed, as
+                a ``CommandError`` built by :meth:`retrieval_error`.
         """
         try:
             response = OPENER.open(self.source, timeout=TIMEOUT_SECONDS)

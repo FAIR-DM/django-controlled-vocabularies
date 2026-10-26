@@ -130,7 +130,8 @@ class TestSeedDemoAccounts:
 
         for username in ("regular.user", "staff.user", "super.user"):
             assert User.objects.filter(username=username).exists()
-            assert client.login(username=username, password="password")  # noqa: S106 -- the demo's published password
+            # The demo's published password.
+            assert client.login(username=username, password="password")  # noqa: S106
 
     def test_the_regular_user_holds_no_permission_and_is_not_staff(self):
         run_seed_demo()

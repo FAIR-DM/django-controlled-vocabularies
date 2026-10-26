@@ -184,10 +184,10 @@ class VocabularySearch(SearchFilter):
 class VocabularyFilter(django_filters.FilterSet):
     """The search, sort and facets of the list of vocabularies.
 
-    A site holds few vocabularies, so every facet is computed in Python over all of them.
-    Each facet offers the values the site's vocabularies carry, and is left out when
-    fewer than two vocabularies differ on it. The view annotates ``concept_count`` and
-    ``modified`` onto the queryset.
+    A site holds few vocabularies, so every facet is computed in Python over all of
+    them. Each facet offers the values the site's vocabularies carry, and is left out
+    when fewer than two vocabularies differ on it. The view annotates ``concept_count``
+    and ``modified`` onto the queryset.
     """
 
     q = VocabularySearch(fields=[], max_words=MAX_SEARCH_WORDS)
@@ -302,8 +302,8 @@ class VocabularyFilter(django_filters.FilterSet):
 class ConceptFilter(django_filters.FilterSet):
     """The search and sort of the concepts on a vocabulary's page."""
 
-    # `search_text` reaches every label: other languages, alternative and hidden. Notes are left
-    # out on purpose. A hidden label is matched but never shown.
+    # `search_text` reaches every label: other languages, alternative and hidden. Notes
+    # are left out on purpose. A hidden label is matched but never shown.
     q = SearchFilter(fields=["pref_label", "search_text"])
     o = SortFilter(
         options=[

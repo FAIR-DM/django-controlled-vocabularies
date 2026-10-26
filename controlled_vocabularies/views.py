@@ -16,7 +16,10 @@ if TYPE_CHECKING:
 
 
 class ConceptAutocompleteView(AutocompleteModelView):
-    """Search-as-you-type endpoint for the concepts of :class:`~controlled_vocabularies.models.Record`."""
+    """Search-as-you-type endpoint for the concepts of a vocabulary.
+
+    Serves :class:`~controlled_vocabularies.models.Record` rows.
+    """
 
     model = Record
     page_size = 20
@@ -29,7 +32,8 @@ class ConceptAutocompleteView(AutocompleteModelView):
 
     def search(self, queryset: QuerySet, query: str) -> QuerySet:
         """Match the query against every label of a concept and its preferred label."""
-        # Replaces search_lookups, a flat list of lookups that cannot say "either column".
+        # Replaces search_lookups, a flat list of lookups that cannot say "either
+        # column".
         if not query:
             return queryset
         return queryset.filter(

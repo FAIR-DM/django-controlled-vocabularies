@@ -56,8 +56,8 @@ def assert_control_rendered(content, model, field_name):
     assert "window.djangoTomSelect.initialize(element, config);" in content
     escaped_equals = "\\u003D"
     assert (
-        f"autocompleteParams: 'field{escaped_equals}{field_reference(model, field_name)}'"
-        in content
+        "autocompleteParams: "
+        f"'field{escaped_equals}{field_reference(model, field_name)}'" in content
     )
 
 
@@ -422,8 +422,8 @@ def assert_inline_row_control_rendered(content, model, field_name, prefix, index
     assert "data-tomselect" in content
     escaped_equals = "\\u003D"
     assert (
-        f"autocompleteParams: 'field{escaped_equals}{field_reference(model, field_name)}'"
-        in content
+        "autocompleteParams: "
+        f"'field{escaped_equals}{field_reference(model, field_name)}'" in content
     )
 
 
@@ -508,7 +508,8 @@ class TestEmptyFormRowIsInitialisable:
         assert "data-tomselect" in content
         escaped_equals = "\\u003D"
         assert (
-            f"autocompleteParams: 'field{escaped_equals}{field_reference(Specimen, 'rock_type')}'"
+            "autocompleteParams: "
+            f"'field{escaped_equals}{field_reference(Specimen, 'rock_type')}'"
             in content
         )
 
