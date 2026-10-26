@@ -4,7 +4,7 @@ import json
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models.functions import Lower
 from django.utils.text import slugify
 from django.utils.translation import get_language
@@ -454,14 +454,38 @@ class Record(Resource):
         return Record.objects.filter(scheme_id=self.scheme_id)
 
     def save(self, *args, **kwargs):
-        """Refresh the search text, then save as any resource does."""
+        """Refresh the search text, then save as any resource does and rebuild the links.
+
+        The links are rebuilt, in the same transaction as the save, unless a partial
+        save leaves ``data`` out.
+        """
         self.search_text = "\n".join(
             str(entry["@value"])
             for curie in ("skos:prefLabel", "skos:altLabel", "skos:hiddenLabel")
             for entry in self.values(curie)
             if "@value" in entry
         )
-        super().save(*args, **kwargs)
+        update_fields = kwargs.get("update_fields")
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if update_fields is None or "data" in update_fields:
+                self.refresh_links()
+
+    def refresh_links(self) -> None:
+        """Rebuild this record's ``Link`` rows from its document.
+
+        ``save()`` calls this. Call it after writing documents with
+        ``QuerySet.update()`` or ``bulk_create()``, which skip ``save()``, once the
+        record is loaded again.
+        """
+        rows = [
+            Link(source=self, predicate=curie, target=target)
+            for curie in self.data
+            for target in self.linked_uris(curie)
+        ]
+        with transaction.atomic():
+            self.links.all().delete()
+            Link.objects.bulk_create(rows)
 
 
 class Link(models.Model):
