@@ -194,9 +194,3 @@ non-mirror-paths = [
     "tests/test_demo/test_seed.py",
     "tests/test_demo/test_smoke.py",
 ]
-
-[tool.forge.docs]
-# The contributing standards illustrate general rules with examples of their own. They describe
-# how code here is written, not this package's API, so a name the package drops is no reason to
-# rewrite them.
-record-paths = ["docs/contributing/"]
