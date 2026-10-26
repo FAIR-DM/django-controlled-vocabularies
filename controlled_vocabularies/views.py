@@ -10,6 +10,7 @@ from django_tomselect.autocompletes import (
     AutocompleteModelView,
 )
 
+from .conf import get_namespaces
 from .fields import ConceptFieldMixin
 from .models import Record
 from .predicates import Namespaces
@@ -29,6 +30,20 @@ class PredicateAutocompleteView(AutocompleteIterablesView):
         """The configured namespaces' properties as CURIEs, each its own value and label."""
         # A property, not a class attribute: the terms follow the project's settings.
         return Namespaces.terms()
+
+    def get_iterable(self) -> list[dict[str, str | int]]:
+        """List each term under the heading of its namespace, in the configured order."""
+        # The optgroup key is read by django-mvp-forms' template for django-tomselect.
+        names = {name.lower(): name for name in get_namespaces()}
+        order = list(names)
+        items = [
+            {**item, "optgroup": names[str(item["value"]).split(":", 1)[0]]}
+            for item in super().get_iterable()
+        ]
+        return sorted(
+            items,
+            key=lambda item: order.index(str(item["value"]).split(":", 1)[0]),
+        )
 
 
 class ConceptAutocompleteView(AutocompleteModelView):
