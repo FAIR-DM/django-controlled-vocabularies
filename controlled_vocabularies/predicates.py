@@ -1,8 +1,14 @@
 """The predicates the package knows about and the CURIE prefixes that abbreviate them."""
 
 import re
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import cache
+
+import rdflib.namespace
+
+from controlled_vocabularies.conf import get_namespaces
 
 
 class Kind(StrEnum):
@@ -28,15 +34,34 @@ class Predicate:
     translatable: bool = False
 
 
+class _Prefixes(Mapping[str, str]):
+    """The prefix to namespace map, built from the configured ``rdflib`` namespace classes.
+
+    Read on every access rather than at import, so it follows the project's settings.
+    ``xsd`` is always present because typed values use ``xsd:date``.
+    """
+
+    @staticmethod
+    def _build() -> dict[str, str]:
+        """Return the map for the namespaces now configured."""
+        names = dict.fromkeys([*get_namespaces(), "XSD"])
+        return {name.lower(): str(getattr(rdflib.namespace, name)) for name in names}
+
+    def __getitem__(self, prefix: str) -> str:
+        """Return the namespace a prefix abbreviates."""
+        return self._build()[prefix]
+
+    def __iter__(self) -> Iterator[str]:
+        """Iterate the prefixes in configured order."""
+        return iter(self._build())
+
+    def __len__(self) -> int:
+        """Return how many prefixes there are."""
+        return len(self._build())
+
+
 #: The prefixes a stored key may use. A key outside these namespaces is stored as a full URI.
-PREFIXES = {
-    "skos": "http://www.w3.org/2004/02/skos/core#",
-    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-    "dcterms": "http://purl.org/dc/terms/",
-    "owl": "http://www.w3.org/2002/07/owl#",
-    "xsd": "http://www.w3.org/2001/XMLSchema#",
-}
+PREFIXES = _Prefixes()
 
 _LITERAL = Predicate(Kind.LITERAL, many=False)
 _NOTE = Predicate(Kind.LITERAL, translatable=True)
@@ -83,6 +108,30 @@ class Namespaces:
 
     #: What may follow a prefix's namespace for the result to count as a CURIE.
     _LOCAL_NAME = re.compile(r"[\w.-]+")
+
+    @classmethod
+    def terms(cls) -> list[str]:
+        """Return the properties of the configured namespaces, as CURIEs.
+
+        Returns:
+            The CURIEs in ``PREDICATES`` first, in table order, then the rest alphabetically.
+        """
+        return cls._terms(tuple(get_namespaces()))
+
+    @staticmethod
+    @cache
+    def _terms(names: tuple[str, ...]) -> list[str]:
+        """Collect the properties of the named ``rdflib`` classes once per process."""
+        # A DefinedNamespace lists its terms as class annotations, and by RDF's convention a
+        # property starts in lower case where a class does not.
+        found = {
+            f"{name.lower()}:{term}"
+            for name in names
+            for term in getattr(rdflib.namespace, name).__annotations__
+            if term[0].islower()
+        }
+        known = [curie for curie in PREDICATES if curie in found]
+        return known + sorted(found - set(known))
 
     @classmethod
     def compact(cls, uri: str) -> str:

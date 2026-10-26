@@ -5,14 +5,30 @@ from typing import TYPE_CHECKING
 from django.apps import apps
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
-from django_tomselect.autocompletes import AutocompleteModelView
+from django_tomselect.autocompletes import (
+    AutocompleteIterablesView,
+    AutocompleteModelView,
+)
 
 from .fields import ConceptFieldMixin
 from .models import Record
+from .predicates import Namespaces
 
 if TYPE_CHECKING:
     # Guarded the same way as the base view's import of it.
     from django_tomselect._types import PaginatedResponse
+
+
+class PredicateAutocompleteView(AutocompleteIterablesView):
+    """Search-as-you-type endpoint for the properties of the configured RDF namespaces."""
+
+    page_size = 20
+
+    @property
+    def iterable(self) -> list[str]:  # type: ignore[override]
+        """The configured namespaces' properties as CURIEs, each its own value and label."""
+        # A property, not a class attribute: the terms follow the project's settings.
+        return Namespaces.terms()
 
 
 class ConceptAutocompleteView(AutocompleteModelView):

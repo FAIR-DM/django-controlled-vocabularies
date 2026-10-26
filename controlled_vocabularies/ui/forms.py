@@ -9,6 +9,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.forms import BaseFormSet, formset_factory
 from django.utils.translation import gettext_lazy as _
+from django_tomselect.app_settings import AllowedCSSFrameworks, TomSelectConfig
+from django_tomselect.forms import TomSelectChoiceField
 
 from controlled_vocabularies.models import ConceptScheme
 from controlled_vocabularies.predicates import (
@@ -20,11 +22,41 @@ from controlled_vocabularies.predicates import (
 )
 from controlled_vocabularies.ui.filters import language_name
 
-#: The id of the ``<datalist>`` the page offers to every row's predicate input.
-PREDICATE_LIST_ID = "statement-predicates"
+PREDICATE_AUTOCOMPLETE_URL_NAME = "controlled_vocabularies:predicate-autocomplete"
 
 #: What a predicate the package does not list is taken to be.
 _UNLISTED = Predicate(Kind.LITERAL)
+
+
+class PredicateChoiceField(TomSelectChoiceField):
+    """A predicate picked from the configured namespaces' terms, or typed in full.
+
+    Any text is a valid choice here; the row's own validation decides whether it names a
+    predicate.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Search the predicate endpoint, and let a curator create a value of their own."""
+        kwargs.setdefault(
+            "config",
+            TomSelectConfig(
+                url=PREDICATE_AUTOCOMPLETE_URL_NAME,
+                value_field="value",
+                label_field="label",
+                create=True,
+                # css_framework takes the enum's value: TomSelectConfig.validate() rejects the member itself.
+                css_framework=AllowedCSSFrameworks.DEFAULT.value,  # type: ignore[arg-type]
+            ),
+        )
+        super().__init__(*args, **kwargs)
+
+    def clean(self, value):
+        """Accept whatever was entered, as the text box this replaces did."""
+        return forms.CharField(required=False).clean(value)
+
+    def valid_value(self, value):
+        """Count any value as one of the choices, so a stored predicate redisplays selected."""
+        return True
 
 
 class VocabularyForm(forms.ModelForm):
@@ -91,13 +123,10 @@ class StatementForm(forms.Form):
     A row with no value is blank and is dropped when the vocabulary is saved.
     """
 
-    predicate = forms.CharField(
+    predicate = PredicateChoiceField(
         required=False,
         label=_("Predicate"),
         help_text=_("Pick a known term, or enter a prefixed name or a full address."),
-        widget=forms.TextInput(
-            attrs={"list": PREDICATE_LIST_ID, "autocomplete": "off"}
-        ),
     )
     value = forms.CharField(required=False, label=_("Value"))
     language = forms.ChoiceField(required=False, label=_("Language"), choices=())

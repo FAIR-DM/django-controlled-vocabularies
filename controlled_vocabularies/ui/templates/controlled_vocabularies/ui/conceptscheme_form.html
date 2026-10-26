@@ -6,9 +6,6 @@
   django-mvp places it.
 {% endcomment %}
 {% block formset %}
-  <datalist id="statement-predicates">
-    {% for curie in predicate_curies %}<option value="{{ curie }}">{% endfor %}
-  </datalist>
   <c-mvp.form.formset :formset="formset"
                       layout="tabular"
                       title="{% trans "Statements" %}"
