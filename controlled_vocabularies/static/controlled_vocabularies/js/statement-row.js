@@ -33,11 +33,14 @@
             return {
                 predicate: "",
                 known: kinds(),
+                // A stored modified date that is not YYYY-MM-DD cannot fill a date input, so it is
+                // edited as text rather than dropped on the next save.
+                notADate: false,
 
                 // A predicate the package does not list takes free text, like a literal.
                 get kind() {
                     if (this.predicate === "dcterms:modified") {
-                        return "date";
+                        return this.notADate ? "typed" : "date";
                     }
                     return this.known[this.predicate] || "literal";
                 },
@@ -45,6 +48,9 @@
                 init() {
                     var select = this.$el.querySelector("select[name$='-predicate']");
                     this.predicate = select.value;
+                    var date = this.$el.querySelector("input[type=date]");
+                    var text = this.$el.querySelector("input[type=text][name$='-value']");
+                    this.notADate = Boolean(date && text && !date.value && text.value);
                     // Tom Select fires change on the select it replaces.
                     select.addEventListener("change", () => {
                         this.predicate = select.value;
