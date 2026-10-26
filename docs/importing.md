@@ -167,8 +167,9 @@ instead of every document.
 Every save of a record deletes its `Link` rows and builds them again from its document, in the
 same transaction. A save that names `update_fields` without `"data"` leaves them alone. A write
 that skips `save()`, such as `QuerySet.update()` or `bulk_create()`, leaves them as they were, so
-call `record.refresh_links()` on each record afterwards, loaded again from the database. The
-import saves each record, so it keeps them in line without help.
+call `record.refresh_links()` on each record afterwards, loaded again from the database.
+`record.link_rows()` returns the unsaved rows a record's document states, which is what both build
+from. The import saves each record, so it keeps them in line without help.
 
 ### Reading a row
 

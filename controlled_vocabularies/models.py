@@ -464,10 +464,28 @@ class Record(Resource):
             if "@value" in entry
         )
         update_fields = kwargs.get("update_fields")
-        with transaction.atomic():
+        adding = self._state.adding
+        # No savepoint: an import saves thousands of records in one transaction, and a
+        # failure here rolls back the caller's transaction as a failed save would.
+        with transaction.atomic(savepoint=False):
             super().save(*args, **kwargs)
-            if update_fields is None or "data" in update_fields:
+            if adding:
+                # A new record has no rows to clear.
+                Link.objects.bulk_create(self.link_rows())
+            elif update_fields is None or "data" in update_fields:
                 self.refresh_links()
+
+    def link_rows(self) -> list["Link"]:
+        """Return the unsaved ``Link`` rows this record's document states.
+
+        Returns:
+            One row for each top-level link entry, in stored order.
+        """
+        return [
+            Link(source=self, predicate=curie, target=target)
+            for curie in self.data
+            for target in self.linked_uris(curie)
+        ]
 
     def refresh_links(self) -> None:
         """Rebuild this record's ``Link`` rows from its document.
@@ -476,14 +494,9 @@ class Record(Resource):
         ``QuerySet.update()`` or ``bulk_create()``, which skip ``save()``, once the
         record is loaded again.
         """
-        rows = [
-            Link(source=self, predicate=curie, target=target)
-            for curie in self.data
-            for target in self.linked_uris(curie)
-        ]
-        with transaction.atomic():
+        with transaction.atomic(savepoint=False):
             self.links.all().delete()
-            Link.objects.bulk_create(rows)
+            Link.objects.bulk_create(self.link_rows())
 
 
 class Link(models.Model):

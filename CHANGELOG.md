@@ -33,8 +33,11 @@ All notable changes to this project are documented in this file. The format foll
 ### Changed
 
 - A vocabulary's page and a concept's page find the links to a record in the new `Link` table
-  instead of reading every document. With 37,840 concepts on PostgreSQL they took about 5.4 and
-  1.8 seconds, because each read the documents of the whole vocabulary (#228).
+  instead of reading every document. With 37,840 concepts on PostgreSQL 17, a vocabulary's page
+  went from about 5.4 seconds to 0.25 and a concept's page from about 1.8 seconds to 0.02 (#228).
+- An import writes each record's link rows as it saves it, so it takes longer. On PostgreSQL 17,
+  a first import of 3,784 concepts went from 13 to 19 seconds, and importing it again from 8 to
+  17.5 (#228).
 - **Breaking:** `RecordQuerySet.mentioning(uri)` is replaced by `linking_to(uri, *curies)`. It reads
   the `Link` table, so it returns only records that link to the URI, under one of the given
   predicates when any are given, and never one that holds the URI as a literal. There is no alias

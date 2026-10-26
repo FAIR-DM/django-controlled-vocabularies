@@ -73,7 +73,10 @@ branch fast enough, so the cost is not earned.
 
 ## Consequences
 
-- An import writes one more delete and one more insert for each record it saves.
+- An import writes one more insert for each record it creates, and one more delete and insert
+  for each record it updates. Measured on PostgreSQL 17 with GCMD Science Keywords (3,784
+  concepts), a first import went from 13 to 19 seconds, and importing it again from 8 to 17.5. An
+  import is a batch job and a page is read on every request, so the pages are what the cost buys.
 - A write that skips `save()`, such as `QuerySet.update()` or `bulk_create()`, leaves the rows as
   they were until `refresh_links()` is called on each record.
 - A branch of a hierarchy can now be one recursive query over the table. Nothing in the package
