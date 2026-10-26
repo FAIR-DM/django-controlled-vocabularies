@@ -139,10 +139,11 @@ features:
 
 ### R7 — Scale hardening
 
-*Full feature · advances G5.*
+*delivered in [#186](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/186), [#228](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/228) · advances G5.*
 
-Keep search, browse, and autocomplete responsive at tens of thousands of concepts, and support
-navigation over deep hierarchies.
+Search, browse and autocomplete stay responsive at tens of thousands of concepts. Concept search
+reads trigram indexes on PostgreSQL, and the pages that follow a vocabulary's hierarchy read an
+indexed table of each record's links instead of every document.
 
 ### R8 — Embeddable and standalone modes
 
