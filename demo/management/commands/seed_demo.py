@@ -38,16 +38,12 @@ class Command(BaseCommand):
 
         import_skos(IMPORTED_FILE)
 
-        authored_scheme = ConceptScheme.objects.create(
-            name=AUTHORED_NAME,
-            description=AUTHORED_DESCRIPTION,
-        )
+        authored_scheme = self.create_scheme(AUTHORED_NAME, AUTHORED_DESCRIPTION)
         import_skos(AUTHORED_FILE, scheme=authored_scheme)
 
         # A vocabulary held here with nothing in it yet, whose default language can still change.
-        ConceptScheme.objects.create(
-            name="Sample Types",
-            description="Kinds of physical sample a dataset can be drawn from.",
+        self.create_scheme(
+            "Sample Types", "Kinds of physical sample a dataset can be drawn from."
         )
 
         seed_accounts()
@@ -56,6 +52,25 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 "seed_demo loaded 3 vocabularies and the sign-in accounts"
             )
+        )
+
+    @staticmethod
+    def create_scheme(name, description):
+        """Create a vocabulary held on this site.
+
+        Args:
+            name: The vocabulary's name, in English.
+            description: What it covers, in English.
+
+        Returns:
+            The saved vocabulary.
+        """
+        return ConceptScheme.objects.create(
+            default_language="en",
+            data={
+                "skos:prefLabel": [{"@value": name, "@language": "en"}],
+                "dcterms:description": [{"@value": description, "@language": "en"}],
+            },
         )
 
 
