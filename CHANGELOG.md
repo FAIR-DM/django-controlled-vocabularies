@@ -30,6 +30,10 @@ All notable changes to this project are documented in this file. The format foll
   `CONTROLLED_VOCABULARIES` and not loaded yet. A vocabulary that is neither declared nor loaded
   is reported as `controlled_vocabularies.W006`. A project that silences `W001` adds `W006` to
   `SILENCED_SYSTEM_CHECKS` until it declares its vocabularies (#221).
+- On PostgreSQL, a concept search reads trigram indexes over each concept's `pref_label` and
+  `search_text` instead of every concept. A migration enables the `pg_trgm` extension and adds
+  them, and does nothing on other databases. The search control lists concepts by name ignoring
+  case, as a vocabulary's page does, and both read their first page off one index (#186).
 
 - **Breaking:** a vocabulary is stored as two models, `ConceptScheme` and `Record`, in place of
   seven. `ConceptScheme` holds a vocabulary's URI, slug, default language, preferred label and

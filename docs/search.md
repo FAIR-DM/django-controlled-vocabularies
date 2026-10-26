@@ -57,6 +57,26 @@ uses the same classes. The control submits each chosen concept's URI.
 The control needs a browser running JavaScript. Without it, both fields still work as an ordinary
 required-relation form field; only the search-as-you-type behaviour is unavailable.
 
+## Searching a large vocabulary
+
+A search matches its text anywhere in a label, ignoring case, in the control and on a
+vocabulary's page alike. How much of the database it reads depends on the database:
+
+- **PostgreSQL.** The package's migrations add trigram indexes over each concept's preferred
+  label and its `search_text`, so a search of three or more characters reads the index rather
+  than every concept. A search of one or two characters is too short for a trigram index and
+  reads every concept of the vocabulary.
+- **Any other database.** The same search works unchanged, with no index behind it, and reads
+  every concept of the vocabulary. That costs more as a vocabulary grows, so a site holding
+  vocabularies of tens of thousands of concepts is better served by PostgreSQL.
+
+The first page, shown before anything is typed, is read off an index in name order on every
+database, so opening a vocabulary's page costs the same whatever its size. The control does the
+same for a field naming one vocabulary. A field naming several, or none, sorts the concepts it
+allows before taking the first page.
+
+What PostgreSQL needs for this is in [configuration](configuration.md#database).
+
 ## Choosing a concept in the admin
 
 A model that declares `ConceptField` or `MultiConceptField` gets the same search-as-you-type control

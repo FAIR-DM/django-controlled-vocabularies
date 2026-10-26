@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING
 from django.apps import apps
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
+from django.db.models.functions import Lower
 from django_tomselect.autocompletes import AutocompleteModelView
 
 from .fields import ConceptFieldMixin
-from .models import Record
+from .models import ConceptScheme, Record
 
 if TYPE_CHECKING:
     # Guarded the same way as the base view's import of it.
@@ -23,7 +24,10 @@ class ConceptAutocompleteView(AutocompleteModelView):
 
     model = Record
     page_size = 20
-    ordering = ("pref_label", "pk")
+    # The order a vocabulary's page lists its concepts in, which the composite index on
+    # Record serves. The base annotates field names only, though it passes the value to
+    # order_by(), which takes expressions as well.
+    ordering = (Lower("pref_label"), "pk")  # type: ignore[assignment]
     allow_anonymous = True
     allowed_filter_fields = []
     allowed_ordering_fields = []
@@ -81,7 +85,14 @@ class ConceptAutocompleteView(AutocompleteModelView):
         if field is None:
             return queryset.none()
         # The mixin is not a RelatedField, so mypy cannot see get_limit_choices_to() after narrowing.
-        return queryset.complex_filter(field.get_limit_choices_to())  # type: ignore[attr-defined]
+        queryset = queryset.complex_filter(field.get_limit_choices_to())  # type: ignore[attr-defined]
+        if not field.vocabulary:
+            return queryset
+        # The restriction names vocabularies by slug, through a join. Naming them by id as
+        # well lets PostgreSQL read a page off the record index in its sort order, rather
+        # than sorting every concept of the vocabulary first.
+        schemes = ConceptScheme.objects.filter(slug__in=field.vocabulary)
+        return queryset.filter(scheme__in=list(schemes.values_list("pk", flat=True)))
 
     def order_queryset(self, queryset: QuerySet) -> QuerySet:
         """Order by an ordered collection's own sequence while the search box is empty."""

@@ -420,6 +420,16 @@ class TestConceptAutocompletePagination:
 
         assert result_uris(response) == [concept.uri for concept in expected_order]
 
+    def test_opening_with_nothing_typed_orders_by_name_ignoring_case(self):
+        # The order a vocabulary's own page lists its concepts in.
+        bravo, alpha, charlie = (
+            RecordFactory(label=label) for label in ["Bravo", "alpha", "Charlie"]
+        )
+
+        response = unrestricted_get()
+
+        assert result_uris(response) == [alpha.uri, bravo.uri, charlie.uri]
+
     def test_a_page_past_the_last_returns_nothing_and_says_no_more_exist(self):
         # The inherited behaviour re-serves page 1 for a page past the last.
         RecordFactory(label="Granite")
@@ -467,8 +477,8 @@ class TestConceptAutocompletePagination:
         selects = [q["sql"] for q in ctx.captured_queries if "ORDER BY" in q["sql"]]
         assert selects, [q["sql"] for q in ctx.captured_queries]
         order_by = selects[0].split("ORDER BY", 1)[1]
-        assert '"pref_label" ASC' in order_by
-        assert order_by.index('"pref_label" ASC') < order_by.index('"id" ASC')
+        assert '"pref_label") ASC' in order_by
+        assert order_by.index('"pref_label") ASC') < order_by.index('"id" ASC')
 
 
 @pytest.mark.django_db

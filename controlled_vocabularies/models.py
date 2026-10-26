@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils.text import slugify
 from django.utils.translation import get_language
 from django.utils.translation import gettext_lazy as _
@@ -393,9 +394,15 @@ class Record(Resource):
                 fields=["scheme", "slug"], name="unique_record_slug_per_scheme"
             )
         ]
+        # In the order a vocabulary's concepts are listed. The trigram indexes concept
+        # search uses on PostgreSQL are made by migration 0002 and not declared here,
+        # because no other database can build them.
         indexes = [
             models.Index(
-                fields=["scheme", "type", "pref_label"], name="record_scheme_type_label"
+                models.F("scheme"),
+                models.F("type"),
+                Lower("pref_label"),
+                name="record_scheme_type_label",
             )
         ]
 
