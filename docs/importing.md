@@ -156,6 +156,20 @@ Two columns are copies, filled in from the document each time a row is saved:
 
 Sorting and searching use these copies, so they cost no lookup inside the document.
 
+The links a record states are copied too, into the `Link` table, one row for each top-level
+`{"@id": ...}` entry of the document: the `source` record, the `predicate` as stored (a CURIE such
+as `skos:broader`, or a full URI) and the `target` URI. A target is a URI and not a foreign key,
+because a link may point at a concept this site does not hold. A literal, and a link inside an
+embedded blank node, give no row, and a link stated twice gives two. Pages that ask who links to a
+concept, such as its inferred narrower concepts and the vocabulary's top concepts, read this table
+instead of every document.
+
+Every save of a record deletes its `Link` rows and builds them again from its document, in the
+same transaction. A save that names `update_fields` without `"data"` leaves them alone. A write
+that skips `save()`, such as `QuerySet.update()` or `bulk_create()`, leaves them as they were, so
+call `record.refresh_links()` on each record afterwards, loaded again from the database. The
+import saves each record, so it keeps them in line without help.
+
 ### Reading a row
 
 A row is read with its methods rather than by indexing into `data`:
@@ -176,10 +190,11 @@ collection.member_uris()            # a collection's members, an ordered one in 
 A record's `type` is one of `Record.Type.CONCEPT`, `Record.Type.COLLECTION` and
 `Record.Type.ORDERED_COLLECTION`. `Record.COLLECTION_TYPES` holds the last two, and
 `record.is_collection` says whether a record is either. `Record.objects` is a `RecordQuerySet`,
-whose `mentioning(uri)` narrows
-records to those whose document may link to a URI, which is how a concept's page finds the links
-other concepts make to it. It matches on the stored text, so it can return a record that holds the
-URI as a plain literal, and callers check the links with `linked_uris()`.
+whose `linking_to(uri, *curies)` narrows records to those whose document links to a URI, under
+one of the given predicates when any are given. It reads the `Link` table, so a record that holds
+the URI only as a literal is not returned and a record that links to it more than once is returned
+once. A concept's page finds the collections holding it with
+`linking_to(concept.uri, "skos:member", "skos:memberList")`.
 
 A document is validated by `validate_document` when a row is cleaned. It must be an object that
 maps each predicate to a list of entries, each a link or a literal as shown above.

@@ -23,9 +23,22 @@ All notable changes to this project are documented in this file. The format foll
   vocabularies are declared this way (#221).
 - `manage.py check` warns about a field naming a vocabulary that is neither declared nor loaded
   (`controlled_vocabularies.W006`).
+- A `Link` model holds one row for each top-level link a record's document states: its `source`
+  record, its `predicate` as stored and its `target` URI. It is rebuilt from the document each time
+  the record is saved, and `Record.refresh_links()` rebuilds it after a write that skips `save()`,
+  such as `QuerySet.update()`. A migration builds the rows for the records a site already holds
+  (#228). See
+  [ADR 0025](docs/adr/0025-a-records-links-are-copied-into-a-table.md).
 
 ### Changed
 
+- A vocabulary's page and a concept's page find the links to a record in the new `Link` table
+  instead of reading every document. With 37,840 concepts on PostgreSQL they took about 5.4 and
+  1.8 seconds, because each read the documents of the whole vocabulary (#228).
+- **Breaking:** `RecordQuerySet.mentioning(uri)` is replaced by `linking_to(uri, *curies)`. It reads
+  the `Link` table, so it returns only records that link to the URI, under one of the given
+  predicates when any are given, and never one that holds the URI as a literal. There is no alias
+  (#228).
 - `controlled_vocabularies.W001` now reports only a vocabulary that is declared in
   `CONTROLLED_VOCABULARIES` and not loaded yet. A vocabulary that is neither declared nor loaded
   is reported as `controlled_vocabularies.W006`. A project that silences `W001` adds `W006` to
