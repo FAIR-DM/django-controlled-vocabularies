@@ -1,6 +1,7 @@
 # django-controlled-vocabularies
 
-Manage, publish, and consume SKOS controlled vocabularies in Django.
+Import published SKOS controlled vocabularies into Django, and reference their concepts from your
+own models.
 
 The [README](../README.md) is the front door — what this package is, what it deliberately is not,
 how to install it, and the shortest example that works. These pages are the manual.

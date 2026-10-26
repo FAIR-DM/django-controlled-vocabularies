@@ -1,4 +1,4 @@
-# ADR 0018 — A restriction names its target by slug
+# ADR 0022 — A restriction names its target by slug
 
 **Status:** accepted
 

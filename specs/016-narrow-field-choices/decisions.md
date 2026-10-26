@@ -18,7 +18,7 @@ restriction at a time, and no requirement asks for more. Nothing is foreclosed �
 an intersection appears, it can be added later with an explicit spelling, whereas a guessed default
 shipped now would have to be broken to correct it.
 
-**ADR:** docs/adr/0017-a-field-carries-one-restriction-never-a-combination.md
+**ADR:** docs/adr/0021-a-field-carries-one-restriction-never-a-combination.md
 
 ## D2 — The failure lands at declaration time, not at validation time
 
@@ -107,7 +107,7 @@ target resolves inside the single named vocabulary. That is what makes "exactly 
 (FR-005) a precondition rather than a preference — with two vocabularies named, a collection slug
 could resolve to two different collections, and there would be no way to say which was meant.
 
-**ADR:** docs/adr/0018-a-restriction-names-its-target-by-slug.md
+**ADR:** docs/adr/0022-a-restriction-names-its-target-by-slug.md
 
 ## D8 — The ordered sequence is applied at the endpoint, and only while the search box is empty
 
@@ -135,7 +135,7 @@ The position is read through a `Subquery` annotation keyed on the declaration's 
 a membership join. A concept may belong to more than one collection, and this queryset reaches
 `complex_filter()` without Django's `Exists()` wrapper, so a join would duplicate rows silently.
 
-**ADR:** docs/adr/0019-a-curators-order-reaches-browsing-not-searching.md
+**ADR:** docs/adr/0023-a-curators-order-reaches-browsing-not-searching.md
 
 ## D9 — A branch restriction's closure is recomputed per request, on an endpoint open to anyone
 

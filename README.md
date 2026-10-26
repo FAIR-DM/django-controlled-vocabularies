@@ -11,20 +11,20 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Licence](https://img.shields.io/github/license/FAIR-DM/django-controlled-vocabularies)](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/LICENSE)
 
-Manage, publish, and consume SKOS controlled vocabularies in Django.
+Import published SKOS controlled vocabularies into Django, and reference their concepts from your
+own models.
 
-Research data infrastructure runs on controlled vocabularies, but Django has no native way to manage
-or consume them, and the existing editors are foreign stacks, unmaintained, or deployment-heavy.
-This app closes that gap for research organisations by treating a vocabulary as ordinary relational
-data: no hand-edited RDF, no code release to add a term, and no triplestore to operate. It
-supersedes and retires `skos-builder` and `django-research-vocabs`.
+Research data infrastructure runs on controlled vocabularies, and the ones worth using are already
+published: by standards bodies, by research communities, by other projects. Django has no native
+way to bring one in and point a record at its terms. This app closes that gap by importing a
+published vocabulary as ordinary relational data, so a model references a concept the way it
+references any other row, with no hand-edited RDF and no triplestore to operate. It supersedes and
+retires `skos-builder` and `django-research-vocabs`.
 
-**v0.1.0 covers the consuming half.** You can import a published SKOS vocabulary from a file or a
-URL, attach its concepts to your own models through a single field, pick one through a
-search-as-you-type control in your forms and in the Django admin, and browse what the site holds
-through an opt-in set of read-only pages. The next release adds creating, editing and deleting a
-vocabulary from those pages. Managing the concepts inside a vocabulary and serving RDF back out at those addresses are the
-next releases — see
+You can import a published SKOS vocabulary from a file or a URL, attach its concepts to your own
+models through a single field, pick one through a search-as-you-type control in your forms and in
+the Django admin, and browse what the site holds through an opt-in set of read-only pages. Loading
+the vocabularies a site declares with one command is next — see
 [the roadmap](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/ROADMAP.md).
 
 - [Scope and philosophy](#scope-and-philosophy)
@@ -38,42 +38,46 @@ next releases — see
 
 ## Scope and philosophy
 
-A vocabulary here is **relational data, not a document**. Concepts are Django models, the database
-is the source of truth, and RDF is a projection produced only at the import and export boundary.
-That puts everything Django already does well — forms, permissions, indexed search, referential
-integrity — to work on vocabulary management, and lets a vocabulary scale to tens of thousands of
-concepts and evolve as data rather than as code.
+This package **imports published vocabularies and lets your models reference their concepts.** A
+vocabulary belongs to whoever published it. The package's job is to hold it faithfully and make
+its concepts something a Django model can point at, not to author it.
+
+A vocabulary here lives **in the database, not in an RDF file or a triplestore**. Concepts are
+Django models, the database is the source of truth, and RDF is read only at the import boundary. That puts everything Django
+already does well — forms, permissions, indexed search, referential integrity — to work on
+referencing vocabularies, and lets a vocabulary of tens of thousands of concepts change as data
+rather than as a code release of every project that uses it.
 
 **It deliberately is:**
 
 - SKOS-focused.
 - A Django app — installable into any Django project (notably FairDM) and runnable standalone.
-- Both a **manager** (author, edit, version, publish) and a **consumer** (attach concepts to your
-  models via a field, and serve RDF at stable URIs).
+- A **reference** — a field attaches a concept to your model, and a concept a
+  record still points at cannot be deleted. Whether a concept is deprecated is what its publisher
+  says.
+- A faithful keeper of what was published — an import keeps every statement it reads, in every
+  language, including statements in vocabularies other than SKOS.
 - Multilingual — a concept holds labels and definitions in any number of languages, with one
-  preferred label per language. Each vocabulary picks the language that anchors its concept
-  addresses, and a curator can override any concept's slug.
+  preferred label per language.
 - A graph, not a flat list — concepts link to one another through a broader/narrower hierarchy
   (navigable both ways, and a concept may sit under several broader concepts) and a symmetric
   related association, all within one vocabulary.
-- Organisable into collections — a curator can gather a vocabulary's concepts into named
-  collections, optionally in a deliberate order, separate from the hierarchy and from any other
-  collection a concept belongs to.
+- Organised into collections where the publisher defines them — named groupings of a vocabulary's
+  concepts, optionally in a deliberate order, separate from the hierarchy.
 
 **It deliberately is not:**
 
-- A general RDF/OWL toolkit — the SKOS-only scope is intentional.
+- A vocabulary editor or publisher — a curator can create, edit and delete a vocabulary's own
+  details from the browsing pages, but authoring the concepts inside one and serving vocabularies
+  as RDF are set aside until a project needs them. Imported vocabularies are read-only references,
+  and extending one with your own terms is out of scope.
+- A general RDF/OWL toolkit — only SKOS is modelled.
 - A triplestore or SPARQL endpoint — the relational database is the store.
-- A replacement for rdflib — rdflib is used only to parse and serialize at the boundary.
+- A replacement for rdflib — rdflib is used only to parse at the boundary.
 - A reasoner — no OWL inference.
-- An editor for external vocabularies — imported vocabularies are read-only references, and
-  extending one with your own terms is out of scope.
-- A faithful mirror of an imported vocabulary — imports are normalised to what the app supports
-  (its configured languages, for one), and unsupported languages and constructs are not stored.
-  Nothing is dropped in silence: everything set aside is named in the import report.
 
 **Tie-breaks, when principles collide:** the database is the source of truth over RDF fidelity in
-memory, lossless round-tripping over schema neatness, stable concept URIs over convenient
+memory, keeping what was published over schema neatness, stable concept URIs over convenient
 identifiers, vocabulary-as-data over vocabulary-as-code, and SKOS fidelity over generality.
 
 ## Requirements

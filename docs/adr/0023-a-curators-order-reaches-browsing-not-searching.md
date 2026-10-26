@@ -1,4 +1,4 @@
-# ADR 0019 — A curator's order reaches browsing, not searching
+# ADR 0023 — A curator's order reaches browsing, not searching
 
 **Status:** accepted
 

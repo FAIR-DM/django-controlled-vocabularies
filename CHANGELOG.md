@@ -31,6 +31,9 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Changed
 
+- The package's stated scope is importing published vocabularies and referencing their concepts
+  from your own models. Authoring vocabularies and publishing them as RDF are set aside until a
+  project needs them. See [GOALS.md](GOALS.md) and [the roadmap](docs/ROADMAP.md).
 - The list of vocabularies shows its entries as rows rather than cards, laid out as the concepts
   on a vocabulary's page are. Each row names the vocabulary's publisher, its collection count and
   when it was last updated, and shows every vocabulary's identifier. Whether a vocabulary was
