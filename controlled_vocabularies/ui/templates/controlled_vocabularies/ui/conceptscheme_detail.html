@@ -21,7 +21,7 @@
         Edit only for a vocabulary held here: an imported one is the publisher's, and the side panel
         tells a curator which this is. Delete for either, to whoever may delete.
       {% endcomment %}
-      {% if perms.controlled_vocabularies.change_conceptscheme and not vocabulary.static_uri %}
+      {% if perms.controlled_vocabularies.change_conceptscheme and vocabulary.managed %}
         <c-button text="{% trans "Edit" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-update' vocabulary.slug %}" icon="edit" outline only />
       {% endif %}
       {% if perms.controlled_vocabularies.delete_conceptscheme %}
@@ -98,7 +98,7 @@
         {% if perms.controlled_vocabularies.change_conceptscheme %}
           <div>
             <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Source" %}</dt>
-            <dd>{% if vocabulary.static_uri %}{% trans "Imported" %}{% else %}{% trans "Held here" %}{% endif %}</dd>
+            <dd>{% if vocabulary.managed %}{% trans "Held here" %}{% else %}{% trans "Imported" %}{% endif %}</dd>
           </div>
         {% endif %}
         <div>
@@ -107,11 +107,11 @@
         </div>
       </dl>
       <dl id="vocabulary-publication" class="flex flex-col gap-3 border-t border-base-300 pt-4">
-        <c-controlled-vocabularies.publication-detail term="{% trans "Publisher" %}" value="{{ vocabulary.publisher }}" />
-        <c-controlled-vocabularies.publication-detail term="{% trans "Creator" %}" value="{{ vocabulary.creator }}" />
-        <c-controlled-vocabularies.publication-detail term="{% trans "Licence" %}" value="{{ vocabulary.license }}" />
-        <c-controlled-vocabularies.publication-detail term="{% trans "Version" %}" value="{{ vocabulary.version }}" />
-        <c-controlled-vocabularies.publication-detail term="{% trans "Last modified" %}" value="{{ vocabulary.modified|date }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Publisher" %}" value="{{ details.publisher }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Creator" %}" value="{{ details.creator }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Licence" %}" value="{{ details.license }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Version" %}" value="{{ details.version }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Last modified" %}" value="{{ details.modified }}" />
       </dl>
       <dl class="flex flex-col gap-3 border-t border-base-300 pt-4">
         <div>
@@ -127,7 +127,7 @@
                 {% for concept in top_concepts %}
                   <li>
                     <c-link href="{% url 'controlled_vocabularies_ui:concept-detail' vocabulary.slug concept.slug %}"
-                            text="{{ concept.resolved_label }}"
+                            text="{{ concept.display_label }}"
                             hover=True />
                   </li>
                 {% endfor %}
@@ -143,10 +143,10 @@
                 {% for collection in collections %}
                   <li class="leading-snug">
                     <c-link href="{% url 'controlled_vocabularies_ui:collection-detail' vocabulary.slug collection.slug %}"
-                            text="{{ collection.name }}"
+                            text="{{ collection.display_label }}"
                             hover=True />
                     <span class="block text-xs text-base-content/60">
-                      {% blocktrans count counter=collection.member_count %}{{ counter }} member{% plural %}{{ counter }} members{% endblocktrans %}{% if collection.ordered %} · {% trans "ordered" %}{% endif %}
+                      {% blocktrans count counter=collection.member_count %}{{ counter }} member{% plural %}{{ counter }} members{% endblocktrans %}{% if collection.type == "skos:OrderedCollection" %} · {% trans "ordered" %}{% endif %}
                     </span>
                   </li>
                 {% endfor %}

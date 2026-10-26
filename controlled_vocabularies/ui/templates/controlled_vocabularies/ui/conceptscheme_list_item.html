@@ -7,20 +7,20 @@
 {% endcomment %}
 <c-list.row>
   <div class="list-col-grow min-w-0">
-    {% if object.publisher %}
-      <div class="text-xs text-base-content/60 truncate">{{ object.publisher }}</div>
+    {% if object.details.publisher %}
+      <div class="text-xs text-base-content/60 truncate">{{ object.details.publisher }}</div>
     {% endif %}
     <a href="{% url 'controlled_vocabularies_ui:vocabulary-detail' object.slug %}"
-       class="link link-hover font-medium">{{ object.name }}</a>
-    {% if object.description %}
-      <p class="text-sm text-base-content/70">{{ object.description|truncatewords:30 }}</p>
+       class="link link-hover font-medium">{{ object.display_label }}</a>
+    {% if object.summary %}
+      <p class="text-sm text-base-content/70">{{ object.summary|truncatewords:30 }}</p>
     {% endif %}
     {% comment %}
       What a person compares between candidates: size and how recently it changed. A vocabulary with
       no collections says nothing about them.
     {% endcomment %}
     <div class="text-xs text-base-content/60 mt-1 tabular-nums">
-      {% blocktrans count counter=object.concept_count %}{{ counter }} concept{% plural %}{{ counter }} concepts{% endblocktrans %}{% if object.collection_count %} · {% blocktrans count counter=object.collection_count %}{{ counter }} collection{% plural %}{{ counter }} collections{% endblocktrans %}{% endif %}{% if object.modified %} · {% blocktrans with date=object.modified|date %}Updated {{ date }}{% endblocktrans %}{% endif %}
+      {% blocktrans count counter=object.concept_count %}{{ counter }} concept{% plural %}{{ counter }} concepts{% endblocktrans %}{% if object.collection_count %} · {% blocktrans count counter=object.collection_count %}{{ counter }} collection{% plural %}{{ counter }} collections{% endblocktrans %}{% endif %}{% if object.details.modified %} · {% blocktrans with date=object.details.modified %}Updated {{ date }}{% endblocktrans %}{% endif %}
     </div>
     <div class="text-xs text-base-content/60 break-words">
       <c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" />

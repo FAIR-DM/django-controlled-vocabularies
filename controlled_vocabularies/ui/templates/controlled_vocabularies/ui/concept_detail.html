@@ -1,9 +1,5 @@
 {% extends "detail_view.html" %}
 {% load i18n %}
-{% comment %}
-  Only the keys a row carries are passed: a Python None interpolated into `{{ }}` renders as the
-  text "None", which would make property_row.html's `{% if short_form %}` true for every row.
-{% endcomment %}
 {% block page.content %}
   {% comment %}
     Leads the page rather than trailing the list, so a reader citing this record need not scroll past
@@ -12,18 +8,10 @@
   <c-mvp.text size="xs" muted><c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" /></c-mvp.text>
   <dl>
     {% for row in rows %}
-      {% if row.short_form %}
-        <c-controlled-vocabularies.property-row term="{{ row.term }}"
-                                                  term_uri="{{ row.term_uri }}"
-                                                  short_form="{{ row.short_form }}"
-                                                  uri="{{ row.uri }}"
-                                                  href="{{ row.href }}"
-                                                  identifier_id="{{ row.identifier_id }}" />
-      {% else %}
-        <c-controlled-vocabularies.property-row term="{{ row.term }}"
-                                                  term_uri="{{ row.term_uri }}"
-                                                  value="{{ row.value }}" />
-      {% endif %}
+      {% comment %} `entries` is a list, so it is bound with : rather than interpolated, which would turn it into a string. {% endcomment %}
+      <c-controlled-vocabularies.property-row term="{{ row.term }}"
+                                                term_uri="{{ row.term_uri }}"
+                                                :entries="row.entries" />
     {% endfor %}
   </dl>
   {% if concept_collections %}
@@ -37,7 +25,7 @@
         {% for collection in concept_collections %}
           <li>
             <c-link href="{% url 'controlled_vocabularies_ui:collection-detail' object.scheme.slug collection.slug %}"
-                    text="{{ collection.name }}"
+                    text="{{ collection.display_label }}"
                     hover=True />
           </li>
         {% endfor %}

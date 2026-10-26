@@ -1,12 +1,11 @@
 """Views for the opt-in vocabulary-browsing front end."""
 
-from itertools import count
 from urllib.parse import urlencode
 
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import CASCADE, Count, F, OuterRef, Prefetch, Subquery
-from django.db.models.functions import Coalesce, Lower
+from django.db.models import CASCADE, Count, F, Q
+from django.db.models.functions import Lower
 from django.http import Http404
 from django.urls import reverse
 from django.utils.text import Truncator, capfirst
@@ -20,36 +19,13 @@ from mvp.views import (
     MVPUpdateView,
 )
 
-from controlled_vocabularies.exchange.mapping import (
-    BROADER_CURIE,
-    COLLECTION_TYPE_CURIE,
-    CONCEPT_TYPE_CURIE,
-    IN_SCHEME_CURIE,
-    LABEL_CURIES,
-    MEMBER_CURIE,
-    MEMBER_LIST_CURIE,
-    NARROWER_CURIE,
-    NOTE_CURIES,
-    ORDERED_COLLECTION_TYPE_CURIE,
-    RELATED_CURIE,
-    TYPE_CURIE,
-    curie_uri,
-)
-from controlled_vocabularies.models import (
-    Collection,
-    CollectionMember,
-    Concept,
-    ConceptLabel,
-    ConceptNote,
-    ConceptRelation,
-    ConceptScheme,
-)
-from controlled_vocabularies.ui.filters import (
-    ConceptFilter,
-    VocabularyFilter,
-    language_expression,
-)
+from controlled_vocabularies.models import ConceptScheme, Record
+from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
 from controlled_vocabularies.ui.forms import VocabularyForm
+from controlled_vocabularies.ui.rows import (
+    PropertyRows,
+    PublicationDetails,
+)
 
 
 class _StrippedSearchMixin:
@@ -66,6 +42,30 @@ class _StrippedSearchMixin:
             stripped = request.GET.copy()
             stripped["q"] = term.strip()
             request.GET = stripped
+
+
+class _VocabularyPageMixin:
+    """Resolve the vocabulary segment of the address and link the trail back to it."""
+
+    def setup(self, request, *args, **kwargs):
+        """Resolve the vocabulary segment of the address, or raise a 404."""
+        super().setup(request, *args, **kwargs)
+        try:
+            self.vocabulary = ConceptScheme.objects.get(slug=kwargs["slug"])
+        except ConceptScheme.DoesNotExist as exc:
+            raise Http404(_("No vocabulary matches this address.")) from exc
+
+    def get_breadcrumbs(self):
+        """Link the trail to the record's vocabulary rather than to every record."""
+        # The default trail names the model's plural and links nowhere.
+        return [
+            {"text": _("Home"), "href": "/"},
+            {
+                "text": self.vocabulary.display_label(),
+                "href": vocabulary_url(self.vocabulary),
+            },
+            {"text": self.get_page_title()},
+        ]
 
 
 class VocabularyListView(_StrippedSearchMixin, MVPListView):
@@ -89,402 +89,108 @@ class VocabularyListView(_StrippedSearchMixin, MVPListView):
 
     # A class attribute: Django applies `ordering` before the search adds `.distinct()`, which an
     # order_by() in get_queryset() would land after. `pk` makes the order total for pagination.
-    ordering = [Lower("name"), "pk"]
+    ordering = [Lower("pref_label"), "pk"]
 
     def get_queryset(self):
-        """Annotate each vocabulary with its counts and its effective default language."""
+        """Annotate each vocabulary with its counts and its modified date."""
         return (
             super()
             .get_queryset()
             .annotate(
-                concept_count=Count("concepts", distinct=True),
-                collection_count=Count("collections", distinct=True),
-                language=language_expression(),
-            )
-        )
-
-    def get_context_data(self, **kwargs):
-        """Count each facet option before the filter panel draws it."""
-        self.get_filterset().count_facets()
-        return super().get_context_data(**kwargs)
-
-
-def concept_property_rows(
-    concept: Concept, language: str, default_language: str | None = None
-) -> list[dict]:
-    """Return the fixed-order property rows a concept's own page renders.
-
-    One row per SKOS statement the concept makes about itself: type, preferred label,
-    alternative labels, notes, broader, narrower and related concepts, then the
-    vocabulary holding it. Collection membership is never a row, because other records
-    make that statement. A hidden label is never read. A property with no value in
-    either language contributes no row.
-
-    Each row is a dict of ``term``, ``term_uri``, ``value``, ``short_form``, ``uri``,
-    ``href`` and ``identifier_id``, the names the ``property_row`` component takes. A
-    record-valued row carries ``short_form``, ``uri`` and ``href`` and leaves ``value`` empty.
-
-    Args:
-        concept: The concept to describe.
-        language: The language being read.
-        default_language: The language a value absent in ``language`` falls back to.
-            ``None``, the default, requests no fallback.
-
-    Returns:
-        The rows in display order.
-    """
-    identifier_ids = count()
-
-    def row(term: str, *, value=None, short_form=None, uri=None, href=None) -> dict:
-        """Build one row dict.
-
-        Args:
-            term: The CURIE naming the property.
-            value: The plain value, for a row that is not record-valued.
-            short_form: The link text of a record-valued row.
-            uri: The record's canonical identifier.
-            href: The address of the record's own page.
-
-        Returns:
-            The row.
-        """
-        # A term is a CURIE, so a reader hovering it is asking which URI it abbreviates.
-        return {
-            "term": term,
-            "term_uri": curie_uri(term),
-            "value": value,
-            "short_form": short_form,
-            "uri": uri,
-            "href": href,
-            # Only a record-valued row has a hidden span for aria-describedby to name, and its id
-            # must be unique on the page.
-            "identifier_id": f"identifier-{next(identifier_ids)}" if uri else None,
-        }
-
-    def localized_text(getter):
-        """Return a value in the reading language, or in the default language when it has none.
-
-        Args:
-            getter: Returns the value for a given language.
-
-        Returns:
-            The value found.
-        """
-        value = getter(language)
-        if not value and default_language and default_language != language:
-            value = getter(default_language)
-        return value
-
-    def localized_list(getter):
-        """Return values in the reading language, or in the default language when there are none.
-
-        Args:
-            getter: Returns the values for a given language.
-
-        Returns:
-            The values found.
-        """
-        values = getter(language)
-        if not values and default_language and default_language != language:
-            values = getter(default_language)
-        return values
-
-    def record_row(term: str, record: Concept) -> dict:
-        """Build the row for a related concept.
-
-        Args:
-            term: The CURIE naming the relation.
-            record: The related concept.
-
-        Returns:
-            The row.
-        """
-        # The prefix comes from the vocabulary holding the record, and the link is reversed
-        # through this app's namespace: `local_url` is an identifier, not a route.
-        return row(
-            term,
-            short_form=f"{record.scheme.slug}:{record.slug}",
-            uri=record.uri,
-            href=reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": record.scheme.slug, "concept_slug": record.slug},
-            ),
-        )
-
-    rows = [row(TYPE_CURIE, value=CONCEPT_TYPE_CURIE)]
-
-    preferred_label = localized_text(concept.preferred_label)
-    if preferred_label:
-        rows.append(
-            row(LABEL_CURIES[ConceptLabel.Kind.PREFERRED], value=preferred_label)
-        )
-
-    rows.extend(
-        row(LABEL_CURIES[ConceptLabel.Kind.ALTERNATIVE], value=text)
-        for text in localized_list(concept.alt_labels)
-    )
-
-    for kind in ConceptNote.Kind:
-        rows.extend(
-            row(NOTE_CURIES[kind], value=value)
-            for value in localized_list(
-                lambda lang, kind=kind: concept.notes(lang, kind=kind)
-            )
-        )
-
-    # None of these three is prefetchable (each builds a fresh queryset), so each chains its own
-    # select_related("scheme").
-    rows.extend(
-        record_row(BROADER_CURIE, related)
-        for related in concept.broader().select_related("scheme")
-    )
-    rows.extend(
-        record_row(NARROWER_CURIE, related)
-        for related in concept.narrower().select_related("scheme")
-    )
-    rows.extend(
-        record_row(RELATED_CURIE, related)
-        for related in concept.related().select_related("scheme")
-    )
-
-    scheme = concept.scheme
-    rows.append(
-        row(
-            IN_SCHEME_CURIE,
-            # A vocabulary records no short prefix, so its row names it by display name.
-            short_form=scheme.name,
-            uri=scheme.uri,
-            href=reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            ),
-        )
-    )
-
-    return rows
-
-
-def collection_property_rows(collection: Collection) -> list[dict]:
-    """Return the fixed-order property rows a collection's own page renders.
-
-    Mirrors :func:`concept_property_rows`: type, name, members, then the vocabulary
-    holding it. An ordered collection is a ``skos:OrderedCollection`` with members
-    under ``skos:memberList``, an unordered one a ``skos:Collection`` with members
-    under ``skos:member``. Membership is one row carrying every member in its
-    ``entries`` key, and a collection with no members has no such row.
-
-    Args:
-        collection: The collection to describe.
-
-    Returns:
-        The rows in display order.
-    """
-    identifier_ids = count()
-
-    def row(
-        term: str, *, value=None, short_form=None, uri=None, href=None, entries=None
-    ) -> dict:
-        """Build one row dict.
-
-        Args:
-            term: The CURIE naming the property.
-            value: The plain value, for a row that is not record-valued.
-            short_form: The link text of a record-valued row.
-            uri: The record's canonical identifier.
-            href: The address of the record's own page.
-            entries: The ``short_form``, ``uri``, ``href`` and ``identifier_id`` of each
-                member, for the membership row.
-
-        Returns:
-            The row.
-        """
-        return {
-            "term": term,
-            "term_uri": curie_uri(term),
-            "value": value,
-            "short_form": short_form,
-            "uri": uri,
-            "href": href,
-            "entries": entries,
-            # As in concept_property_rows.row(). The membership row carries entries, not a uri of
-            # its own, so it never claims an id.
-            "identifier_id": f"identifier-{next(identifier_ids)}" if uri else None,
-        }
-
-    def member_entry(member: Concept) -> dict:
-        """Build the entry for one member of the collection.
-
-        Args:
-            member: The member concept.
-
-        Returns:
-            A dict of ``short_form``, ``uri``, ``href`` and ``identifier_id``.
-        """
-        # Collection.members() does not select_related the scheme, and every membership is
-        # intra-vocabulary, so the collection's loaded scheme is assigned to spare a query per member.
-        member.scheme = collection.scheme
-        return {
-            "short_form": f"{collection.scheme.slug}:{member.slug}",
-            "uri": member.uri,
-            "href": reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": collection.scheme.slug, "concept_slug": member.slug},
-            ),
-            # Shares the counter with row(), so ids never collide.
-            "identifier_id": f"identifier-{next(identifier_ids)}",
-        }
-
-    type_curie = (
-        ORDERED_COLLECTION_TYPE_CURIE if collection.ordered else COLLECTION_TYPE_CURIE
-    )
-    member_curie = MEMBER_LIST_CURIE if collection.ordered else MEMBER_CURIE
-
-    rows = [
-        row(TYPE_CURIE, value=type_curie),
-        row(LABEL_CURIES[ConceptLabel.Kind.PREFERRED], value=collection.name),
-    ]
-    entries = [member_entry(member) for member in collection.members()]
-    if entries:
-        rows.append(row(member_curie, entries=entries))
-
-    scheme = collection.scheme
-    rows.append(
-        row(
-            IN_SCHEME_CURIE,
-            short_form=scheme.name,
-            uri=scheme.uri,
-            href=reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            ),
-        )
-    )
-
-    return rows
-
-
-class ConceptDetailView(MVPDetailView):
-    """A single concept's own page, resolved within the vocabulary its address names."""
-
-    model = Concept
-    slug_url_kwarg = "concept_slug"
-    template_name = "controlled_vocabularies/ui/concept_detail.html"
-
-    def setup(self, request, *args, **kwargs):
-        """Resolve the vocabulary segment of the address, or raise a 404."""
-        super().setup(request, *args, **kwargs)
-        try:
-            self.vocabulary = ConceptScheme.objects.get(slug=kwargs["slug"])
-        except ConceptScheme.DoesNotExist as exc:
-            raise Http404(_("No vocabulary matches this address.")) from exc
-
-    def get_queryset(self):
-        """Limit to the vocabulary's concepts, preloading the labels and notes the rows read."""
-        # Keeps the property rows to one query per relation. broader(), narrower() and related()
-        # build fresh querysets, so they are not prefetchable.
-        return (
-            Concept.objects.filter(scheme=self.vocabulary)
-            .select_related("scheme")
-            .prefetch_related("labels", "concept_notes")
-        )
-
-    def get_breadcrumbs(self):
-        """Link the trail to the concept's vocabulary rather than to every concept."""
-        # The default trail names the model's plural and links nowhere. self.vocabulary is already
-        # resolved in setup(), so this costs no query.
-        return [
-            {"text": _("Home"), "href": "/"},
-            {
-                "text": self.vocabulary.name,
-                "href": reverse(
-                    "controlled_vocabularies_ui:vocabulary-detail",
-                    kwargs={"slug": self.vocabulary.slug},
+                concept_count=Count(
+                    "records", filter=Q(records__type=Record.Type.CONCEPT)
                 ),
-            },
-            {"text": self.get_page_title()},
-        ]
+                collection_count=Count(
+                    "records", filter=Q(records__type__in=Record.COLLECTION_TYPES)
+                ),
+                modified=F("data__dcterms:modified__0__@value"),
+            )
+        )
 
     def get_context_data(self, **kwargs):
-        """Add the property rows and the collections that gather the concept."""
-        # Passing default_language is what opts this page into the per-property language fallback.
+        """Count each facet option, and read each row's publication details."""
+        self.get_filterset().count_facets()
         context = super().get_context_data(**kwargs)
-        context["rows"] = concept_property_rows(
-            self.object,
-            get_language(),
-            default_language=self.object.scheme.effective_default_language,
-        )
-        # Never a row: membership is a statement other records make about this concept.
-        # collections() builds a fresh queryset, so this is an extra query.
-        context["concept_collections"] = self.object.collections()
+        context["object_list"] = schemes = list(context["object_list"])
+        for scheme in schemes:
+            scheme.details = PublicationDetails.of(scheme)
+            entries = PropertyRows.in_reading_language(
+                scheme.values("dcterms:description"),
+                get_language() or "",
+                scheme.default_language,
+            )
+            scheme.summary = str(entries[0]["@value"]) if entries else ""
         return context
 
 
-class CollectionDetailView(MVPDetailView):
+class ConceptDetailView(_VocabularyPageMixin, MVPDetailView):
+    """A single concept's own page, resolved within the vocabulary its address names."""
+
+    model = Record
+    slug_url_kwarg = "concept_slug"
+    template_name = "controlled_vocabularies/ui/concept_detail.html"
+
+    def get_queryset(self):
+        """Limit to the vocabulary's concepts."""
+        return Record.objects.filter(
+            scheme=self.vocabulary, type=Record.Type.CONCEPT
+        ).select_related("scheme")
+
+    def get_context_data(self, **kwargs):
+        """Add the property rows and the collections that gather the concept."""
+        context = super().get_context_data(**kwargs)
+        concept = self.object
+        context["rows"] = PropertyRows(concept, get_language() or "").build()
+        # Never a row: membership is a statement the collection makes, not the concept.
+        collections = Record.objects.filter(
+            scheme=self.vocabulary, type__in=Record.COLLECTION_TYPES
+        ).mentioning(concept.uri)
+        context["concept_collections"] = [
+            collection
+            for collection in collections.order_by("pref_label", "pk")
+            if concept.uri in collection.member_uris()
+        ]
+        return context
+
+
+class CollectionDetailView(_VocabularyPageMixin, MVPDetailView):
     """A single collection's own page, resolved within the vocabulary its address names."""
 
-    model = Collection
+    model = Record
     slug_url_kwarg = "collection_slug"
     template_name = "controlled_vocabularies/ui/collection_detail.html"
 
-    def setup(self, request, *args, **kwargs):
-        """Resolve the vocabulary segment of the address, or raise a 404."""
-        super().setup(request, *args, **kwargs)
-        try:
-            self.vocabulary = ConceptScheme.objects.get(slug=kwargs["slug"])
-        except ConceptScheme.DoesNotExist as exc:
-            raise Http404(_("No vocabulary matches this address.")) from exc
-
     def get_queryset(self):
         """Limit to the vocabulary's collections."""
-        # collection_property_rows() reads collection.scheme for the vocabulary row and every
-        # member's short form.
-        return Collection.objects.filter(scheme=self.vocabulary).select_related(
-            "scheme"
-        )
-
-    def get_breadcrumbs(self):
-        """Link the trail to the collection's vocabulary rather than to every collection."""
-        # As ConceptDetailView.get_breadcrumbs().
-        return [
-            {"text": _("Home"), "href": "/"},
-            {
-                "text": self.vocabulary.name,
-                "href": reverse(
-                    "controlled_vocabularies_ui:vocabulary-detail",
-                    kwargs={"slug": self.vocabulary.slug},
-                ),
-            },
-            {"text": self.get_page_title()},
-        ]
+        return Record.objects.filter(
+            scheme=self.vocabulary, type__in=Record.COLLECTION_TYPES
+        ).select_related("scheme")
 
     def get_context_data(self, **kwargs):
         """Add the property rows and whether the collection has members."""
         context = super().get_context_data(**kwargs)
-        context["rows"] = collection_property_rows(self.object)
-        # An empty collection has no member row, so the template needs its own flag. Computed from
-        # the built rows to avoid a second .members() query.
-        context["collection_has_members"] = any(
-            row["term"] in (MEMBER_CURIE, MEMBER_LIST_CURIE) for row in context["rows"]
-        )
+        context["rows"] = PropertyRows(self.object, get_language() or "").build()
+        # An empty collection has no member row, so the template needs its own flag.
+        context["collection_has_members"] = bool(self.object.member_uris())
         return context
 
 
 class VocabularyDetailView(_StrippedSearchMixin, MVPListView):
     """A single vocabulary's page: the concepts it holds, and a side panel about the vocabulary.
 
-    A list view over ``Concept`` rather than a detail view over ``ConceptScheme``,
+    A list view over ``Record`` rather than a detail view over ``ConceptScheme``,
     because django-mvp's detail view is empty below its heading and would mean
     re-implementing search, pagination and empty states. The vocabulary is resolved
     once in ``setup()`` and kept on ``self.vocabulary``.
     """
 
-    model = Concept
+    model = Record
     template_name = "controlled_vocabularies/ui/conceptscheme_detail.html"
     list_item_template = "controlled_vocabularies/ui/concept_list_item.html"
 
-    # By the label shown, not the stored default-language one. `pk` makes the order total for
-    # pagination (#140).
-    ordering = [Lower("resolved_label"), "pk"]
+    # By the preferred label in the default language, which the column holds. `pk` makes the
+    # order total for pagination (#140).
+    ordering = [Lower("pref_label"), "pk"]
 
     filterset_class = ConceptFilter
     toolbar_filters = ["q", "o"]
@@ -499,110 +205,98 @@ class VocabularyDetailView(_StrippedSearchMixin, MVPListView):
             self.vocabulary = ConceptScheme.objects.get(slug=kwargs["slug"])
         except ConceptScheme.DoesNotExist as exc:
             raise Http404(_("No vocabulary matches this address.")) from exc
-        # Assigned to self.queryset rather than annotated on the way out of get_queryset(): Django applies
-        # `ordering` before the mixins' get_queryset(), so a later annotation would not exist yet.
-        # The active language is matched exactly, as labels are stored under the site's configured ones.
-        preferred_in_active_language = ConceptLabel.objects.filter(
-            concept=OuterRef("pk"),
-            language=get_language(),
-            kind=ConceptLabel.Kind.PREFERRED,
-        ).values("text")[:1]
-        # Kept for the side panel's top concepts, which are named the way the rows are.
-        self.labelled_concepts = Concept.objects.filter(
-            scheme=self.vocabulary
-        ).annotate(
-            resolved_label=Coalesce(Subquery(preferred_in_active_language), F("label"))
-        )
-
-        def definition_in(language):
-            """Return the concept's definition in ``language``, as a subquery.
-
-            Args:
-                language: The language code to read.
-
-            Returns:
-                The subquery.
-            """
-            return Subquery(
-                ConceptNote.objects.filter(
-                    concept=OuterRef("pk"),
-                    language=language,
-                    kind=ConceptNote.Kind.DEFINITION,
-                ).values("value")[:1]
-            )
-
-        # The one broader concept a row names for context, named the way the rows are. A concept with
-        # several shows the one whose relation was stored first.
-        broader_preferred = ConceptLabel.objects.filter(
-            concept=OuterRef("target"),
-            language=get_language(),
-            kind=ConceptLabel.Kind.PREFERRED,
-        ).values("text")[:1]
-        broader_label = (
-            ConceptRelation.objects.filter(
-                source=OuterRef("pk"), kind=ConceptRelation.Kind.BROADER
-            )
-            .order_by("pk")
-            .annotate(name=Coalesce(Subquery(broader_preferred), F("target__label")))
-            .values("name")[:1]
-        )
-        # The collections each row names, alphabetically, in one query for the page.
-        memberships = Prefetch(
-            "collection_memberships",
-            queryset=CollectionMember.objects.select_related("collection").order_by(
-                Lower("collection__name")
-            ),
-        )
-        # select_related: the row partial reverses its links from `object.scheme.slug` in an isolated
-        # context, so without the join it costs a query per row.
-        self.queryset = (
-            self.labelled_concepts.select_related("scheme")
-            .prefetch_related(memberships)
-            .annotate(
-                resolved_definition=Coalesce(
-                    definition_in(get_language()),
-                    definition_in(self.vocabulary.effective_default_language),
-                ),
-                broader_label=Subquery(broader_label),
-            )
-        )
+        # select_related: the row partial reverses its links from `object.scheme.slug` in an
+        # isolated context, so without the join it costs a query per row.
+        self.queryset = Record.objects.filter(
+            scheme=self.vocabulary, type=Record.Type.CONCEPT
+        ).select_related("scheme")
 
     def get_page_title(self):
         """Return the vocabulary's name."""
-        # Otherwise the title reads as the concept model's plural.
-        return self.vocabulary.name
+        # Otherwise the title reads as the record model's plural.
+        return self.vocabulary.display_label()
 
     def get_page_subtitle(self):
         """Return the vocabulary's description, cut to the length of a lead paragraph."""
-        return Truncator(self.vocabulary.description).words(40)
+        entries = PropertyRows.in_reading_language(
+            self.vocabulary.values("dcterms:description"),
+            get_language() or "",
+            self.vocabulary.default_language,
+        )
+        return Truncator(entries[0]["@value"] if entries else "").words(40)
 
     def get_context_data(self, **kwargs):
-        """Add the vocabulary and what the side panel says about it."""
+        """Add the vocabulary, what the side panel says about it, and what each row names."""
         context = super().get_context_data(**kwargs)
         vocabulary = self.vocabulary
         context["vocabulary"] = vocabulary
-        language = vocabulary.effective_default_language
+        context["details"] = PublicationDetails.of(vocabulary)
         try:
-            context["language_name"] = get_language_info(language)["name_translated"]
+            context["language_name"] = get_language_info(vocabulary.default_language)[
+                "name_translated"
+            ]
         except KeyError:
-            context["language_name"] = language
-        context["concept_count"] = vocabulary.concepts.count()
+            context["language_name"] = vocabulary.default_language
+        concepts = vocabulary.records.filter(type=Record.Type.CONCEPT)
+        context["concept_count"] = concepts.count()
         # A concept with no broader concept is a way into the hierarchy. A flat vocabulary has
         # nothing but top concepts, so listing them would only repeat the concept list.
-        has_hierarchy = ConceptRelation.objects.filter(
-            source__scheme=vocabulary, kind=ConceptRelation.Kind.BROADER
-        ).exists()
+        has_hierarchy = concepts.filter(data__has_key="skos:broader").exists()
         context["top_concepts"] = (
-            self.labelled_concepts.exclude(
-                relations_as_source__kind=ConceptRelation.Kind.BROADER
-            ).order_by(Lower("resolved_label"), "pk")
+            concepts.exclude(data__has_key="skos:broader").order_by(
+                Lower("pref_label"), "pk"
+            )
             if has_hierarchy
             else []
         )
-        context["collections"] = vocabulary.collections.annotate(
-            member_count=Count("memberships")
-        ).order_by(Lower("name"))
+        collections = list(
+            vocabulary.records.filter(type__in=Record.COLLECTION_TYPES).order_by(
+                Lower("pref_label"), "pk"
+            )
+        )
+        for collection in collections:
+            collection.member_count = len(collection.member_uris())
+        context["collections"] = collections
+        self.describe_rows(context, collections)
         return context
+
+    def describe_rows(self, context, collections):
+        """Give each concept on the page what its row names beyond its own label.
+
+        Reads the broader concept's label, the definition and the collections holding the
+        concept, so the row partial, which sees only the object, costs no query per row.
+
+        Args:
+            context: The page's context, whose ``object_list`` is replaced by a list.
+            collections: The vocabulary's collections.
+        """
+        concepts = context["object_list"] = list(context["object_list"])
+        members = {
+            collection.pk: set(collection.member_uris()) for collection in collections
+        }
+        broader = {
+            concept: next(iter(concept.linked_uris("skos:broader")), None)
+            for concept in concepts
+        }
+        labels = {
+            record.uri: record.display_label()
+            for record in Record.objects.filter(
+                scheme=self.vocabulary, uri__in=set(broader.values())
+            )
+        }
+        for concept in concepts:
+            definitions = PropertyRows.in_reading_language(
+                concept.values("skos:definition"),
+                get_language() or "",
+                self.vocabulary.default_language,
+            )
+            concept.definition = str(definitions[0]["@value"]) if definitions else ""
+            concept.broader_label = labels.get(broader[concept], "")
+            concept.collections = [
+                collection
+                for collection in collections
+                if concept.uri in members[collection.pk]
+            ]
 
 
 def vocabulary_list_url():
@@ -646,7 +340,9 @@ class VocabularyCreateView(PermissionRequiredMixin, MVPCreateView):
 
     def get_success_message(self, cleaned_data):
         """Name the vocabulary that was created."""
-        return _("Created the vocabulary %(name)s.") % {"name": self.object.name}
+        return _("Created the vocabulary %(name)s.") % {
+            "name": self.object.display_label()
+        }
 
     def get_context_data(self, **kwargs):
         """Add where Cancel leads and what the save button says."""
@@ -666,13 +362,13 @@ class VocabularyUpdateView(PermissionRequiredMixin, MVPUpdateView):
     page_title = _("Edit vocabulary")
 
     def get_object(self, queryset=None):
-        """Refuse a vocabulary a publisher fixed the identifier of."""
+        """Refuse a vocabulary that is not managed here."""
         vocabulary = super().get_object(queryset)
-        if vocabulary.static_uri:
+        if not vocabulary.managed:
             raise PermissionDenied(_("An imported vocabulary cannot be edited here."))
         # A form that fails to validate has already written its values onto the instance, so the
         # page names the vocabulary by what is stored.
-        self.stored_name = vocabulary.name
+        self.stored_name = vocabulary.display_label()
         return vocabulary
 
     def get_page_subtitle(self):
@@ -688,12 +384,14 @@ class VocabularyUpdateView(PermissionRequiredMixin, MVPUpdateView):
         ]
 
     def get_success_url(self):
-        """Land on the vocabulary's page, at the address its name now produces."""
+        """Land on the vocabulary's page; the slug never changes, whatever the new name."""
         return vocabulary_url(self.object)
 
     def get_success_message(self, cleaned_data):
         """Name the vocabulary that was saved."""
-        return _("Saved your changes to %(name)s.") % {"name": self.object.name}
+        return _("Saved your changes to %(name)s.") % {
+            "name": self.object.display_label()
+        }
 
     def get_delete_url(self):
         """Offer deletion only to someone who may delete, and come back here on Back."""
@@ -709,7 +407,6 @@ class VocabularyUpdateView(PermissionRequiredMixin, MVPUpdateView):
     def get_context_data(self, **kwargs):
         """Add where Cancel leads and what the save button says."""
         context = super().get_context_data(**kwargs)
-        # The slug only changes inside save(), so it is the stored one even when the form is re-shown.
         context["cancel_url"] = vocabulary_url(self.object)
         context["submit_label"] = _("Save changes")
         return context
@@ -725,13 +422,13 @@ class VocabularyDeleteView(PermissionRequiredMixin, MVPDeleteView):
 
     def get_page_subtitle(self):
         """Name the vocabulary being deleted."""
-        return self.object.name
+        return self.object.display_label()
 
     def get_breadcrumbs(self):
         """Return the trail back through the vocabulary's page."""
         return [
             {"text": _("Vocabularies"), "href": vocabulary_list_url()},
-            {"text": self.object.name, "href": vocabulary_url(self.object)},
+            {"text": self.object.display_label(), "href": vocabulary_url(self.object)},
             {"text": _("Delete")},
         ]
 
@@ -747,7 +444,9 @@ class VocabularyDeleteView(PermissionRequiredMixin, MVPDeleteView):
 
     def get_success_message(self, cleaned_data):
         """Name the vocabulary that was deleted."""
-        return _("Deleted the vocabulary %(name)s.") % {"name": self.object.name}
+        return _("Deleted the vocabulary %(name)s.") % {
+            "name": self.object.display_label()
+        }
 
     @staticmethod
     def protected_kinds(protected_objects):
@@ -792,8 +491,10 @@ class VocabularyDeleteView(PermissionRequiredMixin, MVPDeleteView):
     def get_context_data(self, **kwargs):
         """Add how much goes with the vocabulary, and what is using its concepts."""
         context = super().get_context_data(**kwargs)
-        vocabulary = self.object
-        context["concept_count"] = vocabulary.concepts.count()
-        context["collection_count"] = vocabulary.collections.count()
+        records = self.object.records
+        context["concept_count"] = records.filter(type=Record.Type.CONCEPT).count()
+        context["collection_count"] = records.filter(
+            type__in=Record.COLLECTION_TYPES
+        ).count()
         context["protected_kinds"] = self.protected_kinds(context["protected_objects"])
         return context

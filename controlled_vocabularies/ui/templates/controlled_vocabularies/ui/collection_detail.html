@@ -1,9 +1,5 @@
 {% extends "detail_view.html" %}
 {% load i18n %}
-{% comment %}
-  Branches as concept_detail.html does. `entries` is a list, so it is bound with :entries rather
-  than interpolated, which would turn it into a string.
-{% endcomment %}
 {% block page.content %}
   {% comment %}
     Leads the page, as in concept_detail.html.
@@ -11,27 +7,14 @@
   <c-mvp.text size="xs" muted><c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" /></c-mvp.text>
   <dl>
     {% for row in rows %}
-      {% if row.entries %}
-        <c-controlled-vocabularies.property-row term="{{ row.term }}"
-                                                  term_uri="{{ row.term_uri }}"
-                                                  :entries="row.entries" />
-      {% elif row.short_form %}
-        <c-controlled-vocabularies.property-row term="{{ row.term }}"
-                                                  term_uri="{{ row.term_uri }}"
-                                                  short_form="{{ row.short_form }}"
-                                                  uri="{{ row.uri }}"
-                                                  href="{{ row.href }}"
-                                                  identifier_id="{{ row.identifier_id }}" />
-      {% else %}
-        <c-controlled-vocabularies.property-row term="{{ row.term }}"
-                                                  term_uri="{{ row.term_uri }}"
-                                                  value="{{ row.value }}" />
-      {% endif %}
+      <c-controlled-vocabularies.property-row term="{{ row.term }}"
+                                                term_uri="{{ row.term_uri }}"
+                                                :entries="row.entries" />
     {% endfor %}
   </dl>
   {% comment %}
-    The loop above adds no member row for an empty collection, so this says so rather than leaving
-    the reader to infer it from an absence (FS-015).
+    A collection with no members has no member row, so this says so rather than leaving the reader
+    to infer it from an absence (FS-015).
   {% endcomment %}
   {% if not collection_has_members %}
     <c-mvp.text muted>{% trans "This collection holds no members." %}</c-mvp.text>
