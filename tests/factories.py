@@ -1,24 +1,11 @@
 """factory_boy factories for the vocabulary and test-app models."""
 
 import factory
-from django.utils.text import slugify
 
-from controlled_vocabularies.models import (
-    Collection,
-    CollectionMember,
-    Concept,
-    ConceptLabel,
-    ConceptNote,
-    ConceptRelation,
-    ConceptScheme,
-)
+from controlled_vocabularies.models import ConceptScheme, Record
 from tests.testapp.models import (
     Artifact,
     Borehole,
-    BranchSample,
-    BranchTray,
-    ChipSample,
-    ChipTray,
     CoreSample,
     Deposit,
     DrillCore,
@@ -34,126 +21,84 @@ from tests.testapp.models import (
 )
 
 
+def labelled(name, language="en", statements=None):
+    """Return a document naming its subject, with any further statements.
+
+    Args:
+        name: The preferred label.
+        language: The label's language tag.
+        statements: Further predicates, each a CURIE holding a list of entries.
+
+    Returns:
+        The document.
+    """
+    return {
+        "skos:prefLabel": [{"@value": name, "@language": language}],
+        **(statements or {}),
+    }
+
+
 class ConceptSchemeFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`ConceptScheme` with an app-wide-unique name."""
+    """Build a saved :class:`ConceptScheme` named in English with an app-wide-unique name.
+
+    Pass ``name`` to choose the name, or ``data`` to give the whole document.
+    """
 
     class Meta:
         model = ConceptScheme
 
-    name = factory.Sequence(lambda n: f"Vocabulary {n}")
-    # Derived here as well as in save(), so an unsaved .build() scheme has the slug it
-    # would get once saved. A blank slug makes any URL reversal against it raise
-    # NoReverseMatch.
-    slug = factory.LazyAttribute(
-        lambda scheme: slugify(scheme.name, allow_unicode=True)
+    class Params:
+        name = factory.Sequence(lambda n: f"Vocabulary {n}")
+
+    default_language = "en"
+    data = factory.LazyAttribute(
+        lambda scheme: labelled(scheme.name, scheme.default_language)
     )
 
-    class Params:
-        external = factory.Trait(
-            static_uri=factory.Sequence(
-                lambda n: f"http://publisher.example.org/vocab/{n}"
-            ),
-        )
 
+class RecordFactory(factory.django.DjangoModelFactory):
+    """Build a saved concept :class:`Record`, auto-creating its vocabulary.
 
-class ConceptFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`Concept`, auto-creating its owning scheme."""
+    Pass ``label`` to choose its name, ``type`` for a collection, or ``data`` to give
+    the whole document.
+    """
 
     class Meta:
-        model = Concept
+        model = Record
+
+    class Params:
+        label = factory.Sequence(lambda n: f"Concept {n}")
 
     scheme = factory.SubFactory(ConceptSchemeFactory)
-    label = factory.Sequence(lambda n: f"Concept {n}")
-
-    class Params:
-        external = factory.Trait(
-            static_uri=factory.Sequence(
-                lambda n: f"http://publisher.example.org/concept/{n}"
-            ),
-        )
-        multilingual = factory.Trait(
-            # The en preferred label is ``label`` above; de is a real ConceptLabel row,
-            # because the field owns only the default language.
-            german_label=factory.RelatedFactory(
-                "tests.factories.ConceptLabelFactory",
-                factory_related_name="concept",
-                language="de",
-                kind=ConceptLabel.Kind.PREFERRED,
-                text=factory.Sequence(lambda n: f"Konzept {n}"),
-            ),
-            english_note=factory.RelatedFactory(
-                "tests.factories.ConceptNoteFactory",
-                factory_related_name="concept",
-                language="en",
-                kind=ConceptNote.Kind.DEFINITION,
-                value=factory.Sequence(lambda n: f"Definition {n}"),
-            ),
-            german_note=factory.RelatedFactory(
-                "tests.factories.ConceptNoteFactory",
-                factory_related_name="concept",
-                language="de",
-                kind=ConceptNote.Kind.DEFINITION,
-                value=factory.Sequence(lambda n: f"Definition {n}"),
-            ),
-        )
-
-
-class ConceptLabelFactory(factory.django.DjangoModelFactory):
-    """Build a saved German preferred :class:`ConceptLabel` on an auto-created concept."""
-
-    class Meta:
-        model = ConceptLabel
-
-    concept = factory.SubFactory(ConceptFactory)
-    language = "de"
-    kind = ConceptLabel.Kind.PREFERRED
-    text = factory.Sequence(lambda n: f"Label {n}")
-
-
-class ConceptNoteFactory(factory.django.DjangoModelFactory):
-    """Build a saved English definition :class:`ConceptNote` on an auto-created concept."""
-
-    class Meta:
-        model = ConceptNote
-
-    concept = factory.SubFactory(ConceptFactory)
-    language = "en"
-    kind = ConceptNote.Kind.DEFINITION
-    value = factory.Sequence(lambda n: f"Definition {n}")
-
-
-class ConceptRelationFactory(factory.django.DjangoModelFactory):
-    """Build a saved broader :class:`ConceptRelation` between two concepts of one scheme."""
-
-    class Meta:
-        model = ConceptRelation
-
-    source = factory.SubFactory(ConceptFactory)
-    target = factory.SubFactory(
-        ConceptFactory, scheme=factory.SelfAttribute("..source.scheme")
+    type = Record.Type.CONCEPT
+    data = factory.LazyAttribute(
+        lambda record: labelled(record.label, record.scheme.default_language)
     )
-    kind = ConceptRelation.Kind.BROADER
 
 
 def relation_graph(scheme=None):
     """Build a small navigable graph in one vocabulary and return its concepts.
 
-    A broader/narrower pair (``child`` under ``parent``) and a separate related pair
-    (``left`` and ``right``), built through ``add_broader`` and ``add_related``.
+    A broader/narrower pair (``child`` under ``parent``, stated by the child) and a
+    related pair (``left`` and ``right``, stated by ``left``).
 
     Args:
-        scheme: The scheme to build the graph in. A new one is created when omitted.
+        scheme: The vocabulary to build the graph in. A new one is created when omitted.
 
     Returns:
         A dict with keys ``scheme``, ``parent``, ``child``, ``left`` and ``right``.
     """
     scheme = scheme or ConceptSchemeFactory()
-    parent = ConceptFactory(scheme=scheme)
-    child = ConceptFactory(scheme=scheme)
-    left = ConceptFactory(scheme=scheme)
-    right = ConceptFactory(scheme=scheme)
-    child.add_broader(parent)
-    left.add_related(right)
+    parent = RecordFactory(scheme=scheme, label="Parent")
+    right = RecordFactory(scheme=scheme, label="Right")
+    child = RecordFactory(
+        scheme=scheme,
+        data=labelled("Child", statements={"skos:broader": [{"@id": parent.uri}]}),
+    )
+    left = RecordFactory(
+        scheme=scheme,
+        data=labelled("Left", statements={"skos:related": [{"@id": right.uri}]}),
+    )
     return {
         "scheme": scheme,
         "parent": parent,
@@ -163,61 +108,32 @@ def relation_graph(scheme=None):
     }
 
 
-class CollectionFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`Collection`, auto-creating its owning scheme."""
-
-    class Meta:
-        model = Collection
-
-    scheme = factory.SubFactory(ConceptSchemeFactory)
-    name = factory.Sequence(lambda n: f"Collection {n}")
-
-    class Params:
-        external = factory.Trait(
-            static_uri=factory.Sequence(
-                lambda n: f"http://publisher.example.org/collection/{n}"
-            ),
-        )
-
-
-class CollectionMemberFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`CollectionMember` joining a collection to a concept of its scheme."""
-
-    class Meta:
-        model = CollectionMember
-
-    collection = factory.SubFactory(CollectionFactory)
-    concept = factory.SubFactory(
-        ConceptFactory, scheme=factory.SelfAttribute("..collection.scheme")
-    )
-
-
 def collection_with_members(
     scheme=None, labels=("Granite", "Basalt", "Gabbro"), ordered=False, name=None
 ):
-    """Build a collection populated with concepts and return it with its members.
-
-    The concepts are created in the collection's own scheme and added through
-    :meth:`Collection.add`, so validation and, for an ordered collection, positions apply.
+    """Build a collection of new concepts and return it with its members.
 
     Args:
-        scheme: The scheme to build in. A new one is created when omitted.
-        labels: The label of each concept to create, in the order they are added.
-        ordered: Build an ordered collection.
-        name: The collection's name. Leave it out for the factory's own sequence, and pass
-            it when a consuming model's ``collection=`` restriction has to name its slug.
+        scheme: The vocabulary to build in. A new one is created when omitted.
+        labels: The label of each concept to create, in member order.
+        ordered: Build an ordered collection, listing its members in ``skos:memberList``.
+        name: The collection's name. Leave it out for a generated one, and pass it when a
+            consuming model's ``collection=`` restriction has to name its slug.
 
     Returns:
-        A ``(collection, members)`` tuple, ``members`` being the concepts in the order
-        they were added.
+        A ``(collection, members)`` tuple, ``members`` being the concepts in order.
     """
     scheme = scheme or ConceptSchemeFactory()
-    collection = CollectionFactory(
-        scheme=scheme, ordered=ordered, **({"name": name} if name is not None else {})
+    members = [RecordFactory(scheme=scheme, label=label) for label in labels]
+    predicate = "skos:memberList" if ordered else "skos:member"
+    collection = RecordFactory(
+        scheme=scheme,
+        type=Record.Type.ORDERED_COLLECTION if ordered else Record.Type.COLLECTION,
+        data=labelled(
+            name or f"Collection of {', '.join(labels)}",
+            statements={predicate: [{"@id": member.uri} for member in members]},
+        ),
     )
-    members = [ConceptFactory(scheme=scheme, label=label) for label in labels]
-    for concept in members:
-        collection.add(concept)
     return collection, members
 
 
@@ -228,7 +144,7 @@ class SpecimenFactory(factory.django.DjangoModelFactory):
         model = Specimen
 
     name = factory.Sequence(lambda n: f"Specimen {n}")
-    rock_type = factory.SubFactory(ConceptFactory)
+    rock_type = factory.SubFactory(RecordFactory)
 
 
 class LocalityFactory(factory.django.DjangoModelFactory):
@@ -346,39 +262,3 @@ class DrillCoreFactory(factory.django.DjangoModelFactory):
         model = DrillCore
 
     name = factory.Sequence(lambda n: f"Drill core {n}")
-
-
-class ChipSampleFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.ChipSample` with no concept attached."""
-
-    class Meta:
-        model = ChipSample
-
-    name = factory.Sequence(lambda n: f"Chip sample {n}")
-
-
-class ChipTrayFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.ChipTray` with no concepts attached."""
-
-    class Meta:
-        model = ChipTray
-
-    name = factory.Sequence(lambda n: f"Chip tray {n}")
-
-
-class BranchSampleFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.BranchSample` with no concept attached."""
-
-    class Meta:
-        model = BranchSample
-
-    name = factory.Sequence(lambda n: f"Branch sample {n}")
-
-
-class BranchTrayFactory(factory.django.DjangoModelFactory):
-    """Build a saved :class:`~tests.testapp.models.BranchTray` with no concepts attached."""
-
-    class Meta:
-        model = BranchTray
-
-    name = factory.Sequence(lambda n: f"Branch tray {n}")
