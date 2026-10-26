@@ -226,6 +226,22 @@ class TestSyncVocabulariesReportsAFailureAndCarriesOn:
         assert not ConceptScheme.objects.exists()
         assert not Record.objects.exists()
 
+    def test_a_key_that_is_not_a_slug_is_reported_and_the_others_still_load(self):
+        with (
+            override_settings(
+                CONTROLLED_VOCABULARIES={
+                    "rock type!": {"source": FIXTURES / "rocks.ttl"},
+                    "french": {"source": FIXTURES / "french_vocabulary.ttl"},
+                }
+            ),
+            pytest.raises(CommandError),
+        ):
+            sync()
+
+        assert list(ConceptScheme.objects.values_list("slug", flat=True)) == [
+            "french"
+        ]
+
     def test_a_declaration_without_a_source_is_reported_as_a_failure(self):
         with (
             override_settings(CONTROLLED_VOCABULARIES={"rock-type": {}}),

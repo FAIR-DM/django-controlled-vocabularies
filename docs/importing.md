@@ -34,7 +34,8 @@ project publishes itself works the same way: ship it as a SKOS file and declare 
 - `format`, optional — the serialization (`turtle`, `xml` or `json-ld`), for a source whose name
   or `Content-Type` does not carry one.
 
-The key becomes the vocabulary's slug when the command first loads it, in place of the slug an
+Each key must be a valid slug: letters, digits, hyphens and underscores. The key becomes the
+vocabulary's slug when the command first loads it, in place of the slug an
 import would derive from its URI, and it is how every later run finds the vocabulary again.
 
 - A source that declares a vocabulary other than the one already held under its key is refused,

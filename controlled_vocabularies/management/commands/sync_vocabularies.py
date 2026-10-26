@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
@@ -146,12 +147,19 @@ class Command(BaseCommand):
             The import's report.
 
         Raises:
-            CommandError: The declaration names no source, or the source is a vocabulary
-                already held under another slug.
+            CommandError: The declaration names no source, its key is not a usable slug,
+                or the source is a vocabulary already held under another slug.
         """
         source = declaration.get("source")
         if not source:
             raise CommandError(str(_("The declaration names no source.")))
+        try:
+            ConceptScheme._meta.get_field("slug").run_validators(slug)
+        except ValidationError as exc:
+            raise CommandError(
+                str(_("The declared key is not a usable slug: %(error)s"))
+                % {"error": " ".join(exc.messages)}
+            ) from exc
         held = ConceptScheme.objects.filter(slug=slug).first()
         resolver = SourceResolver(str(source), serialization=declaration.get("format"))
         try:
