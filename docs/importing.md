@@ -1,9 +1,84 @@
 # Importing a published vocabulary
 
+A site lists the vocabularies it uses in its settings and loads them all with one command. Each
+is keyed by the slug its fields name it by:
+
+```python
+# settings.py
+CONTROLLED_VOCABULARIES = {
+    "rock-type": {"source": BASE_DIR / "vocabularies" / "rock-type.ttl"},
+    "sample-status": {"source": "https://vocab.example.org/sample-status.ttl"},
+}
+```
+
+```bash
+python manage.py sync_vocabularies
+```
+
+`ConceptField(vocabulary="rock-type")` then finds the vocabulary under that slug, whatever its
+publisher's URI looks like. Run the command on every deploy: each run updates every declared
+vocabulary in place and never deletes anything.
+
+**Ship the file with the project where you can.** A source can be a local path or an
+`http://`/`https://` address, but a file checked in beside your code is loaded the same way on
+every machine and does not make a deploy depend on a remote server being up. A vocabulary your
+project publishes itself works the same way: ship it as a SKOS file and declare it like any other.
+
+## Declaring vocabularies
+
+`CONTROLLED_VOCABULARIES` is a dict. Each key is a vocabulary's slug, and each value holds:
+
+- `source` — a local path, as a string or a `Path`, or an `http://`/`https://` address. A URL is
+  fetched exactly as [the `import_skos` command](#importing-a-single-file-from-the-command-line)
+  fetches one.
+- `format`, optional — the serialization (`turtle`, `xml` or `json-ld`), for a source whose name
+  or `Content-Type` does not carry one.
+
+Each key must be a valid slug: letters, digits, hyphens and underscores. The key becomes the
+vocabulary's slug when the command first loads it, in place of the slug an
+import would derive from its URI, and it is how every later run finds the vocabulary again.
+
+- A source that declares a vocabulary other than the one already held under its key is refused,
+  and nothing about either changes.
+- A source that declares no vocabulary of its own loads into the one already held under its key.
+  With nothing held there yet, it is refused, since there is nothing to load it into.
+- A vocabulary already loaded under a different slug, by `import_skos` for example, is reported
+  and left as it is. It is never renamed, because pages and links may already use its slug.
+  Declare it under the slug it has.
+
+`manage.py check` warns about a field naming a vocabulary that is neither declared nor loaded
+(`controlled_vocabularies.W006`), and about one that is declared but not loaded yet
+(`controlled_vocabularies.W001`). See
+[attaching concepts to your models](fields.md#attaching-a-concept-to-your-model).
+
+## Loading declared vocabularies
+
+```bash
+python manage.py sync_vocabularies
+python manage.py sync_vocabularies rock-type sample-status
+python manage.py sync_vocabularies --dry-run
+```
+
+Each declared vocabulary is imported in a transaction of its own, through the same import the
+rest of this page describes, and gets its own report: how many records were created, updated and
+absent from the source, naming each absent one, as `import_skos` prints. A record the source no
+longer lists is reported and left alone, never deleted.
+
+- Naming slugs limits the run to those vocabularies. A slug that is not declared is refused
+  before anything is loaded.
+- `--dry-run` performs every import and prints every report, then leaves the database exactly
+  as it was.
+- A vocabulary that fails, because its source cannot be fetched or read or the import refuses
+  it, is reported with the reason, and nothing of it is kept. The others still load. The command
+  exits non-zero if any failed, so a deployment script stops there.
+
+## Loading from Python
+
 `import_skos()` reads a SKOS file — Turtle, RDF/XML, or JSON-LD — and creates or updates the
 vocabulary it declares, along with every concept and collection it contains. It keeps every
 statement the file makes about them, in every language. Each row is matched by its URI, never by
-name, so importing the same file twice updates the same rows rather than duplicating them.
+name, so importing the same file twice updates the same rows rather than duplicating them. Both
+commands load through it.
 
 ```python
 from controlled_vocabularies.exchange import import_skos
@@ -129,7 +204,8 @@ already exists keeps its default language, and so does one passed in with `schem
 
 A vocabulary's slug and a record's slug are both derived from their own published identifier — its
 fragment where it has one, otherwise the last segment of its path — assigned once, on first import,
-and never recomputed by a later one. A vocabulary's name arriving in a different language on a later
+and never recomputed by a later one. A vocabulary loaded from `CONTROLLED_VOCABULARIES` takes its
+declared key instead. A vocabulary's name arriving in a different language on a later
 import never moves its local address. Only the publisher reassigning the identifier itself does.
 
 That permanence has a cost worth naming: a vocabulary published under opaque codes gets an opaque
@@ -170,8 +246,8 @@ A run is refused for one of these reasons, each a member of `FatalReason`:
 Nothing else in this list refuses a run, and a file that cannot be read as SKOS at all raises
 `SkosImportError` (below). A run either succeeds in full or changes nothing: every problem in a
 file is collected before any of it is written, and a fatal one rolls the whole run back. The
-`import_skos` management command wraps this for use from a terminal (see below). There is no
-web-facing entry point yet.
+`sync_vocabularies` and `import_skos` management commands wrap this for use from a terminal.
+There is no web-facing entry point yet.
 
 ## Upgrading from 0.1.0
 
@@ -200,14 +276,17 @@ fatal problems, and carries the same `ImportReport` its `fatal` bucket names the
 exported `SkosImportError` subclasses, so code that only catches `(SkosImportError,
 SkosImportFailed)` already catches a file the safety scan refuses too.
 
-## Importing from the command line
+## Importing a single file from the command line
 
-The `import_skos` management command wraps `import_skos()` for use from a terminal or a
-deployment script:
+The `import_skos` management command loads one source by hand, without declaring it:
 
 ```bash
 python manage.py import_skos rocks.ttl
 ```
+
+The vocabulary takes the slug derived from its URI (see
+[Slugs and addresses](#slugs-and-addresses)). To manage it with `sync_vocabularies` afterwards,
+declare it under that slug.
 
 The source can be a local filesystem path or an `http://`/`https://` URL, told apart by the value
 itself rather than by a flag. A URL is fetched under a fixed 30-second read timeout, a fixed 50 MiB

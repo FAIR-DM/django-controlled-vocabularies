@@ -21,11 +21,10 @@ published vocabulary as ordinary relational data, so a model references a concep
 references any other row, with no hand-edited RDF and no triplestore to operate. It supersedes and
 retires `skos-builder` and `django-research-vocabs`.
 
-You can import a published SKOS vocabulary from a file or a URL, attach its concepts to your own
-models through a single field, pick one through a search-as-you-type control in your forms and in
-the Django admin, and browse what the site holds through an opt-in set of read-only pages. Loading
-the vocabularies a site declares with one command is next — see
-[the roadmap](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/ROADMAP.md).
+You can declare the published SKOS vocabularies your site uses and load them all, from files or
+URLs, with one command, attach their concepts to your own models through a single field, pick one
+through a search-as-you-type control in your forms and in the Django admin, and browse what the
+site holds through an opt-in set of read-only pages.
 
 - [Scope and philosophy](#scope-and-philosophy)
 - [Requirements](#requirements)
@@ -130,11 +129,23 @@ pages are an opt-in extra — both are covered in the
 
 ## Quick start
 
-Import a published vocabulary, then attach one of its concepts to your own model:
+Declare the vocabularies your site uses, keyed by the slug your fields name them by. A file
+shipped with the project is the most dependable source, and an http(s) address works too:
+
+```python
+# settings.py
+CONTROLLED_VOCABULARIES = {
+    "rock-type": {"source": BASE_DIR / "vocabularies" / "rock-type.ttl"},
+}
+```
+
+Load every one of them, on first install and again on every deploy:
 
 ```bash
-python manage.py import_skos https://example.org/vocabularies/rock-type.ttl
+python manage.py sync_vocabularies
 ```
+
+Then attach a concept to your own model:
 
 ```python
 from django.db import models

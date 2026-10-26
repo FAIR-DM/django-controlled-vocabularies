@@ -62,11 +62,18 @@ specimen.get_rock_type_label()  # its name in the active language, falling back 
 specimen.get_rock_type_uri()    # its URI, read from the column with no query
 ```
 
-If `"rock-type"` has not been imported yet, which is the state of a fresh install before the
-vocabulary's own import step has run, nothing about the field declaration fails. `manage.py check`
-reports a warning (`controlled_vocabularies.W001`) naming the model, the field, and the missing
-slug. If the vocabulary genuinely arrives in a later deployment step, silence the warning with
-`SILENCED_SYSTEM_CHECKS`.
+If `"rock-type"` has not been loaded yet, which is the state of a fresh install before
+`manage.py sync_vocabularies` has run, nothing about the field declaration fails. `manage.py check`
+reports a warning naming the model, the field, and the missing slug:
+
+- `controlled_vocabularies.W001` when the vocabulary is declared in `CONTROLLED_VOCABULARIES` and
+  has not been loaded yet. Run `sync_vocabularies`.
+- `controlled_vocabularies.W006` when it is neither declared nor loaded. Declare it (see
+  [importing a published vocabulary](importing.md#declaring-vocabularies)).
+
+A vocabulary loaded some other way, with `import_skos` for example, is not reported whether or not
+it is declared. If the vocabulary genuinely arrives in a later deployment step, silence the warning
+with `SILENCED_SYSTEM_CHECKS`.
 
 Reading `get_<field>_label()` on every row of a list costs a query for the concept, per row.
 `get_<field>_uri()` costs nothing, because the URI is the column's own value.
@@ -185,7 +192,8 @@ an unrestricted field's own `vocabulary` does. If it never arrives, or arrives m
 offers nothing at all rather than raising. Every choice and every search comes back empty, which
 looks the same from outside as a vocabulary that has not been imported. `manage.py check` catches
 it: `controlled_vocabularies.W005` names the model, the field and the missing collection, the way
-`controlled_vocabularies.W001` already does for an absent vocabulary.
+`controlled_vocabularies.W001` and `controlled_vocabularies.W006` already do for an absent
+vocabulary.
 
 A collection the publisher marked as ordered (`skos:OrderedCollection`) buys a field restricted to
 it one more thing. The concept search offers the collection's members in the publisher's sequence

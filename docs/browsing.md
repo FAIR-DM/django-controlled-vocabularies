@@ -416,7 +416,8 @@ page reloads itself when a template, static file or Python module changes, throu
 content is the DCMI Type Vocabulary, a real vocabulary published by the Dublin Core Metadata
 Initiative, imported from a SKOS file that declares its own vocabulary, and Data Collection
 Methods, a short vocabulary loaded from a file that declares none, so the command creates the
-vocabulary for it first and imports into that. Data Collection Methods' own page also carries one of
+vocabulary for it first and imports into that. Both are declared in the demo's
+`CONTROLLED_VOCABULARIES` setting, and `seed_demo` loads them with `sync_vocabularies`. Data Collection Methods' own page also carries one of
 each kind of collection — "Primary data collection methods" (unordered) and "Typical project
 workflow" (ordered) — both loaded through the same SKOS file, so the side panel's collections are
 never empty on a fresh checkout.

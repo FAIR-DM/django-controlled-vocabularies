@@ -10,7 +10,7 @@
 
 **Serves**: G8 (external vocabularies as read-only references — a vocabulary nobody can get into a deployment is one nobody can reference) · G4 (faithful round-trip — the import half of it, reached without a Python shell) · **Roadmap**: R2 · **Issue**: #52
 
-> Scope note: this is the fourth and last slice of roadmap item R2, and the one that closes its "both a management command and a programmatic entry point" deliverable. FS-006 built the import and its structured report, and FS-007 fixed that it keeps every statement in every language. This feature owns **where an operator stands when they run one and what they read afterwards**: a management command, a source that may be a local file or a URL, a rendering of the existing report at a terminal, and a dry run that reports the same outcome and keeps none of it. It adds no new import behaviour — every decision about what a file means was made upstream of it. The command takes no target vocabulary: the source declares which vocabulary it is, and a source that declares none is refused. The programmatic entry point accepts a target for a source that declares none, and pointing a deployment script at the wrong address is the operator's mistake to make and not this package's to prevent. **Out of scope:** any change to what the import stores, exporting or serving RDF (R4), the consumption field (R3), the editing interface and any web-facing entry point, browsing (R6), scheduling or automating repeat runs, remembering where a vocabulary was fetched from, and importing anything the source does not itself declare as a SKOS concept scheme.
+> Scope note: this is the fourth and last slice of roadmap item R2, and the one that closes its "both a management command and a programmatic entry point" deliverable. FS-006 built the import and its structured report, and FS-007 fixed that it keeps every statement in every language. This feature owns **where an operator stands when they run one and what they read afterwards**: a management command, a source that may be a local file or a URL, a rendering of the existing report at a terminal, and a dry run that reports the same outcome and keeps none of it. It adds no new import behaviour — every decision about what a file means was made upstream of it. The command takes no target vocabulary: the source declares which vocabulary it is, and a source that declares none is refused. A site may also declare the vocabularies it uses in its settings, keyed by the slug its fields name them by, and load every one of them with a second command (US-7, from issue #221). The programmatic entry point accepts a target for a source that declares none, and pointing a deployment script at the wrong address is the operator's mistake to make and not this package's to prevent. **Out of scope:** any change to what the import stores, exporting or serving RDF (R4), the consumption field (R3), the editing interface and any web-facing entry point, browsing (R6), scheduling repeat runs, storing where a vocabulary was fetched from in the database, deleting anything a source no longer lists, and importing anything the source does not itself declare as a SKOS concept scheme.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -116,6 +116,26 @@ Everything the command prints is translatable, the README tells an operator the 
 
 ---
 
+### User Story 7 - A site's vocabularies are declared once and loaded with one command (Priority: P2)
+
+A developer whose site relies on several vocabularies lists them in the project's settings, each under the slug the site's fields name it by, with the file shipped beside the code or the address it is published at. On every deploy they run one command, and every declared vocabulary is loaded or refreshed. A vocabulary that fails is reported and the others still load, and the deploy script stops on the exit status.
+
+**Why this priority**: Without it a site using five vocabularies has five commands to remember on every deploy, and the slug a field names depends on how each publisher shaped its URI. It is P2 because US-1 and US-2 already load any one vocabulary.
+
+**Independent Test**: Declare two fixture vocabularies, one of them failing, run the command, and confirm the good one is held under its declared slug, the failing one left nothing behind, and the command exited non-zero. Run it again and confirm the rows were updated in place.
+
+**Acceptance Scenarios**:
+
+1. **Given** a vocabulary declared under a slug, **When** the command is run in an empty database, **Then** the vocabulary is loaded and holds the declared slug, whatever its URI.
+2. **Given** that vocabulary already loaded, **When** the command is run again, **Then** it is found by its declared slug and updated in place, and no row is duplicated.
+3. **Given** a source that no longer lists a record the vocabulary holds, **When** the command is run, **Then** the record is reported and kept.
+4. **Given** several declared vocabularies, one of which cannot be loaded, **When** the command is run, **Then** the others are loaded, the failing one is reported with its reason and nothing of it is kept, and the exit status is non-zero.
+5. **Given** a declared source that publishes a vocabulary other than the one already held under its slug, **When** the command is run, **Then** it is refused and neither vocabulary changes.
+6. **Given** a vocabulary already loaded under a different slug, **When** it is declared and the command is run, **Then** it is reported naming the slug it holds, and it is not renamed.
+7. **Given** a dry run, **When** the command finishes, **Then** every report printed and nothing was kept.
+8. **Given** one or more slugs named on the command line, **When** the command is run, **Then** only those vocabularies are loaded, and a slug that is not declared is refused before anything loads.
+9. **Given** a field naming a vocabulary that is neither declared nor loaded, **When** `manage.py check` runs, **Then** it warns under an id of its own, distinct from the warning for a vocabulary that is declared but not loaded yet.
+
 ### Edge Cases
 
 - A source value beginning with a scheme other than `http`/`https` is refused as an unsupported source, rather than being read as a relative filename that then fails to exist.
@@ -149,9 +169,16 @@ Everything the command prints is translatable, the README tells an operator the 
 - **FR-015**: Every string the command prints, including its help text, MUST be translatable per Article XII, with named placeholders so the message identifiers stay static.
 - **FR-016**: `CONTEXT.md` MUST define **dry run**, which this feature puts in front of an operator. The documentation MUST describe the command, both source forms, and the dry run flag.
 
+- **FR-017**: The package MUST read a `CONTROLLED_VOCABULARIES` setting: a mapping from a vocabulary's slug to its `source`, a path or an `http`/`https` URL, and an optional `format`.
+- **FR-018**: The package MUST ship a second management command that loads every declared vocabulary, or only those named, each through the same path `import_skos` takes, in a transaction of its own, printing each one's report.
+- **FR-019**: A vocabulary the command creates MUST take its declared slug, and every later run MUST find it by that slug rather than by a slug derived from its URI. A vocabulary already held under another slug MUST be reported and not renamed.
+- **FR-020**: A vocabulary that fails MUST be reported with its reason and leave nothing behind, MUST NOT stop the others, and MUST make the command exit non-zero. The command MUST offer the same dry run as `import_skos`.
+- **FR-021**: `manage.py check` MUST warn about a field naming a vocabulary that is neither declared nor loaded, under an id distinct from the warning for a declared vocabulary that is not loaded yet.
+
 ### Key Entities *(include if feature involves data)*
 
-- **Source**: What the operator points the command at — a filesystem path or an `http`/`https` URL. It resolves to bytes and nothing about it survives the run.
+- **Source**: What the operator points the command at — a filesystem path or an `http`/`https` URL. It resolves to bytes and nothing about it is stored in the database.
+- **Declared vocabulary**: An entry in `CONTROLLED_VOCABULARIES`: the slug fields name a vocabulary by, and the source it is loaded from.
 - **Dry run**: A run performed in full and then abandoned, reporting what it did without keeping any of it.
 - **Import report**: The structured outcome FS-006 defined. This feature reads it and renders it. It adds nothing to it and parses none of its rendered messages.
 
@@ -171,4 +198,4 @@ Everything the command prints is translatable, the README tells an operator the 
 - **The operator is trusted.** A management command is run by whoever already has shell access to the deployment and its database, so a URL they type is an instruction, not untrusted input. The command does not restrict which addresses may be fetched, and pointing it at the wrong one is the operator's error to make. This is a deliberate position taken at intake, recorded so it is not later read as an omission. Content fetched from any address remains untrusted as *content*, and passes through the existing safety scan unchanged.
 - **Retrieval needs no new runtime dependency.** The standard library covers fetching bytes over HTTP, and the package's dependency discipline (Article VII) prefers that to adding a client for one call site.
 - **The import's behaviour is fixed.** Every decision about what a source means was made by FS-006 and FS-007. If rendering the report at a terminal shows the report itself to be insufficient, that is a finding against those features, not a licence to change them here.
-- **Repeat runs are the caller's business.** Scheduling, retrying, and remembering where a vocabulary came from all sit outside this feature. A deployment script or a scheduler owns them.
+- **Repeat runs are the caller's business.** Scheduling and retrying sit outside this feature, and a deployment script or a scheduler owns them. Where a vocabulary comes from is remembered in the project's settings, never in the database.

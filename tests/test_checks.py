@@ -24,6 +24,7 @@ from controlled_vocabularies.checks import (
     CHECK_ID_MISSING_MIDDLEWARE,
     CHECK_ID_MISSING_RESTRICTION_TARGET,
     CHECK_ID_MISSING_ROUTE,
+    CHECK_ID_UNDECLARED_VOCABULARY,
     TOMSELECT_MIDDLEWARE,
     check_concept_autocomplete_route_included,
     check_concept_field_restriction_targets,
@@ -37,6 +38,19 @@ from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import Specimen
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+
+@pytest.fixture
+def declared_test_app_vocabularies(settings):
+    """Declare every vocabulary the test app's fields name.
+
+    Their absence then reads as not loaded yet rather than undeclared.
+    """
+    settings.CONTROLLED_VOCABULARIES = {
+        "rock-type": {"source": "rock-type.ttl"},
+        "mineral": {"source": "mineral.ttl"},
+    }
 
 
 def run_django_admin(
@@ -69,6 +83,7 @@ def run_django_admin(
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures("declared_test_app_vocabularies")
 class TestCheckConceptFieldVocabularies:
     def test_warns_about_a_field_whose_vocabulary_is_absent(self):
         warnings = check_concept_field_vocabularies(None)
@@ -137,6 +152,52 @@ class TestCheckConceptFieldVocabularies:
 
 
 @pytest.mark.django_db
+class TestCheckUndeclaredVocabularies:
+    def test_a_vocabulary_neither_declared_nor_loaded_has_its_own_id(self):
+        with override_settings(CONTROLLED_VOCABULARIES={}):
+            warnings = check_concept_field_vocabularies(None)
+
+        assert warnings
+        assert {warning.id for warning in warnings} == {CHECK_ID_UNDECLARED_VOCABULARY}
+
+    def test_only_the_undeclared_vocabulary_has_the_undeclared_id(self):
+        with override_settings(
+            CONTROLLED_VOCABULARIES={"rock-type": {"source": "rock-type.ttl"}}
+        ):
+            warnings = check_concept_field_vocabularies(None)
+
+        ids = {
+            (warning.obj.model._meta.label, warning.obj.name): warning.id
+            for warning in warnings
+        }
+        assert ids[("testapp.Specimen", "rock_type")] == CHECK_ID
+        assert ids[("testapp.RockSample", "primary_mineral")] == (
+            CHECK_ID_UNDECLARED_VOCABULARY
+        )
+
+    def test_a_loaded_vocabulary_is_not_reported_whether_or_not_it_is_declared(self):
+        ConceptSchemeFactory(name="Rock Type")
+        ConceptSchemeFactory(name="Mineral")
+
+        with override_settings(CONTROLLED_VOCABULARIES={}):
+            assert check_concept_field_vocabularies(None) == []
+
+    def test_silencing_the_undeclared_id_suppresses_it(self):
+        with override_settings(CONTROLLED_VOCABULARIES={}):
+            stderr = io.StringIO()
+            call_command("check", stderr=stderr)
+            assert CHECK_ID_UNDECLARED_VOCABULARY in stderr.getvalue()
+
+            stderr = io.StringIO()
+            with override_settings(
+                SILENCED_SYSTEM_CHECKS=[CHECK_ID_UNDECLARED_VOCABULARY]
+            ):
+                call_command("check", stderr=stderr)
+            assert CHECK_ID_UNDECLARED_VOCABULARY not in stderr.getvalue()
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("declared_test_app_vocabularies")
 class TestCheckMultiConceptFieldVocabularies:
     def test_warns_about_a_multi_concept_field_whose_vocabulary_is_absent(self):
         warnings = check_concept_field_vocabularies(None)
@@ -389,6 +450,7 @@ class TestCheckSurvivesUnmigratedDatabase:
         assert result.returncode == 0, result.stderr
 
     @pytest.mark.django_db
+    @pytest.mark.usefixtures("declared_test_app_vocabularies")
     def test_silencing_the_check_id_suppresses_it(self):
         stderr = io.StringIO()
         call_command("check", stderr=stderr)
