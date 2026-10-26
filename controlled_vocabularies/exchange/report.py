@@ -24,6 +24,7 @@ class FatalReason(TextChoices):
     """
 
     MISSING_IDENTITY = "missing_identity", _("identifier missing or blank")
+    REFUSED_IDENTITY = "refused_identity", _("identifier uses a refused scheme")
     VOCABULARY_UNDETERMINED = (
         "vocabulary_undetermined",
         _("vocabulary not declared and no target named"),
@@ -46,6 +47,9 @@ class FatalReason(TextChoices):
 _FATAL_TEMPLATES: dict[FatalReason, Promise] = {
     FatalReason.MISSING_IDENTITY: _(
         "'%(subject)s' has no identifier that survives re-serialization (a blank node); the run was refused."
+    ),
+    FatalReason.REFUSED_IDENTITY: _(
+        "'%(subject)s' uses a scheme that can carry executable content; the run was refused."
     ),
     FatalReason.VOCABULARY_UNDETERMINED: _(
         "'%(subject)s' declares no vocabulary of its own, and no target vocabulary was named; the run was refused."

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import urllib.parse
 from collections import Counter
 from pathlib import Path
 
@@ -27,6 +28,9 @@ from controlled_vocabularies.predicates import Namespaces
 
 # The serializations this importer reads. Anything else fails the run instead of reaching rdflib.
 _SUPPORTED_FORMATS = frozenset({"turtle", "xml", "json-ld"})
+
+#: Schemes refused as an identifier, because a stored URI is rendered as a link.
+_UNSAFE_SCHEMES = frozenset({"javascript", "data", "vbscript"})
 
 #: The classes that make a subject a record, lowest priority first: a subject typed with
 #: several becomes the last one it matches.
@@ -172,10 +176,7 @@ class SkosImporter:
             The declared scheme, or None when the file declares none the run can use.
         """
         nodes = sorted(set(graph.subjects(RDF.type, SKOS.ConceptScheme)), key=str)
-        for node in nodes:
-            if isinstance(node, rdflib.BNode):
-                self.report.add_fatal(FatalReason.MISSING_IDENTITY, str(node))
-        declared = [node for node in nodes if isinstance(node, rdflib.URIRef)]
+        declared = [node for node in nodes if self._identifiable(node)]
 
         if self.target is not None:
             for node in declared:
@@ -222,13 +223,31 @@ class SkosImporter:
             for node in graph.subjects(predicate, scheme_node):
                 found.setdefault(node, Record.Type.CONCEPT)
 
-        nodes = {}
-        for node in sorted(found, key=str):
-            if isinstance(node, rdflib.URIRef):
-                nodes[node] = found[node]
-            else:
-                self.report.add_fatal(FatalReason.MISSING_IDENTITY, str(node))
-        return nodes
+        return {
+            node: found[node]
+            for node in sorted(found, key=str)
+            if self._identifiable(node)
+        }
+
+    def _identifiable(self, node: rdflib.term.Node) -> bool:
+        """Return whether a subject's URI can be stored, recording a fatal finding when not.
+
+        A blank node cannot be identified again on a re-import. A ``javascript:``, ``data:``
+        or ``vbscript:`` URI is refused because the pages render a record's URI as a link.
+
+        Args:
+            node: The subject.
+
+        Returns:
+            Whether the subject is a usable URI.
+        """
+        if not isinstance(node, rdflib.URIRef):
+            self.report.add_fatal(FatalReason.MISSING_IDENTITY, str(node))
+            return False
+        if urllib.parse.urlsplit(str(node)).scheme.lower() in _UNSAFE_SCHEMES:
+            self.report.add_fatal(FatalReason.REFUSED_IDENTITY, str(node))
+            return False
+        return True
 
     def _document(self, graph: rdflib.Graph, node: rdflib.URIRef) -> dict:
         """Gather every statement a subject makes into a document.
