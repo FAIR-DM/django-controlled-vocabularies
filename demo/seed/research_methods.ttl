@@ -25,10 +25,8 @@
     a skos:Concept ;
     skos:prefLabel "Laboratory experiment"@en ;
     skos:definition "Data produced under controlled conditions in a laboratory setting."@en ;
-    # 015-read-single-record T024, FR-010: an associative link, stated once — the importer
-    # stores one ConceptRelation row from a single direction and Concept.related() reads it
-    # from either side (relation_both_directions.ttl), so remote-sensing's own page shows
-    # this concept back without a second statement here.
+    # An associative link, stated once: skos:related is symmetric, so remote-sensing's own
+    # page shows this concept back without a second statement here.
     skos:related <http://example.org/research-methods/remote-sensing> .
 
 <http://example.org/research-methods/survey>

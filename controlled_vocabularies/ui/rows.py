@@ -29,20 +29,27 @@ class PropertyRows:
         language: The language being read.
     """
 
+    #: Each hierarchy and association predicate, and the predicate it reads as from the other end.
+    INVERSES: ClassVar[dict[str, str]] = {
+        "skos:broader": "skos:narrower",
+        "skos:narrower": "skos:broader",
+        "skos:related": "skos:related",
+    }
+
     def __init__(self, record: Record, language: str) -> None:
         self.record = record
         self.scheme = record.scheme
         self.language = language
         self.identifier_ids = count()
-        self.narrower = (
-            self._narrower_uris() if record.type == Record.Type.CONCEPT else []
+        self.inferred = (
+            self._inferred_links() if record.type == Record.Type.CONCEPT else {}
         )
         linked = {
             entry["@id"]
             for entries in record.data.values()
             for entry in entries
             if "@id" in entry
-        } | set(self.narrower)
+        }.union(*self.inferred.values())
         self.records = {
             found.uri: found
             for found in Record.objects.filter(uri__in=linked).select_related("scheme")
@@ -122,12 +129,11 @@ class PropertyRows:
             stored = self.in_reading_language(
                 stored, self.language, self.scheme.default_language
             )
-        if curie == "skos:narrower":
-            # A file usually states a hierarchy from the narrower side only.
-            stated = {entry.get("@id") for entry in stored}
-            stored = stored + [
-                {"@id": uri} for uri in self.narrower if uri not in stated
-            ]
+        # A file often states a hierarchy from one side only, and skos:related is symmetric.
+        stated = {entry.get("@id") for entry in stored}
+        stored = stored + [
+            {"@id": uri} for uri in self.inferred.get(curie, []) if uri not in stated
+        ]
         return [
             self._link(entry["@id"])
             if "@id" in entry
@@ -171,16 +177,22 @@ class PropertyRows:
         entry["identifier_id"] = f"identifier-{next(self.identifier_ids)}"
         return entry
 
-    def _narrower_uris(self) -> list[str]:
-        """Return the URIs of the concepts that name this one as their broader concept."""
+    def _inferred_links(self) -> dict[str, list[str]]:
+        """Find the links other concepts of the vocabulary make to this one, turned around.
+
+        Returns:
+            For each of ``skos:broader``, ``skos:narrower`` and ``skos:related``, the URIs of
+            the concepts that state the inverse link to this concept, by preferred label.
+        """
+        inferred: dict[str, list[str]] = {curie: [] for curie in self.INVERSES.values()}
         candidates = Record.objects.filter(
             scheme=self.scheme, type=Record.Type.CONCEPT
         ).mentioning(self.record.uri)
-        return [
-            candidate.uri
-            for candidate in candidates.order_by("pref_label", "pk")
-            if self.record.uri in candidate.linked_uris("skos:broader")
-        ]
+        for candidate in candidates.order_by("pref_label", "pk"):
+            for stated, inverse in self.INVERSES.items():
+                if self.record.uri in candidate.linked_uris(stated):
+                    inferred[inverse].append(candidate.uri)
+        return inferred
 
 
 @dataclass(frozen=True)
