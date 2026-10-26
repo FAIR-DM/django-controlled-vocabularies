@@ -44,7 +44,7 @@ class TermPickerView(MVPFormView):
     """Show what each widget submits, without saving anything."""
 
     form_class = TermPickerForm
-    template_name = "form_view.html"
+    template_name = "demo/term_picker.html"
     page_title = _("Predicate picker")
 
     def form_valid(self, form):

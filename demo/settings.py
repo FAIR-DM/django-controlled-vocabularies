@@ -47,8 +47,6 @@ INSTALLED_APPS = [
     "demo",
     # Wired as README.md's "Finding a vocabulary" section documents; the README wins any disagreement.
     "controlled_vocabularies",
-    # The concept search control, which the package's system checks require of any installing project.
-    "django_tomselect",
     "django_cotton",
     "easy_icons",
     "flex_menu",
@@ -57,7 +55,10 @@ INSTALLED_APPS = [
     "mvp",
     "daisy_cotton",
     "crispy_forms",
+    # Ahead of django_tomselect, so mvp_forms' template for its widget is the one found.
     "mvp_forms",
+    # The concept search control, which the package's system checks require of any installing project.
+    "django_tomselect",
     # Development only, from the dev dependency group: the open page reloads itself when a template,
     # static file or Python module changes, and watchfiles notices the change without polling.
     "django_browser_reload",

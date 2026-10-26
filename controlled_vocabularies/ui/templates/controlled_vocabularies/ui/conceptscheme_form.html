@@ -1,10 +1,15 @@
 {% extends "form_view.html" %}
-{% load i18n %}
+{% load i18n static %}
 {% comment %}
   The create and edit pages share one form. The buttons say what saving does, Cancel goes back
   without saving, and on the edit page Delete sits at the far end, away from the save button, as
   django-mvp places it.
 {% endcomment %}
+{% block head %}
+  {{ block.super }}
+  {# Fits Tom Select's dropdown inside daisyUI's select, which otherwise clips it. #}
+  <link rel="stylesheet" href="{% static 'mvp_forms/tomselect.css' %}">
+{% endblock head %}
 {% block formset %}
   <c-mvp.form.formset :formset="formset"
                       layout="tabular"
