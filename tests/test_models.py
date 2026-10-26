@@ -535,35 +535,54 @@ class TestRecordLinks:
 
 
 class TestRecordQuerySet:
-    def test_mentioning_finds_a_record_linking_to_the_uri(self):
+    def test_linking_to_finds_a_record_linking_to_the_uri(self):
         target = RecordFactory()
         linking = RecordFactory(
             data=labelled("Child", statements={"skos:broader": [{"@id": target.uri}]})
         )
 
-        assert list(Record.objects.mentioning(target.uri)) == [linking]
+        assert list(Record.objects.linking_to(target.uri)) == [linking]
 
-    def test_mentioning_leaves_out_records_that_do_not_hold_the_uri(self):
+    def test_linking_to_leaves_out_records_that_do_not_link_to_the_uri(self):
         target = RecordFactory()
         RecordFactory()
 
-        assert not Record.objects.mentioning(target.uri).exists()
+        assert not Record.objects.linking_to(target.uri).exists()
 
-    def test_mentioning_matches_a_uri_that_needs_escaping_in_json(self):
-        uri = 'https://example.org/a"b\\c'
-        linking = RecordFactory(
-            data=labelled("Child", statements={"skos:broader": [{"@id": uri}]})
+    def test_linking_to_leaves_out_a_record_holding_the_uri_only_as_a_literal(self):
+        target = RecordFactory()
+        RecordFactory(
+            data=labelled("Note", statements={"skos:note": [{"@value": target.uri}]})
         )
 
-        assert list(Record.objects.mentioning(uri)) == [linking]
+        assert not Record.objects.linking_to(target.uri).exists()
 
-    def test_mentioning_matches_a_uri_with_non_ascii_characters(self):
-        uri = "https://example.org/géologie/granit"
-        linking = RecordFactory(
-            data=labelled("Child", statements={"skos:broader": [{"@id": uri}]})
+    def test_linking_to_with_predicates_leaves_out_a_link_under_another_predicate(self):
+        target = RecordFactory()
+        related = RecordFactory(
+            data=labelled("Rel", statements={"skos:related": [{"@id": target.uri}]})
+        )
+        RecordFactory(
+            data=labelled("Child", statements={"skos:broader": [{"@id": target.uri}]})
         )
 
-        assert list(Record.objects.mentioning(uri)) == [linking]
+        found = Record.objects.linking_to(target.uri, "skos:related", "skos:member")
+
+        assert list(found) == [related]
+
+    def test_linking_to_lists_a_record_once_however_often_it_links(self):
+        target = RecordFactory()
+        linking = RecordFactory(
+            data=labelled(
+                "Child",
+                statements={
+                    "skos:broader": [{"@id": target.uri}, {"@id": target.uri}],
+                    "skos:related": [{"@id": target.uri}],
+                },
+            )
+        )
+
+        assert list(Record.objects.linking_to(target.uri)) == [linking]
 
 
 class TestRecord:

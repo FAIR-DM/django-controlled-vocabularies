@@ -1,6 +1,5 @@
 """Models for vocabularies and the records they hold, with SKOS statements in JSON."""
 
-import json
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
@@ -327,25 +326,24 @@ class ConceptScheme(Resource):
 class RecordQuerySet(models.QuerySet):
     """Queries over records that read the JSON documents."""
 
-    def mentioning(self, uri: str) -> "RecordQuerySet":
-        """Narrow to records whose document may link to ``uri``.
+    def linking_to(self, uri: str, *curies: str) -> "RecordQuerySet":
+        """Narrow to records whose document links to ``uri``, under one of ``curies`` when given.
 
-        A cheap pre-filter on the stored text, which can match a record that holds the
-        URI as a plain literal; callers check the links in Python.
+        Reads the ``Link`` rows, so a record that holds the URI only as a literal is not
+        returned, and a record that states the link more than once is returned once.
 
         Args:
-            uri: The URI to look for.
+            uri: The URI the records link to.
+            *curies: The predicates to look under, such as ``skos:member``. Any
+                predicate when none is given.
 
         Returns:
-            The candidate records.
+            The records stating a link to ``uri``.
         """
-        # The stored text is JSON, so the quoted form is what appears in it. SQLite
-        # keeps non-ASCII characters escaped and PostgreSQL's jsonb does not, so both
-        # are tried.
-        return self.filter(
-            models.Q(data__icontains=json.dumps(uri))
-            | models.Q(data__icontains=json.dumps(uri, ensure_ascii=False))
-        )
+        links = Link.objects.filter(source=models.OuterRef("pk"), target=uri)
+        if curies:
+            links = links.filter(predicate__in=curies)
+        return self.filter(models.Exists(links))
 
 
 class Record(Resource):

@@ -136,14 +136,13 @@ class ConceptDetailView(VocabularyPageMixin, MVPDetailView):
         concept = self.object
         context["rows"] = PropertyRows(concept, get_language() or "").build()
         # Never a row: membership is a statement the collection makes, not the concept.
-        collections = Record.objects.filter(
-            scheme=self.vocabulary, type__in=Record.COLLECTION_TYPES
-        ).mentioning(concept.uri)
-        context["concept_collections"] = [
-            collection
-            for collection in collections.order_by("pref_label", "pk")
-            if concept.uri in collection.member_uris()
-        ]
+        context["concept_collections"] = list(
+            Record.objects.filter(
+                scheme=self.vocabulary, type__in=Record.COLLECTION_TYPES
+            )
+            .linking_to(concept.uri, "skos:member", "skos:memberList")
+            .order_by("pref_label", "pk")
+        )
         return context
 
 

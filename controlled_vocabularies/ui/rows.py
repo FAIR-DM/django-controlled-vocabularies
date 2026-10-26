@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils.dateparse import parse_date
 from django.utils.formats import date_format
 
-from controlled_vocabularies.models import ConceptScheme, Record
+from controlled_vocabularies.models import ConceptScheme, Link, Record
 from controlled_vocabularies.predicates import (
     PREDICATE_ORDER,
     TRANSLATED_PREDICATES,
@@ -221,15 +221,23 @@ class PropertyRows:
             URIs of the concepts that state the inverse link to this concept, by
             preferred label.
         """
-        inferred: dict[str, list[str]] = {curie: [] for curie in self.INVERSES.values()}
-        candidates = Record.objects.filter(
-            scheme=self.scheme, type=Record.Type.CONCEPT
-        ).mentioning(self.record.uri)
-        for candidate in candidates.order_by("pref_label", "pk"):
-            for stated, inverse in self.INVERSES.items():
-                if self.record.uri in candidate.linked_uris(stated):
-                    inferred[inverse].append(candidate.uri)
-        return inferred
+        links = (
+            Link.objects.filter(
+                target=self.record.uri,
+                predicate__in=self.INVERSES,
+                source__scheme=self.scheme,
+                source__type=Record.Type.CONCEPT,
+            )
+            .order_by("source__pref_label", "source_id")
+            .values_list("predicate", "source__uri")
+        )
+        # A source may state the same link twice, and is listed once.
+        inferred: dict[str, dict[str, None]] = {
+            curie: {} for curie in self.INVERSES.values()
+        }
+        for stated, source_uri in links:
+            inferred[self.INVERSES[stated]][source_uri] = None
+        return {curie: list(uris) for curie, uris in inferred.items()}
 
 
 @dataclass(frozen=True)
