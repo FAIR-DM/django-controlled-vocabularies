@@ -17,14 +17,14 @@ from .admin import related_field_widget_wrapper_class
 from .checks import AUTOCOMPLETE_URL_NAME
 from .models import Record
 
-_MISSING_ROUTE_MESSAGE = _(
+MISSING_ROUTE_MESSAGE = _(
     "controlled_vocabularies's URL configuration is not included in the project's "
     'URLconf. Add path("<prefix>/", include("controlled_vocabularies.urls")) to the '
     'project\'s root URLconf, and add "django_tomselect" to INSTALLED_APPS.'
 )
 
 
-def _config() -> TomSelectConfig:
+def tomselect_config() -> TomSelectConfig:
     """Return the TomSelect configuration both concept widgets render with.
 
     Returns:
@@ -79,7 +79,7 @@ class ConceptWidgetRouteMixin:
         try:
             return super().get_autocomplete_context()
         except NoReverseMatch as exc:
-            raise ImproperlyConfigured(_MISSING_ROUTE_MESSAGE) from exc
+            raise ImproperlyConfigured(MISSING_ROUTE_MESSAGE) from exc
 
 
 class ConceptWidgetDisplayMixin:
@@ -166,7 +166,7 @@ class ConceptChoiceField(DeclinesAdminRelatedWrapperMixin, TomSelectModelChoiceF
     widget_class = ConceptWidget
 
     def __init__(self, *args, model_field=None, **kwargs):
-        kwargs.setdefault("config", _config())
+        kwargs.setdefault("config", tomselect_config())
         super().__init__(*args, **kwargs)
         self.widget.model_field = model_field
 
@@ -186,6 +186,6 @@ class ConceptsChoiceField(  # type: ignore[misc]
     widget_class = ConceptsWidget
 
     def __init__(self, *args, model_field=None, **kwargs):
-        kwargs.setdefault("config", _config())
+        kwargs.setdefault("config", tomselect_config())
         super().__init__(*args, **kwargs)
         self.widget.model_field = model_field

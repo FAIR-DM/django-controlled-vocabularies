@@ -12,7 +12,7 @@ from django.utils.translation import gettext_lazy as _
 # Entry values are text the source document chose, and a remote server can supply it, so
 # escapes, carriage returns and newlines are stripped before an operator's terminal sees
 # them (Article V). Newline and tab are included: an entry is one line by construction.
-_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 
 class FatalReason(TextChoices):
@@ -41,10 +41,10 @@ class FatalReason(TextChoices):
     @property
     def template(self) -> Promise:
         """The translatable message template for this reason, keyed by named placeholders."""
-        return _FATAL_TEMPLATES[self]
+        return FATAL_TEMPLATES[self]
 
 
-_FATAL_TEMPLATES: dict[FatalReason, Promise] = {
+FATAL_TEMPLATES: dict[FatalReason, Promise] = {
     FatalReason.MISSING_IDENTITY: _(
         "'%(subject)s' has no identifier that survives re-serialization (a blank node); the run was refused."
     ),
@@ -82,7 +82,7 @@ class FatalFinding:
         """Return this finding's message in the active language, safe to print."""
         merged = {"subject": self.subject, **self.params}
         return str(self.reason.template) % {
-            key: _CONTROL_CHARACTERS.sub("", value) for key, value in merged.items()
+            key: CONTROL_CHARACTERS.sub("", value) for key, value in merged.items()
         }
 
 

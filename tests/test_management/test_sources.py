@@ -170,7 +170,7 @@ class TestSourceResolverFetch:
     def test_a_response_exceeding_the_byte_ceiling_is_abandoned_and_writes_nothing(
         self, http_stub, monkeypatch
     ):
-        monkeypatch.setattr(sources, "_MAX_RESPONSE_BYTES", 16)
+        monkeypatch.setattr(sources, "MAX_RESPONSE_BYTES", 16)
         url = http_stub.url + "/big.ttl"
         http_stub.set_response(
             "/big.ttl", status=200, body=b"x" * 1000, content_type="text/turtle"
@@ -190,7 +190,7 @@ class TestSourceResolverFetch:
         # The read timeout is per read and the byte ceiling counts bytes, so a slow
         # trickle escapes both and only the total deadline stops it. The deadline is
         # shortened here rather than the trickle slowed.
-        monkeypatch.setattr(sources, "_MAX_TOTAL_SECONDS", 0)
+        monkeypatch.setattr(sources, "MAX_TOTAL_SECONDS", 0)
         url = http_stub.url + "/slow.ttl"
         http_stub.set_response(
             "/slow.ttl", status=200, body=b"x" * 1000, content_type="text/turtle"
@@ -212,7 +212,7 @@ class TestSourceResolverFetch:
         started = time.monotonic()
         resolver.resolve()
         resolver.cleanup()
-        assert time.monotonic() - started < sources._MAX_TOTAL_SECONDS
+        assert time.monotonic() - started < sources.MAX_TOTAL_SECONDS
 
 
 class TestSourceResolverSerializationLadder:

@@ -23,12 +23,12 @@ CHECK_ID_MISSING_RESTRICTION_TARGET = "controlled_vocabularies.W005"
 TOMSELECT_MIDDLEWARE = "django_tomselect.middleware.TomSelectMiddleware"
 
 #: The name the control's widget reverses at render time (``forms.py``'s
-#: ``_config()``). Named once here so the check and the widget cannot drift
+#: ``tomselect_config()``). Named once here so the check and the widget cannot drift
 #: apart about which route is being asked for.
 AUTOCOMPLETE_URL_NAME = "controlled_vocabularies:concept-autocomplete"
 
 
-def _concept_fields():
+def concept_fields():
     """Return every concept field declared on an installed model."""
     return [
         field
@@ -40,7 +40,7 @@ def _concept_fields():
 
 def check_concept_field_vocabularies(app_configs, **kwargs):
     """Warn about every vocabulary a concept field names that is absent from the database."""
-    fields = _concept_fields()
+    fields = concept_fields()
     slugs = {slug for field in fields for slug in field.vocabulary}
     if not slugs:
         return []
@@ -79,7 +79,7 @@ def check_concept_field_restriction_targets(app_configs, **kwargs):
     """Warn about every collection restriction naming a collection absent from its vocabulary."""
     targets = [
         (field, field.vocabulary[0], field.collection)
-        for field in _concept_fields()
+        for field in concept_fields()
         if field.collection is not None
     ]
     if not targets:

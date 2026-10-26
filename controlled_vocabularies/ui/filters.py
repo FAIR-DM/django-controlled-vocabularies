@@ -32,7 +32,7 @@ LICENCE_NAMES = {
 }
 
 #: The facets of the list of vocabularies, in the order the filter panel draws them.
-FACETS = ("publisher", "license", "language", "source")
+FACETS = ("publisher", "license", "language")
 
 
 def licence_name(value: str) -> str:
@@ -110,14 +110,12 @@ class Profile:
         publisher: The publisher, or an empty string.
         license: The licence, or an empty string.
         language: The default language.
-        source: ``"imported"`` or ``"here"``.
         text: The lower-cased name and description searched for words.
     """
 
     publisher: str
     license: str
     language: str
-    source: str
     text: str
 
     @classmethod
@@ -141,7 +139,6 @@ class Profile:
             publisher=scheme.first_value("dcterms:publisher"),
             license=details.license,
             language=scheme.default_language,
-            source="here" if scheme.managed else "imported",
             text=" ".join(words).lower(),
         )
 
@@ -191,12 +188,6 @@ class VocabularyFilter(django_filters.FilterSet):
     language = django_filters.MultipleChoiceFilter(
         label=_("Language"), widget=CountedCheckboxes, method="filter_facet"
     )
-    source = django_filters.MultipleChoiceFilter(
-        label=_("Source"),
-        widget=CountedCheckboxes,
-        method="filter_facet",
-        choices=[("imported", _("Imported")), ("here", _("Held here"))],
-    )
     # The option keys are the ones the address has always carried, so bookmarked sorts keep
     # working. `pk` makes each order total, so equal names cannot swap between pages.
     o = SortFilter(
@@ -229,13 +220,6 @@ class VocabularyFilter(django_filters.FilterSet):
         self.offer_values("publisher", str)
         self.offer_values("license", licence_name)
         self.offer_values("language", language_name)
-        # Whether a vocabulary was imported decides whether it may be edited here, which is an
-        # editor's concern only, as on the vocabulary's own page.
-        user = getattr(request, "user", None)
-        if user is None or not user.has_perm(
-            "controlled_vocabularies.change_conceptscheme"
-        ):
-            del self.filters["source"]
 
     def offer_values(self, name: str, label) -> None:
         """Make a facet's choices the values vocabularies carry, most common first.

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from django.contrib.auth.models import Permission, User
+from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
 from controlled_vocabularies.exchange import import_skos
@@ -10,10 +10,10 @@ from controlled_vocabularies.models import ConceptScheme
 
 SEED_DIR = Path(__file__).resolve().parent.parent.parent / "seed"
 
-#: Declares its own skos:ConceptScheme with an externally published URI, so it reads as "Imported".
+#: Declares its own skos:ConceptScheme with an externally published URI.
 IMPORTED_FILE = SEED_DIR / "dcmi_types.ttl"
 
-#: Declares no vocabulary of its own; loaded into one created directly, so it reads as "Held here".
+#: Declares no vocabulary of its own, so it is loaded into one created for it.
 AUTHORED_FILE = SEED_DIR / "research_methods.ttl"
 
 AUTHORED_NAME = "Data Collection Methods"
@@ -27,9 +27,8 @@ class Command(BaseCommand):
     """Delete every vocabulary and reload the demo's seed vocabularies and accounts."""
 
     help = (
-        "Delete every vocabulary, then reload the demo's seed vocabularies (one imported from a "
-        "publisher, two held here) and the sign-in accounts. Destructive: anything entered "
-        "through the browsing pages or the admin is lost."
+        "Delete every vocabulary, then reload the demo's two seed vocabularies and the sign-in "
+        "accounts. Destructive: anything entered through the admin is lost."
     )
 
     def handle(self, *args, **options):
@@ -41,22 +40,17 @@ class Command(BaseCommand):
         authored_scheme = self.create_scheme(AUTHORED_NAME, AUTHORED_DESCRIPTION)
         import_skos(AUTHORED_FILE, scheme=authored_scheme)
 
-        # A vocabulary held here with nothing in it yet, whose default language can still change.
-        self.create_scheme(
-            "Sample Types", "Kinds of physical sample a dataset can be drawn from."
-        )
-
         seed_accounts()
 
         self.stdout.write(
             self.style.SUCCESS(
-                "seed_demo loaded 3 vocabularies and the sign-in accounts"
+                "seed_demo loaded 2 vocabularies and the sign-in accounts"
             )
         )
 
     @staticmethod
     def create_scheme(name, description):
-        """Create a vocabulary held on this site.
+        """Create a vocabulary for a seed file that declares none of its own.
 
         Args:
             name: The vocabulary's name, in English.
@@ -74,13 +68,9 @@ class Command(BaseCommand):
         )
 
 
-#: The standard sign-in accounts, all with the password "password". A curator may add, change and
-#: delete vocabularies, and nothing else.
+#: The standard sign-in accounts, all with the password "password".
 ACCOUNTS = {
     "regular.user": {},
-    "curator.user": {
-        "perms": ["add_conceptscheme", "change_conceptscheme", "delete_conceptscheme"]
-    },
     "staff.user": {"is_staff": True},
     "super.user": {"is_staff": True, "is_superuser": True},
 }
@@ -95,9 +85,3 @@ def seed_accounts():
         user.is_superuser = spec.get("is_superuser", False)
         user.set_password("password")
         user.save()
-        user.user_permissions.set(
-            Permission.objects.filter(
-                content_type__app_label="controlled_vocabularies",
-                codename__in=spec.get("perms", []),
-            )
-        )

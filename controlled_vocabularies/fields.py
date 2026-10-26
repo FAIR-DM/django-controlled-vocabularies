@@ -1,6 +1,7 @@
 """Model fields that attach concepts to a consuming model."""
 
 from functools import partial
+from typing import TYPE_CHECKING, ClassVar
 
 from django.core.exceptions import ValidationError
 from django.db.models import CASCADE, PROTECT, ForeignKey, ManyToManyField, Model, Q
@@ -10,6 +11,9 @@ from django.db.models.signals import m2m_changed
 from django.db.models.utils import make_model_tuple
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
+
+if TYPE_CHECKING:
+    from django_stubs_ext import StrOrPromise
 
 
 class ConceptFieldMixin:
@@ -25,7 +29,7 @@ class ConceptFieldMixin:
     default_help_text: str | Promise | None = None
     default_restricted_help_text: str | Promise | None = None
 
-    default_error_messages = {
+    default_error_messages: ClassVar[dict[str, "StrOrPromise"]] = {
         "invalid": _(
             "%(value)s is not a valid concept in the '%(vocabulary)s' vocabulary."
         ),
@@ -35,7 +39,7 @@ class ConceptFieldMixin:
         ),
     }
 
-    def _normalise_vocabulary(self, vocabulary):
+    def normalise_vocabulary(self, vocabulary):
         """Normalise a ``vocabulary`` argument to a tuple of distinct slugs.
 
         Args:
@@ -60,7 +64,7 @@ class ConceptFieldMixin:
                 )
         return tuple(dict.fromkeys(slugs))
 
-    def _apply_collection(self, collection):
+    def apply_collection(self, collection):
         """Validate the ``collection`` restriction and store it as ``self.collection``.
 
         Must run after ``self.vocabulary`` is set.
@@ -84,7 +88,7 @@ class ConceptFieldMixin:
                 )
         self.collection = collection
 
-    def _resolve_restriction(self):
+    def resolve_restriction(self):
         """Return the ``Q`` that limits the field's choices, resolved at call time.
 
         Installed as ``limit_choices_to``, so it is evaluated when a value is validated,
@@ -110,7 +114,7 @@ class ConceptFieldMixin:
             restriction &= Q(uri__in=collection.member_uris() if collection else [])
         return restriction
 
-    def _refusal(self, value):
+    def refusal(self, value):
         """Build the error for a concept the restriction does not admit.
 
         Args:
@@ -128,7 +132,7 @@ class ConceptFieldMixin:
             return "invalid", {"value": value, "vocabulary": ", ".join(self.vocabulary)}
         return "invalid_unrestricted", {"value": value}
 
-    def _apply_vocabulary(self, vocabulary, collection, kwargs):
+    def apply_vocabulary(self, vocabulary, collection, kwargs):
         """Store the normalised ``vocabulary`` and restriction, and fill in the kwargs they decide.
 
         Args:
@@ -148,10 +152,10 @@ class ConceptFieldMixin:
                 f"{type(self).__name__}() sets limit_choices_to itself to constrain choices "
                 "to 'vocabulary'; a consumer may not override it."
             )
-        self.vocabulary = self._normalise_vocabulary(vocabulary)
-        self._apply_collection(collection)
+        self.vocabulary = self.normalise_vocabulary(vocabulary)
+        self.apply_collection(collection)
         kwargs["to"] = "controlled_vocabularies.Record"
-        kwargs["limit_choices_to"] = self._resolve_restriction
+        kwargs["limit_choices_to"] = self.resolve_restriction
         kwargs.setdefault(
             "help_text",
             self.default_help_text
@@ -160,7 +164,7 @@ class ConceptFieldMixin:
         )
         return kwargs
 
-    def _contribute_accessor(self, cls, attr_name, accessor):
+    def contribute_accessor(self, cls, attr_name, accessor):
         """Add a derived read to the consuming model unless it already defines that name.
 
         Args:
@@ -227,7 +231,7 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
                 "ConceptField() sets on_delete=PROTECT itself; a consumer may not override it."
             )
         kwargs["on_delete"] = PROTECT
-        super().__init__(**self._apply_vocabulary(vocabulary, collection, kwargs))
+        super().__init__(**self.apply_vocabulary(vocabulary, collection, kwargs))
 
     def validate(self, value, model_instance):
         """Refuse a concept outside the restriction, naming what decided the refusal."""
@@ -238,7 +242,7 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
         except ValidationError as exc:
             if exc.code != "invalid":
                 raise
-            key, params = self._refusal(value)
+            key, params = self.refusal(value)
             # Keep the ForeignKey's own params: a consumer's message may use `model`, `pk` or `field`.
             raise ValidationError(
                 self.error_messages[key],
@@ -276,11 +280,11 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
             concept = getattr(instance, name, None)
             return concept.uri if concept is not None else None
 
-        self._contribute_accessor(cls, f"get_{name}_label", get_label)
-        self._contribute_accessor(cls, f"get_{name}_uri", get_uri)
+        self.contribute_accessor(cls, f"get_{name}_label", get_label)
+        self.contribute_accessor(cls, f"get_{name}_uri", get_uri)
 
 
-def _create_membership_model(field, cls):
+def create_membership_model(field, cls):
     """Build the through model for a :class:`ConceptsField`.
 
     Args:
@@ -347,7 +351,7 @@ def _create_membership_model(field, cls):
     )
 
 
-def _refuse_concepts_the_restriction_does_not_admit(
+def refuse_concepts_the_restriction_does_not_admit(
     *, field, instance, action, reverse, model, pk_set, **kwargs
 ) -> None:
     """Refuse a write that attaches a concept the field's restriction does not admit.
@@ -387,7 +391,7 @@ def _refuse_concepts_the_restriction_does_not_admit(
         invalid = list(model.objects.filter(pk__in=pk_set).exclude(restriction))
     if not invalid:
         return
-    key, params = field._refusal(", ".join(str(concept) for concept in invalid))
+    key, params = field.refusal(", ".join(str(concept) for concept in invalid))
     raise ValidationError(field.error_messages[key], code="invalid", params=params)
 
 
@@ -420,7 +424,7 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
                 "ConceptsField() generates its own through model with PROTECT on the "
                 "foreign key to the concept; a consumer may not override it."
             )
-        super().__init__(**self._apply_vocabulary(vocabulary, collection, kwargs))
+        super().__init__(**self.apply_vocabulary(vocabulary, collection, kwargs))
 
     def contribute_to_class(self, cls, name, **kwargs):
         """Attach the field, generate its protected through model and add the label and URI accessors."""
@@ -433,12 +437,12 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
         super(ManyToManyField, self).contribute_to_class(cls, name, **kwargs)
 
         if not cls._meta.abstract and not cls._meta.swapped:
-            self.remote_field.through = _create_membership_model(self, cls)
+            self.remote_field.through = create_membership_model(self, cls)
             # Connected here so a declaration cannot exist without its guard: an auto_created
             # through model with no receiver takes bulk_create's fast path, which skips m2m_changed.
             # weak=False because the partial has no other reference to keep it alive.
             m2m_changed.connect(
-                partial(_refuse_concepts_the_restriction_does_not_admit, field=self),
+                partial(refuse_concepts_the_restriction_does_not_admit, field=self),
                 sender=self.remote_field.through,
                 weak=False,
             )
@@ -471,8 +475,8 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
                     return []
                 return [concept.uri for concept in getattr(instance, name).all()]
 
-            self._contribute_accessor(cls, f"get_{name}_labels", get_labels)
-            self._contribute_accessor(cls, f"get_{name}_uris", get_uris)
+            self.contribute_accessor(cls, f"get_{name}_labels", get_labels)
+            self.contribute_accessor(cls, f"get_{name}_uris", get_uris)
 
         setattr(cls, self.name, ManyToManyDescriptor(self.remote_field, reverse=False))
         self.m2m_db_table = partial(self._get_m2m_db_table, cls._meta)

@@ -190,7 +190,7 @@ class TestImportSkosCommandURLFailureModes:
     ):
         # The shipped timeout is set for real publishers, which is far longer than a
         # test should wait to prove the same behaviour.
-        monkeypatch.setattr(sources, "_TIMEOUT_SECONDS", 0.5)
+        monkeypatch.setattr(sources, "TIMEOUT_SECONDS", 0.5)
         url = hanging_socket
         with pytest.raises(CommandError) as exc_info:
             call_command("import_skos", url, stdout=StringIO())

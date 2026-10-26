@@ -11,8 +11,7 @@ from controlled_vocabularies.models import ConceptScheme, Record
 class ConceptSchemeAdmin(admin.ModelAdmin):
     """Admin for vocabularies; the name lives in the document, so it is searched there."""
 
-    list_display = ("pref_label", "slug", "uri", "managed")
-    list_filter = ("managed",)
+    list_display = ("pref_label", "slug", "uri")
     search_fields = ("pref_label", "uri")
     readonly_fields = ("pref_label",)
 

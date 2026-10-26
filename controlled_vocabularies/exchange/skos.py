@@ -6,6 +6,7 @@ import json
 import urllib.parse
 from collections import Counter
 from pathlib import Path
+from typing import TypeGuard
 
 import rdflib
 import rdflib.util
@@ -27,14 +28,14 @@ from controlled_vocabularies.models import ConceptScheme, Record
 from controlled_vocabularies.predicates import Namespaces
 
 # The serializations this importer reads. Anything else fails the run instead of reaching rdflib.
-_SUPPORTED_FORMATS = frozenset({"turtle", "xml", "json-ld"})
+SUPPORTED_FORMATS = frozenset({"turtle", "xml", "json-ld"})
 
 #: Schemes refused as an identifier, because a stored URI is rendered as a link.
-_UNSAFE_SCHEMES = frozenset({"javascript", "data", "vbscript"})
+UNSAFE_SCHEMES = frozenset({"javascript", "data", "vbscript"})
 
 #: The classes that make a subject a record, lowest priority first: a subject typed with
 #: several becomes the last one it matches.
-_RECORD_CLASSES = (
+RECORD_CLASSES = (
     (SKOS.Concept, Record.Type.CONCEPT),
     (SKOS.Collection, Record.Type.COLLECTION),
     (SKOS.OrderedCollection, Record.Type.ORDERED_COLLECTION),
@@ -83,30 +84,30 @@ class SkosImporter:
         Raises:
             SkosImportFailed: The run recorded a fatal finding; nothing is written.
         """
-        graph = self._read_graph()
+        graph = self.read_graph()
         source_label = str(self.base_uri or self.file)
 
         with transaction.atomic():
-            declared = self._declared_scheme(graph, source_label)
+            declared = self.declared_scheme(graph, source_label)
             scheme_node = declared or rdflib.URIRef(
                 self.target.uri if self.target else ""
             )
-            nodes = self._record_nodes(graph, scheme_node)
+            nodes = self.record_nodes(graph, scheme_node)
             if self.report.fatal:
                 raise SkosImportFailed(self.report)
 
-            documents = {node: self._document(graph, node) for node in nodes}
-            scheme = self._upsert_scheme(graph, declared, documents)
+            documents = {node: self.document(graph, node) for node in nodes}
+            scheme = self.upsert_scheme(graph, declared, documents)
             seen = set()
             for node, record_type in nodes.items():
-                self._upsert_record(scheme, node, record_type, documents[node])
+                self.upsert_record(scheme, node, record_type, documents[node])
                 seen.add(str(node))
             for uri in scheme.records.values_list("uri", flat=True):
                 if uri not in seen:
                     self.report.absent_from_source.append(uri)
         return self.report
 
-    def _read_graph(self) -> rdflib.Graph:
+    def read_graph(self) -> rdflib.Graph:
         """Read the file into a graph, scanning RDF/XML and JSON-LD first.
 
         The scan runs before rdflib sees the bytes (docs/adr/0007-outbound-fetches-are-restricted-by-removing-handlers.md).
@@ -130,7 +131,7 @@ class SkosImporter:
                 code="skos_file_not_found",
             )
         resolved_format = self.serialization or rdflib.util.guess_format(str(path))
-        if resolved_format not in _SUPPORTED_FORMATS:
+        if resolved_format not in SUPPORTED_FORMATS:
             raise SkosImportError(
                 _(
                     "'%(file)s' is not in a serialization this application reads (Turtle, RDF/XML, or JSON-LD)."
@@ -163,7 +164,7 @@ class SkosImporter:
             ) from exc
         return graph
 
-    def _declared_scheme(
+    def declared_scheme(
         self, graph: rdflib.Graph, source_label: str
     ) -> rdflib.URIRef | None:
         """Find the scheme node the file declares, recording a fatal finding when it is unusable.
@@ -176,7 +177,7 @@ class SkosImporter:
             The declared scheme, or None when the file declares none the run can use.
         """
         nodes = sorted(set(graph.subjects(RDF.type, SKOS.ConceptScheme)), key=str)
-        declared = [node for node in nodes if self._identifiable(node)]
+        declared = [node for node in nodes if self.identifiable(node)]
 
         if self.target is not None:
             for node in declared:
@@ -199,7 +200,7 @@ class SkosImporter:
             return declared[0]
         return None
 
-    def _record_nodes(
+    def record_nodes(
         self, graph: rdflib.Graph, scheme_node: rdflib.URIRef
     ) -> dict[rdflib.URIRef, str]:
         """Find the subjects that become records, and the type each becomes.
@@ -215,7 +216,7 @@ class SkosImporter:
             The record type of each subject, in URI order.
         """
         found: dict[rdflib.term.Node, str] = {}
-        for rdf_class, record_type in _RECORD_CLASSES:
+        for rdf_class, record_type in RECORD_CLASSES:
             found.update(
                 dict.fromkeys(graph.subjects(RDF.type, rdf_class), record_type)
             )
@@ -226,10 +227,10 @@ class SkosImporter:
         return {
             node: found[node]
             for node in sorted(found, key=str)
-            if self._identifiable(node)
+            if self.identifiable(node)
         }
 
-    def _identifiable(self, node: rdflib.term.Node) -> bool:
+    def identifiable(self, node: rdflib.term.Node) -> TypeGuard[rdflib.URIRef]:
         """Return whether a subject's URI can be stored, recording a fatal finding when not.
 
         A blank node cannot be identified again on a re-import. A ``javascript:``, ``data:``
@@ -244,12 +245,12 @@ class SkosImporter:
         if not isinstance(node, rdflib.URIRef):
             self.report.add_fatal(FatalReason.MISSING_IDENTITY, str(node))
             return False
-        if urllib.parse.urlsplit(str(node)).scheme.lower() in _UNSAFE_SCHEMES:
+        if urllib.parse.urlsplit(str(node)).scheme.lower() in UNSAFE_SCHEMES:
             self.report.add_fatal(FatalReason.REFUSED_IDENTITY, str(node))
             return False
         return True
 
-    def _document(self, graph: rdflib.Graph, node: rdflib.URIRef) -> dict:
+    def document(self, graph: rdflib.Graph, node: rdflib.URIRef) -> dict:
         """Gather every statement a subject makes into a document.
 
         Args:
@@ -264,7 +265,7 @@ class SkosImporter:
         for predicate, obj in graph.predicate_objects(node):
             if predicate != SKOS.memberList:
                 key = Namespaces.compact(str(predicate))
-                document.setdefault(key, []).append(self._entry(obj))
+                document.setdefault(key, []).append(self.entry(obj))
         for entries in document.values():
             entries.sort(key=lambda entry: json.dumps(entry, sort_keys=True))
         for head in graph.objects(node, SKOS.memberList):
@@ -274,7 +275,7 @@ class SkosImporter:
         return document
 
     @staticmethod
-    def _entry(obj: rdflib.term.Node) -> dict:
+    def entry(obj: rdflib.term.Node) -> dict:
         """Write one object as the entry JSON-LD would.
 
         Args:
@@ -295,7 +296,7 @@ class SkosImporter:
             entry["@type"] = Namespaces.compact(str(obj.datatype))
         return entry
 
-    def _upsert_scheme(
+    def upsert_scheme(
         self,
         graph: rdflib.Graph,
         declared: rdflib.URIRef | None,
@@ -303,8 +304,8 @@ class SkosImporter:
     ) -> ConceptScheme:
         """Return the vocabulary the records go into, creating or refreshing it from the file.
 
-        A vocabulary the run creates is not managed here. One passed in, or already held,
-        keeps its flag and its default language.
+        A vocabulary the run creates takes the most common language of its records'
+        preferred labels as its default. One passed in, or already held, keeps its own.
 
         Args:
             graph: The parsed graph.
@@ -327,19 +328,18 @@ class SkosImporter:
             )
             scheme = ConceptScheme(
                 uri=str(declared),
-                managed=False,
                 default_language=(
                     languages.most_common(1)[0][0]
                     if languages
                     else settings.LANGUAGE_CODE
                 ),
             )
-        scheme.data = self._document(graph, declared)
+        scheme.data = self.document(graph, declared)
         scheme.save()
         (self.report.created if created else self.report.updated).append(scheme.uri)
         return scheme
 
-    def _upsert_record(
+    def upsert_record(
         self,
         scheme: ConceptScheme,
         node: rdflib.URIRef,

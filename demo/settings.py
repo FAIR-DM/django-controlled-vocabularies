@@ -153,7 +153,3 @@ USE_I18N = True
 # (controlled_vocabularies.exchange.skos.SkosImporter — DEFAULT_LANGUAGE_UNCONFIGURED) — the
 # seed command fails without this, before it stores a single concept.
 LANGUAGE_CODE = "en"
-
-# Back to the vocabularies after signing in or out, rather than to Django's /accounts/profile/.
-LOGIN_REDIRECT_URL = "/browse/"
-LOGOUT_REDIRECT_URL = "/browse/"

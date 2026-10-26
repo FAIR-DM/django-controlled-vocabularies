@@ -10,10 +10,14 @@ from django.utils.dateparse import parse_date
 from django.utils.formats import date_format
 
 from controlled_vocabularies.models import ConceptScheme, Record
-from controlled_vocabularies.predicates import PREDICATES, Namespaces
+from controlled_vocabularies.predicates import (
+    PREDICATE_ORDER,
+    TRANSLATED_PREDICATES,
+    Namespaces,
+)
 
 #: Never shown, as the hidden label exists to be searched and not read.
-_HIDDEN_CURIES = frozenset({"skos:hiddenLabel", "rdf:type"})
+HIDDEN_CURIES = frozenset({"skos:hiddenLabel", "rdf:type"})
 
 
 class PropertyRows:
@@ -42,7 +46,7 @@ class PropertyRows:
         self.language = language
         self.identifier_ids = count()
         self.inferred = (
-            self._inferred_links() if record.type == Record.Type.CONCEPT else {}
+            self.inferred_links() if record.type == Record.Type.CONCEPT else {}
         )
         linked = {
             entry["@id"]
@@ -89,19 +93,19 @@ class PropertyRows:
             document does not state one.
         """
         stored = self.record.data
-        curies = [*PREDICATES, *sorted(set(stored) - set(PREDICATES))]
-        rows = [self._row("rdf:type", [{"text": self.record.type}])]
+        curies = [*PREDICATE_ORDER, *sorted(set(stored) - set(PREDICATE_ORDER))]
+        rows = [self.row("rdf:type", [{"text": self.record.type}])]
         for curie in curies:
-            if curie in _HIDDEN_CURIES:
+            if curie in HIDDEN_CURIES:
                 continue
-            entries = self._entries(curie)
+            entries = self.entries(curie)
             if entries:
-                rows.append(self._row(curie, entries))
+                rows.append(self.row(curie, entries))
         if "skos:inScheme" not in stored:
-            rows.append(self._row("skos:inScheme", [self._link(self.scheme.uri)]))
+            rows.append(self.row("skos:inScheme", [self.link(self.scheme.uri)]))
         return rows
 
-    def _row(self, curie: str, entries: list[dict]) -> dict:
+    def row(self, curie: str, entries: list[dict]) -> dict:
         """Build one row.
 
         Args:
@@ -114,7 +118,7 @@ class PropertyRows:
         # A hovered CURIE answers which URI it abbreviates; a key with no prefix is a URI already.
         return {"term": curie, "term_uri": Namespaces.expand(curie), "entries": entries}
 
-    def _entries(self, curie: str) -> list[dict]:
+    def entries(self, curie: str) -> list[dict]:
         """Build the entries a predicate shows.
 
         Args:
@@ -124,8 +128,7 @@ class PropertyRows:
             The entries to display, empty when there is nothing to show.
         """
         stored = self.record.values(curie)
-        predicate = PREDICATES.get(curie)
-        if predicate and predicate.translatable:
+        if curie in TRANSLATED_PREDICATES:
             stored = self.in_reading_language(
                 stored, self.language, self.scheme.default_language
             )
@@ -135,13 +138,13 @@ class PropertyRows:
             {"@id": uri} for uri in self.inferred.get(curie, []) if uri not in stated
         ]
         return [
-            self._link(entry["@id"])
+            self.link(entry["@id"])
             if "@id" in entry
             else {"text": str(entry["@value"])}
             for entry in stored
         ]
 
-    def _link(self, uri: str) -> dict:
+    def link(self, uri: str) -> dict:
         """Build an entry for a link, pointing at the page of a record held here.
 
         Args:
@@ -177,7 +180,7 @@ class PropertyRows:
         entry["identifier_id"] = f"identifier-{next(self.identifier_ids)}"
         return entry
 
-    def _inferred_links(self) -> dict[str, list[str]]:
+    def inferred_links(self) -> dict[str, list[str]]:
         """Find the links other concepts of the vocabulary make to this one, turned around.
 
         Returns:

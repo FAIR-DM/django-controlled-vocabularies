@@ -5,45 +5,14 @@ from typing import TYPE_CHECKING
 from django.apps import apps
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
-from django_tomselect.autocompletes import (
-    AutocompleteIterablesView,
-    AutocompleteModelView,
-)
+from django_tomselect.autocompletes import AutocompleteModelView
 
-from .conf import get_namespaces
 from .fields import ConceptFieldMixin
 from .models import Record
-from .predicates import Namespaces
 
 if TYPE_CHECKING:
     # Guarded the same way as the base view's import of it.
     from django_tomselect._types import PaginatedResponse
-
-
-class PredicateAutocompleteView(AutocompleteIterablesView):
-    """Search-as-you-type endpoint for the properties of the configured RDF namespaces."""
-
-    page_size = 20
-
-    @property
-    def iterable(self) -> list[str]:  # type: ignore[override]
-        """The configured namespaces' properties as CURIEs, each its own value and label."""
-        # A property, not a class attribute: the terms follow the project's settings.
-        return Namespaces.terms()
-
-    def get_iterable(self) -> list[dict[str, str | int]]:
-        """List each term under the heading of its namespace, in the configured order."""
-        # The optgroup key is read by django-mvp-forms' template for django-tomselect.
-        names = {name.lower(): name for name in get_namespaces()}
-        order = list(names)
-        items = [
-            {**item, "optgroup": names[str(item["value"]).split(":", 1)[0]]}
-            for item in super().get_iterable()
-        ]
-        return sorted(
-            items,
-            key=lambda item: order.index(str(item["value"]).split(":", 1)[0]),
-        )
 
 
 class ConceptAutocompleteView(AutocompleteModelView):
@@ -69,9 +38,9 @@ class ConceptAutocompleteView(AutocompleteModelView):
 
     def hook_queryset(self, queryset):
         """Preload what results need, then narrow to the requested field declaration's restriction."""
-        return self._restrict_to_declaration(queryset.select_related("scheme"))
+        return self.restrict_to_declaration(queryset.select_related("scheme"))
 
-    def _resolve_declared_field(self) -> ConceptFieldMixin | None:
+    def declared_field(self) -> ConceptFieldMixin | None:
         """Return the concept field the request's ``field=`` reference names.
 
         The reference identifies a declaration and carries no restriction of its own, so
@@ -94,7 +63,7 @@ class ConceptAutocompleteView(AutocompleteModelView):
             return None
         return field
 
-    def _restrict_to_declaration(self, queryset: QuerySet) -> QuerySet:
+    def restrict_to_declaration(self, queryset: QuerySet) -> QuerySet:
         """Narrow a queryset to what the requested field declaration admits.
 
         Args:
@@ -104,7 +73,7 @@ class ConceptAutocompleteView(AutocompleteModelView):
             The narrowed queryset, or an empty one when the declaration does not resolve,
             which is indistinguishable from a search that matched nothing.
         """
-        field = self._resolve_declared_field()
+        field = self.declared_field()
         if field is None:
             return queryset.none()
         # The mixin is not a RelatedField, so mypy cannot see get_limit_choices_to() after narrowing.
@@ -116,7 +85,7 @@ class ConceptAutocompleteView(AutocompleteModelView):
         if self.query:
             return super().order_queryset(queryset)
 
-        field = self._resolve_declared_field()
+        field = self.declared_field()
         if field is None or field.collection is None:
             return super().order_queryset(queryset)
 
@@ -138,8 +107,8 @@ class ConceptAutocompleteView(AutocompleteModelView):
             output_field=IntegerField(),
         )
         # Annotated so mypy can resolve the ``Self`` that QuerySet.annotate() returns.
-        annotated: QuerySet = queryset.annotate(_collection_position=position)
-        return annotated.order_by("_collection_position", "pk")
+        annotated: QuerySet = queryset.annotate(collection_position=position)
+        return annotated.order_by("collection_position", "pk")
 
     def paginate_queryset(self, queryset: QuerySet) -> "PaginatedResponse":
         """Return an empty last page for a page number past the end instead of page 1."""

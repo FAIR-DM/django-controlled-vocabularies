@@ -14,10 +14,10 @@ from controlled_vocabularies import conf
 PREF_LABEL_MAX_LENGTH = 255
 
 #: Leaves room for a ``-12345`` suffix inside the slug column.
-_SLUG_BASE_LENGTH = 240
+SLUG_BASE_LENGTH = 240
 
 
-def _is_entry(entry: object) -> bool:
+def is_entry(entry: object) -> bool:
     """Return whether ``entry`` is shaped as JSON-LD writes a value.
 
     Args:
@@ -55,7 +55,7 @@ def validate_document(value: object) -> None:
             code="document_not_object",
         )
     for key, entries in value.items():
-        if not isinstance(entries, list) or not all(map(_is_entry, entries)):
+        if not isinstance(entries, list) or not all(map(is_entry, entries)):
             raise ValidationError(
                 _(
                     "The value of '%(predicate)s' must be a list of entries, each "
@@ -185,14 +185,14 @@ class Resource(models.Model):
 
     def save(self, *args, **kwargs):
         """Refresh the derived columns and mint the URI and slug before the first write."""
-        self.pref_label = self._name_in_default_language()
-        self._mint_identity()
+        self.pref_label = self.name_in_default_language()
+        self.mint_identity()
         update_fields = kwargs.get("update_fields")
         if update_fields is not None and "data" in update_fields:
             kwargs["update_fields"] = {*update_fields, *self.derived_fields}
         super().save(*args, **kwargs)
 
-    def _name_in_default_language(self) -> str:
+    def name_in_default_language(self) -> str:
         """Return the name for ``pref_label``, cut to the column."""
         name = self.label(self.default_language)
         if name is None:
@@ -208,19 +208,19 @@ class Resource(models.Model):
             )
         return name[:PREF_LABEL_MAX_LENGTH]
 
-    def _mint_identity(self) -> None:
+    def mint_identity(self) -> None:
         """Give the row the URI and slug it has not got yet, and never change one it has."""
         if self.uri and self.slug:
             return
         if self.uri:
             parts = urlsplit(self.uri)
             segment = parts.fragment or parts.path.rstrip("/").rsplit("/", 1)[-1]
-            self.slug = self._unique_slug(segment or self.pref_label)
+            self.slug = self.unique_slug(segment or self.pref_label)
             return
-        self.slug = self.slug or self._unique_slug(self.pref_label)
+        self.slug = self.slug or self.unique_slug(self.pref_label)
         self.uri = self.minted_uri()
 
-    def _unique_slug(self, text: str) -> str:
+    def unique_slug(self, text: str) -> str:
         """Slugify ``text`` and add ``-2``, ``-3`` and so on until no sibling uses it.
 
         Args:
@@ -229,7 +229,7 @@ class Resource(models.Model):
         Returns:
             A slug unused among the row's siblings.
         """
-        base = slugify(text, allow_unicode=True)[:_SLUG_BASE_LENGTH]
+        base = slugify(text, allow_unicode=True)[:SLUG_BASE_LENGTH]
         base = base or str(self._meta.model_name)
         taken = set(
             self.siblings()
@@ -270,15 +270,6 @@ class ConceptScheme(Resource):
             "for example en."
         ),
     )
-    managed = models.BooleanField(
-        default=True,
-        verbose_name=_("managed here"),
-        help_text=_(
-            "Whether this site is the place to edit the vocabulary. Unticked for an "
-            "imported vocabulary, which is read-only on the pages."
-        ),
-    )
-
     name_curies = ("skos:prefLabel", "dcterms:title")
 
     def __str__(self) -> str:

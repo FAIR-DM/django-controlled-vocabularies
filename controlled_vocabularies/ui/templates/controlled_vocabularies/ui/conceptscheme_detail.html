@@ -5,31 +5,6 @@
   else the page says about the vocabulary sits in the side panel, so the content column is the
   concept list and nothing else.
 {% endcomment %}
-{% block page.title %}
-  {% comment %}
-    The curator's actions sit at the end of the title row, so they are there whether or not the
-    list below has anything in it. django-mvp's own page.actions block is inside the toolbar,
-    which is not drawn while the list is empty.
-  {% endcomment %}
-  <c-mvp.page.title :title="page.title"
-                    :subtitle="page.subtitle"
-                    :info="page.info"
-                    :info_actions="page.info_actions"
-                    inline_actions only>
-    <c-slot name="actions">
-      {% comment %}
-        Edit only for a vocabulary held here: an imported one is the publisher's, and the side panel
-        tells a curator which this is. Delete for either, to whoever may delete.
-      {% endcomment %}
-      {% if perms.controlled_vocabularies.change_conceptscheme and vocabulary.managed %}
-        <c-button text="{% trans "Edit" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-update' vocabulary.slug %}" icon="edit" outline only />
-      {% endif %}
-      {% if perms.controlled_vocabularies.delete_conceptscheme %}
-        <c-button text="{% trans "Delete" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-delete' vocabulary.slug %}" icon="delete" variant="error" outline only />
-      {% endif %}
-    </c-slot>
-  </c-mvp.page.title>
-{% endblock page.title %}
 {% block page.results %}
   {% comment %}
     A daisyUI list rather than django-mvp's grid of cards: the grid is a <div>, and list rows are <li>.
@@ -90,17 +65,6 @@
             <c-link href="{{ vocabulary.uri }}" text="{{ vocabulary.uri }}" hover=True rel="noopener" />
           </dd>
         </div>
-        {% comment %}
-          Only for someone who can edit the vocabulary: whether it was imported decides whether it may
-          be edited here, which is no concern of a reader. Both cases are stated, so an editor does not
-          infer provenance from the identifier's domain (FS-013).
-        {% endcomment %}
-        {% if perms.controlled_vocabularies.change_conceptscheme %}
-          <div>
-            <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Source" %}</dt>
-            <dd>{% if vocabulary.managed %}{% trans "Held here" %}{% else %}{% trans "Imported" %}{% endif %}</dd>
-          </div>
-        {% endif %}
         <div>
           <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Language" %}</dt>
           <dd>{{ language_name }}</dd>

@@ -563,6 +563,6 @@ class TestFormsI18nSweep:
 
 class TestMissingRouteMessage:
     def test_missing_route_message_is_a_lazy_translation(self):
-        assert isinstance(forms_module._MISSING_ROUTE_MESSAGE, Promise), (
-            "_MISSING_ROUTE_MESSAGE is not lazily translatable"
+        assert isinstance(forms_module.MISSING_ROUTE_MESSAGE, Promise), (
+            "MISSING_ROUTE_MESSAGE is not lazily translatable"
         )
