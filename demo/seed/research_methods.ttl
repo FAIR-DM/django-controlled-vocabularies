@@ -1,5 +1,6 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix schema: <https://schema.org/> .
 
 # No skos:ConceptScheme is declared in this file — demo/management/commands/seed_demo.py loads
 # it against a vocabulary created directly here, in the demo, so it lands as authored here
@@ -40,8 +41,13 @@
 
 <http://example.org/research-methods/remote-sensing>
     a skos:Concept ;
-    skos:prefLabel "Remote sensing"@en ;
-    skos:definition "Data captured from a distance, typically by satellite or aircraft instrument."@en .
+    skos:prefLabel "Remote sensing"@en, "Fernerkundung"@de ;
+    skos:definition "Data captured from a distance, typically by satellite or aircraft instrument."@en ;
+    # A notation, a mapping to a concept of the other seeded vocabulary, and a statement from
+    # outside SKOS: an import keeps each of them, and the concept's page shows them.
+    skos:notation "DCM-RS" ;
+    skos:relatedMatch <http://purl.org/dc/dcmitype/Image> ;
+    schema:keywords "satellite"@en .
 
 # One of each kind (T020, FR-018, decisions.md D9): a plain set, and a deliberately
 # sequenced grouping, both loaded through the package's own importer
