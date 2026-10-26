@@ -208,7 +208,7 @@ that does not exist is the failure this avoids. If a second browser-dependent st
 harness becomes justified and this decision is the evidence for it.
 
 **Manual check (T010)**: in a project with the admin installed and a `ModelAdmin` carrying a
-`ConceptField`- or `ConceptsField`-consuming inline (`TabularInline` or `StackedInline`), on the
+`ConceptField`- or `MultiConceptField`-consuming inline (`TabularInline` or `StackedInline`), on the
 parent's change page:
 
 1. Click "Add another" below the inline. The new row must render as the search-as-you-type control
@@ -376,7 +376,7 @@ tests' assertions should tighten to match, per `craft-tdd`'s "assert outcomes" r
 **ADR:** none — a test-authoring detail sealed inside two test functions.
 
 ## D20 — `# type: ignore[misc]` on both field classes, not a restructure
-**Decision**: `ConceptChoiceField` and `ConceptsChoiceField` each carry `# type: ignore[misc]`
+**Decision**: `ConceptChoiceField` and `MultiConceptChoiceField` each carry `# type: ignore[misc]`
 on their class line, immediately after adding `_DeclinesAdminRelatedWrapper` as their first
 base (T006).
 

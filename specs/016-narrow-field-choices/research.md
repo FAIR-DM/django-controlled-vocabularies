@@ -67,7 +67,7 @@ subquery form does not have, and Article II prefers not creating the problem.
 
 ## R4 — The many-valued field does **not** go through `limit_choices_to` for enforcement
 
-**Question:** does the single seam in R1 cover `ConceptsField`?
+**Question:** does the single seam in R1 cover `MultiConceptField`?
 
 **Finding: for choices yes, for enforcement no.** Form choices go through
 `apply_limit_choices_to_to_formfield` like any relation. But the *write* guarantee is a separate
@@ -83,7 +83,7 @@ Both hard-code the vocabulary test. Neither consults `limit_choices_to`.
 branch is the subtle half — on a reverse write `pk_set` holds the *owner* model's keys and the
 concept is `instance` (recorded as D16 in FS-010). The plan re-expresses both branches against the
 resolved restriction rather than against `vocabulary`, so the two halves cannot drift apart the way
-`ConceptField` and `ConceptsField` themselves once did (#111).
+`ConceptField` and `MultiConceptField` themselves once did (#111).
 
 **Second consequence, easy to miss:** the receiver is connected only `if self.vocabulary`
 (`fields.py:607`), deliberately, so that a field with nothing to enforce does not keep Django's
@@ -163,7 +163,7 @@ dropping it leaves the inherited `("label", "pk")` ordering untouched.
 **Question:** where do FR-005 and FR-006 raise, and as what?
 
 **Finding.** `ConceptField.__init__` raises `TypeError` for `on_delete`
-(`fields.py:225-226`), `ConceptsField.__init__` raises `TypeError` for `through`
+(`fields.py:225-226`), `MultiConceptField.__init__` raises `TypeError` for `through`
 (`fields.py:538-542`), and `_apply_vocabulary` raises `TypeError` for `limit_choices_to`
 (`fields.py:97-101`). `_normalise_vocabulary` raises `TypeError` for a non-string or empty slug
 (`fields.py:83-85`).

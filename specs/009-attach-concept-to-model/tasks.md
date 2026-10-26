@@ -250,9 +250,9 @@ still works end-to-end here, and T004 is still what proves it.)*
   `vocabulary` refusals from T001 are developer-facing diagnostics raised at import time and are
   exempt, which is recorded rather than left to inference.
 
-  `CONTEXT.md` currently carries one row describing `ConceptField / ConceptsField` as a field
+  `CONTEXT.md` currently carries one row describing `ConceptField / MultiConceptField` as a field
   "constrained to a scheme, with an autocomplete widget". That row is now half-wrong and half-early:
-  this feature delivers the single-value constraint, `ConceptsField` is #87, and the autocomplete is
+  this feature delivers the single-value constraint, `MultiConceptField` is #87, and the autocomplete is
   #88. Reconcile it, and define the term the package now puts into a consuming project's code.
 
   Test: a standards test asserts no bare user-visible literal in `fields.py` or `checks.py`. Follow

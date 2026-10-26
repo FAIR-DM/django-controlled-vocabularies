@@ -138,7 +138,7 @@ currently true by accident, so that the next two stories cannot quietly break it
 
 ### US-2 — no add, change, delete or view affordance (P1)
 
-`_DeclinesAdminRelatedWrapper`, a small mixin on `ConceptChoiceField` and `ConceptsChoiceField`:
+`_DeclinesAdminRelatedWrapper`, a small mixin on `ConceptChoiceField` and `MultiConceptChoiceField`:
 
 - `widget` becomes a property. Its setter unwraps a `RelatedFieldWidgetWrapper` to the widget it
   wraps and stores that; every other value is stored as given.

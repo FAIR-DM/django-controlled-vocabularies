@@ -41,7 +41,7 @@ something, and that is this task's finding, not the next story's.
 Sign in a staff superuser, request the add page and the change page of a saved record for a model
 declaring `ConceptField`, and assert the concept control is what rendered: the select carries the
 `data-tomselect` marker, the page carries the widget's configuration script, and the field's
-autocomplete reference (`field=testapp.specimen.rock_type`) is present. Repeat for `ConceptsField`.
+autocomplete reference (`field=testapp.specimen.rock_type`) is present. Repeat for `MultiConceptField`.
 Assert the change page shows the concept the record already holds under its preferred label.
 
 **Covers**: FR-001, FR-002, SC-001, US-1 scenarios 1–3 and 6 — the bare `ModelAdmin` with only the three existing wiring entries is what demonstrates FR-002 and scenario 6.
@@ -94,7 +94,7 @@ registered. Assert the control itself still renders and still carries its autoco
 when `django.contrib.admin` is not among the installed applications. It registers nothing and
 imports the admin only inside that function.
 
-`forms.py`: a small mixin applied to `ConceptChoiceField` and `ConceptsChoiceField` making `widget` a
+`forms.py`: a small mixin applied to `ConceptChoiceField` and `MultiConceptChoiceField` making `widget` a
 property whose setter unwraps a `RelatedFieldWidgetWrapper` to the widget it holds and stores
 everything else unchanged. Two mechanics to get right, both raised by the design review: the mixin
 must come **before** the django-tomselect field class in the bases, or the inherited class-level

@@ -162,8 +162,8 @@ half unimplementable as approved — or the field installs the check itself. It 
 consuming class, delegating to the original.
 
 **One installation, every field.** The wrapper is installed once per class, so it cannot be bound to
-the field that triggered the installation — a second required `ConceptsField` on the same model would
-then go unenforced with nothing raising. It resolves the class's required `ConceptsField`s at call
+the field that triggered the installation — a second required `MultiConceptField` on the same model would
+then go unenforced with nothing raising. It resolves the class's required `MultiConceptField`s at call
 time and applies FR-010 to each.
 
 Two further constraints came out of the probe rather than out of taste:
@@ -196,7 +196,7 @@ The original requirement was written from the single-value field's shape, where 
 vocabulary is the whole point, and it carried that assumption across without re-examining it. The
 argument for refusing an unnamed vocabulary — that an unconstrained field is a plain many-to-many
 and offers none of this field's guarantees — turns out to be wrong on its own terms. An
-unconstrained `ConceptsField` still protects its references from deletion, still reads back labels
+unconstrained `MultiConceptField` still protects its references from deletion, still reads back labels
 and identifiers, and still enforces the required-set rule. Those are three of the five guarantees,
 and they are the three a plain many-to-many does not give you.
 
@@ -234,8 +234,8 @@ Rather than build all six of T001's models ahead of T003 (which would generate a
 migration under the stock `CASCADE` through model, replaced the moment T003's `PROTECT` override
 lands), or write T003 against a synthetic helper call the task explicitly rules out, this
 Implementer added exactly the two models T003's own acceptance scenarios require —
-`Deposit` (one required `ConceptsField`, proves the generated membership model's `PROTECT`/`CASCADE`
-split) and `Survey` (two `ConceptsField`s with `related_name="+"` on one model, proves the hidden
+`Deposit` (one required `MultiConceptField`, proves the generated membership model's `PROTECT`/`CASCADE`
+split) and `Survey` (two `MultiConceptField`s with `related_name="+"` on one model, proves the hidden
 related_name rewrite and the absence of a double-registration warning) — as part of the T003 commit,
 with their own migration. T001 adds the remaining four models and a second migration.
 
@@ -289,7 +289,7 @@ built over expanding shared test infrastructure for a scenario a smaller fixture
 field's every named slug, warn only for the ones absent from the database), and two named
 vocabularies with one absent exercises exactly the same code path three would — the only thing three
 would additionally prove is that a second *present* vocabulary is also correctly excluded, which
-`test_reports_nothing_once_the_concepts_fields_vocabulary_exists` and the pre-existing
+`test_reports_nothing_once_the_multi_concept_fields_vocabulary_exists` and the pre-existing
 `test_reports_nothing_once_every_named_vocabulary_exists` already exercise for `FieldNote` once both
 its vocabularies exist.
 
@@ -304,13 +304,13 @@ surface.
 `tasks.md`'s T008 acceptance names the collision guard directly: "a model that already defines
 either accessor name itself... keeps its own definition," the same guard `ConceptField`'s T011
 proved against a real, purpose-built testapp model (`Artifact.get_mineral_label`). No existing
-`ConceptsField` testapp model both names no vocabulary (so the `multilingual_scheme`/
+`MultiConceptField` testapp model both names no vocabulary (so the `multilingual_scheme`/
 `single_language_scheme` fixtures' concepts can be attached without tripping T005's write-path
 check) and already defines `get_keywords_labels()` itself — `Photograph` is the only
 no-vocabulary model, and every other test in this file that uses it relies on the field-contributed
 accessors being real, so adding a permanent pre-existing definition to it would either break those
-or force a second no-vocabulary model. `TestConceptsFieldMembershipModel`'s own
-`test_declaring_two_concepts_fields_on_one_model_warns_of_nothing` already establishes the pattern
+or force a second no-vocabulary model. `TestMultiConceptFieldMembershipModel`'s own
+`test_declaring_two_multi_concept_fields_on_one_model_warns_of_nothing` already establishes the pattern
 for this exact situation — a throwaway model declared inside the test body under
 `@isolate_apps("tests.testapp")` — so `test_a_models_own_definition_survives_the_contribution_guard`
 follows that precedent rather than widening `tests/testapp/models.py` for a scenario the isolated
@@ -324,10 +324,10 @@ result rather than raise," and Django's many-to-many manager raises `ValueError`
 `AttributeError`-subclassing `RelatedObjectDoesNotExist` `ConceptField`'s singular accessors
 already guard against — the moment its queryset is touched before the instance has a primary key.
 Without the `pk is None` guard, `get_<name>_labels()`/`get_<name>_uris()` would crash on exactly the
-required-`ConceptsField`, not-yet-saved case `TestConceptFieldLabelAndUriAccessors`'s own
+required-`MultiConceptField`, not-yet-saved case `TestConceptFieldLabelAndUriAccessors`'s own
 `test_both_accessors_return_none_on_a_required_field_with_nothing_attached` already covers for the
 singular field. `test_both_accessors_return_an_empty_list_on_an_unsaved_record_rather_than_raising`
-proves it against `Deposit`, the required `ConceptsField`.
+proves it against `Deposit`, the required `MultiConceptField`.
 
 **Revisit if:** a future story needs a testapp model with its own pre-existing `get_<name>_labels`/
 `get_<name>_uris` definition for other reasons; this test can then move onto it.
@@ -339,7 +339,7 @@ state.
 ## D14 — the required-set wrapper is guarded on the method, not on a class flag
 
 **Context.** T009 installs a `full_clean` wrapper once per consuming class. The design review's
-correction to D8 made the wrapper resolve the class's required `ConceptsField`s from
+correction to D8 made the wrapper resolve the class's required `MultiConceptField`s from
 `type(self)._meta.get_fields()` at call time, so that a model declaring two required fields has both
 enforced. tasks.md also carried the earlier instruction to guard the install on `cls.__dict__`
 rather than `getattr`, on the reasoning that a subclass inheriting the flag would lose the check.
@@ -351,12 +351,12 @@ wrapper, the child carries a second nested around it, and each enumerates the sa
 empty required field on the child is reported twice.
 
 **Decision.** Guard on the resolved method instead. `_install_required_set_check` tags its wrapper
-with `_concepts_field_required_set_check` and returns early when `cls.full_clean` already carries
+with `_multi_concept_field_required_set_check` and returns early when `cls.full_clean` already carries
 that tag. A subclass that inherits the wrapper installs nothing; a subclass that overrides
 `full_clean` itself gets an untagged method and is wrapped normally. The `__dict__` guard's original
 purpose is served by call-time resolution, which is the mechanism that made it unnecessary.
 
-**Verified.** `TestConceptsFieldRequiredSet::test_an_inheriting_model_does_not_get_a_second_wrapper`
+**Verified.** `TestMultiConceptFieldRequiredSet::test_an_inheriting_model_does_not_get_a_second_wrapper`
 fails against the `__dict__` guard and passes against the tag.
 
 **Author.** Applied at convergence rather than by the story's implementer: the interaction was

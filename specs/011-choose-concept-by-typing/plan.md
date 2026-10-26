@@ -57,7 +57,7 @@ alongside `views.py`/`forms.py`, which are the first code to import it (Article 
 | Surface | Where | Used for |
 |---|---|---|
 | `ConceptFieldMixin` | `fields.py:29` | the shared `vocabulary` contract; the `formfield()` override lands here once, not twice |
-| `ConceptField` / `ConceptsField` | `fields.py:146`, `fields.py` | the two declarations the endpoint resolves |
+| `ConceptField` / `MultiConceptField` | `fields.py:146`, `fields.py` | the two declarations the endpoint resolves |
 | `limit_choices_to` = `Q(scheme__slug__in=…)` | `fields.py:105` | **the restriction itself** — already declarative, already server-side, already the thing the form uses (A6) |
 | `Concept.label` | `models.py:626` | the default-language preferred label, a column — one half of FR-004 |
 | `ConceptLabel` (`concept.labels`) | `models.py` | language + kind + text — the other half of FR-004 |
@@ -78,7 +78,7 @@ alongside `views.py`/`forms.py`, which are the first code to import it (Article 
 | V — Security & data-safety | The whole of A6, plus the two allowlists closed explicitly (D8). The endpoint carries no permission rule by design (D3), which the README states rather than implies. | Pass |
 | VI — Documentation | README gains all three wiring steps (D15), what the endpoint exposes, how to restrict it, and the browser requirement. `CONTEXT.md` gains the terms. CHANGELOG records the addition. | Pass |
 | VII — Dependency discipline | One dependency, justified in D7 against the alternatives, declared alongside the code that imports it. It carries no transitive runtime packages, which is why deptry stays quiet. | Pass |
-| VIII — Compatibility | `django-tomselect` declares `django>=4.2.29` and Python `>=3.11,<4.0`, classifying 5.2 and 6.0 — wider than this package's floor on both axes, so it constrains nothing this package promises. The public names added (`ConceptChoiceField`, `ConceptsChoiceField`, the URL name) enter the API contract. | Pass |
+| VIII — Compatibility | `django-tomselect` declares `django>=4.2.29` and Python `>=3.11,<4.0`, classifying 5.2 and 6.0 — wider than this package's floor on both axes, so it constrains nothing this package promises. The public names added (`ConceptChoiceField`, `MultiConceptChoiceField`, the URL name) enter the API contract. | Pass |
 | IX — URI identity | The endpoint returns a concept's identifier and label. It creates nothing and changes nothing. | Pass |
 | X — Stack & architecture | Models stay the source of truth. No RDF here. | Pass |
 | XII — Internationalization | Every string the control, endpoint and check put in front of a person is wrapped, with named placeholders. Matching runs in the **active** language, which is what makes this article behavioural here rather than cosmetic. | Pass, watched |
@@ -123,7 +123,7 @@ requirement is met as written; the flag is resolved, not carried (D9).
 `ModelForm` gets the control from the model declaration alone. Both model fields inherit it from
 the one mixin. The form field classes are thin:
 
-- `ConceptChoiceField(TomSelectModelChoiceField)` and `ConceptsChoiceField(TomSelectModelMultipleChoiceField)` —
+- `ConceptChoiceField(TomSelectModelChoiceField)` and `MultiConceptChoiceField(TomSelectModelMultipleChoiceField)` —
   both are ordinary `ModelChoiceField` subclasses, so `formfield()` returning them is the standard
   Django pattern rather than anything the library has to permit.
 - their widgets subclass `TomSelectModelWidget` / `TomSelectModelMultipleWidget` and override

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 __all__ = [
     "ConceptField",
     "ConceptFieldMixin",
-    "ConceptsField",
+    "MultiConceptField",
 ]
 
 
@@ -186,12 +186,12 @@ class ConceptFieldMixin:
     def formfield(self, **kwargs):
         """Return this package's search-as-you-type form field."""
         # Deferred: forms.py imports models, which may not be loaded when this module is.
-        from .forms import ConceptChoiceField, ConceptsChoiceField
+        from .forms import ConceptChoiceField, MultiConceptChoiceField
 
         kwargs["model_field"] = self
         kwargs.setdefault(
             "form_class",
-            ConceptsChoiceField
+            MultiConceptChoiceField
             if isinstance(self, ManyToManyField)
             else ConceptChoiceField,
         )
@@ -202,6 +202,7 @@ class ConceptFieldMixin:
         # Field.clone() rebuilds from these kwargs, so they must be ones __init__ accepts.
         name, path, args, kwargs = super().deconstruct()
         kwargs.pop("to", None)
+        kwargs.pop("to_field", None)
         kwargs.pop("on_delete", None)
         kwargs.pop("limit_choices_to", None)
         kwargs["vocabulary"] = self.vocabulary
@@ -213,10 +214,11 @@ class ConceptFieldMixin:
 class ConceptField(ConceptFieldMixin, ForeignKey):
     """A ``ForeignKey`` to ``controlled_vocabularies.Record`` in named vocabularies.
 
-    ``to`` is always the string ``"controlled_vocabularies.Record"`` and ``on_delete``
-    is always ``PROTECT``, so a concept a row holds cannot be deleted. The consumer
-    supplies neither, nor ``limit_choices_to``, which is derived from the arguments
-    below.
+    ``to`` is always the string ``"controlled_vocabularies.Record"``, ``to_field`` is
+    always ``"uri"``, so the column holds the concept's URI, and ``on_delete`` is
+    always ``PROTECT``, so a concept a row holds cannot be deleted. The consumer
+    supplies none of them, nor ``limit_choices_to``, which is derived from the
+    arguments below.
 
     Args:
         vocabulary: One vocabulary slug, several, or ``None`` for no restriction.
@@ -224,7 +226,8 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
         **kwargs: Passed to ``ForeignKey``.
 
     Raises:
-        TypeError: The consumer supplied ``on_delete``, ``limit_choices_to`` or an invalid restriction.
+        TypeError: The consumer supplied ``on_delete``, ``to_field``,
+            ``limit_choices_to`` or an invalid restriction.
     """
 
     default_help_text = _(
@@ -239,7 +242,12 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
             raise TypeError(
                 "ConceptField() sets on_delete=PROTECT itself; a consumer may not override it."
             )
+        if "to_field" in kwargs:
+            raise TypeError(
+                "ConceptField() sets to_field='uri' itself; a consumer may not override it."
+            )
         kwargs["on_delete"] = PROTECT
+        kwargs["to_field"] = "uri"
         super().__init__(**self.apply_vocabulary(vocabulary, collection, kwargs))
 
     def validate(self, value, model_instance):
@@ -277,8 +285,10 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
             concept = getattr(instance, name, None)
             return concept.display_label() if concept is not None else None
 
+        attname = self.attname
+
         def get_uri(instance):
-            """Return the attached concept's URI.
+            """Return the attached concept's URI, read from the row's own column.
 
             Args:
                 instance: The consuming model instance.
@@ -286,15 +296,14 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
             Returns:
                 The URI, or ``None`` when no concept is attached.
             """
-            concept = getattr(instance, name, None)
-            return concept.uri if concept is not None else None
+            return getattr(instance, attname)
 
         self.contribute_accessor(cls, f"get_{name}_label", get_label)
         self.contribute_accessor(cls, f"get_{name}_uri", get_uri)
 
 
 def create_membership_model(field, cls):
-    """Build the through model for a :class:`ConceptsField`.
+    """Build the through model for a :class:`MultiConceptField`.
 
     Args:
         field: The field the model is generated for.
@@ -319,7 +328,7 @@ def create_membership_model(field, cls):
         from_ = f"from_{from_}"
 
     # Mirrors Django's create_many_to_many_intermediary_model, except the foreign key to
-    # the concept is PROTECT (FS-010). auto_created keeps the model out of migration
+    # the concept is PROTECT (FS-010) and holds the concept's URI (#220). auto_created keeps the model out of migration
     # state and deconstruct().
     meta = type(
         "Meta",
@@ -352,6 +361,7 @@ def create_membership_model(field, cls):
             ),
             to: ForeignKey(
                 to_model,
+                to_field="uri",
                 related_name=f"{name}+",
                 db_tablespace=field.db_tablespace,
                 db_constraint=field.remote_field.db_constraint,
@@ -366,18 +376,19 @@ def refuse_concepts_the_restriction_does_not_admit(
 ) -> None:
     """Refuse a write that attaches a concept the field's restriction does not admit.
 
-    An ``m2m_changed`` receiver bound to a :class:`ConceptsField`'s through model.
+    An ``m2m_changed`` receiver bound to a :class:`MultiConceptField`'s through model.
     Only ``pre_add`` is checked. Both directions are checked, so
     ``concept.deposit_set.add(deposit)`` is refused on the same terms as
     ``deposit.rock_types.add(concept)``. Raising aborts the whole write before any row is inserted.
 
     Args:
-        field: The :class:`ConceptsField` whose restriction applies.
+        field: The :class:`MultiConceptField` whose restriction applies.
         instance: The row the write was made on.
         action: The ``m2m_changed`` action.
         reverse: Whether the write was made from the record side.
         model: The class of the rows being added.
-        pk_set: Primary keys of the rows being added.
+        pk_set: Keys of the rows being added: concept URIs on a forward write, the
+            owners' primary keys on a reverse one.
         **kwargs: Other ``m2m_changed`` arguments, ignored.
 
     Raises:
@@ -398,14 +409,14 @@ def refuse_concepts_the_restriction_does_not_admit(
             else [instance]
         )
     else:
-        invalid = list(model.objects.filter(pk__in=pk_set).exclude(restriction))
+        invalid = list(model.objects.filter(uri__in=pk_set).exclude(restriction))
     if not invalid:
         return
     key, params = field.refusal(", ".join(str(concept) for concept in invalid))
     raise ValidationError(field.error_messages[key], code="invalid", params=params)
 
 
-class ConceptsField(ConceptFieldMixin, ManyToManyField):
+class MultiConceptField(ConceptFieldMixin, ManyToManyField):
     """A ``ManyToManyField`` to a ``controlled_vocabularies.Record`` set.
 
     The generated through model protects its concepts from deletion, so ``through`` is
@@ -433,7 +444,7 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
     def __init__(self, vocabulary=None, collection=None, **kwargs):
         if "through" in kwargs:
             raise TypeError(
-                "ConceptsField() generates its own through model with PROTECT on the "
+                "MultiConceptField() generates its own through model with PROTECT on the "
                 "foreign key to the concept; a consumer may not override it."
             )
         super().__init__(**self.apply_vocabulary(vocabulary, collection, kwargs))
@@ -442,14 +453,14 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
     def install_required_set_check(cls):
         """Make ``full_clean()`` report each empty required field, once per class.
 
-        ``full_clean()`` skips many-to-many fields, so a required :class:`ConceptsField`
+        ``full_clean()`` skips many-to-many fields, so a required :class:`MultiConceptField`
         has no hook into model validation without this.
 
         Args:
             cls: The consuming model class to wrap.
         """
         # A subclass inherits an installed wrapper; wrapping again would report twice.
-        if getattr(cls.full_clean, "concepts_field_required_set_check", False):
+        if getattr(cls.full_clean, "multi_concept_field_required_set_check", False):
             return
         original_full_clean = cls.full_clean
 
@@ -476,7 +487,7 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
                 # Read per call: a wrapper closed over one field would miss a second.
                 for field in type(self)._meta.get_fields():
                     if (
-                        isinstance(field, ConceptsField)
+                        isinstance(field, MultiConceptField)
                         and not field.blank
                         and not getattr(self, field.name).exists()
                     ):
@@ -491,7 +502,7 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
             if errors:
                 raise ValidationError(errors)
 
-        full_clean.concepts_field_required_set_check = True
+        full_clean.multi_concept_field_required_set_check = True
         cls.full_clean = full_clean
 
     def contribute_to_class(self, cls, name, **kwargs):

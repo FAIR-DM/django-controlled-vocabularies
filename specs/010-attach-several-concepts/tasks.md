@@ -27,17 +27,17 @@ built — including the three vocabulary shapes, so it follows US-8.
   Extend `tests/testapp/models.py` — do not replace it; `Specimen`, `Sample` and `Artifact` are
   FS-009's and stay exactly as they are. Add:
 
-  - a model carrying a **required** `ConceptsField` (no `blank=True`), for US-5's refusal;
-  - a model carrying an **optional** `ConceptsField` (`blank=True`) with a `related_name`, for US-1's
+  - a model carrying a **required** `MultiConceptField` (no `blank=True`), for US-5's refusal;
+  - a model carrying an **optional** `MultiConceptField` (`blank=True`) with a `related_name`, for US-1's
     reverse accessor and US-5's permissive half;
-  - a model carrying **two required** `ConceptsField`s against the same vocabulary, for T009's
+  - a model carrying **two required** `MultiConceptField`s against the same vocabulary, for T009's
     enumeration case — one required field enforced and the other silently skipped is the failure that
     case exists to catch, and it needs a model with two of them to be visible at all;
-  - a model carrying **both** a `ConceptField` and a `ConceptsField` against the same vocabulary,
+  - a model carrying **both** a `ConceptField` and a `MultiConceptField` against the same vocabulary,
     which is the collision case the plan's Risks section refuses to assume away — two declarations on
     one model must generate distinct membership tables and non-clashing reverse accessors;
-  - a model carrying a `ConceptsField` naming **two** vocabularies, for T012 *(added 2026-08-12, D9)*;
-  - a model carrying a `ConceptsField` naming **no** vocabulary — the keywords shape — for T012, and
+  - a model carrying a `MultiConceptField` naming **two** vocabularies, for T012 *(added 2026-08-12, D9)*;
+  - a model carrying a `MultiConceptField` naming **no** vocabulary — the keywords shape — for T012, and
     for T012's assertion that the delete protection holds without a restriction.
 
   Every field gets `verbose_name` and `help_text` wrapped in `gettext_lazy` (Article XII makes
@@ -49,9 +49,9 @@ built — including the three vocabulary shapes, so it follows US-8.
   field's intended signature and let T002/T003 make them importable. Either way the phase is one
   sequential unit and exits green as a whole.
 
-- **T002** — `ConceptsField` construction and deconstruction (FR-001, FR-002, FR-011, R6).
+- **T002** — `MultiConceptField` construction and deconstruction (FR-001, FR-002, FR-011, R6).
 
-  `ConceptsField(ManyToManyField)` in `controlled_vocabularies/fields.py`, alongside `ConceptField`.
+  `MultiConceptField(ManyToManyField)` in `controlled_vocabularies/fields.py`, alongside `ConceptField`.
   Article VIII already names this class, so the name is fixed by the constitution.
 
   **`vocabulary` is optional and takes three shapes** *(propagated 2026-08-12 from the spec
@@ -149,7 +149,7 @@ built — including the three vocabulary shapes, so it follows US-8.
   `"_%s_%s_%s_+" % (cls._meta.app_label, cls.__name__.lower(), name)`, exactly as Django does. FR-011
   accepts `related_name="+"`, and two such fields on one model clash without it. Do not replicate the
   symmetrical branch — the target is always `Concept` and never the owner, so the condition cannot
-  hold. Test with two `ConceptsField`s declared `related_name="+"` on one model: both declare cleanly
+  hold. Test with two `MultiConceptField`s declared `related_name="+"` on one model: both declare cleanly
   and the reverse accessors do not collide.
 
   Tests, all against a real model from T001, none against the helper in isolation: `makemigrations`
@@ -271,10 +271,10 @@ built — including the three vocabulary shapes, so it follows US-8.
 
   - **Install once per class and delegate.** Guard on the class's own `__dict__`, not `getattr` — a
     subclass would otherwise inherit the flag and lose the check.
-  - **Check every required `ConceptsField` on the class, not the one that installed the wrapper.**
+  - **Check every required `MultiConceptField` on the class, not the one that installed the wrapper.**
     Because the install is once per class, a wrapper closing over the triggering field instance
-    leaves a second required `ConceptsField` on the same model unenforced, with nothing raising and
-    no test failing. Resolve the class's required `ConceptsField`s from `cls._meta.get_fields()` at
+    leaves a second required `MultiConceptField` on the same model unenforced, with nothing raising and
+    no test failing. Resolve the class's required `MultiConceptField`s from `cls._meta.get_fields()` at
     call time and apply FR-010 to each.
   - **Skip an unsaved record.** Touching the relation descriptor when the primary key is `None`
     raises `ValueError`, and `full_clean` catches only `ValidationError`, so an unguarded check turns
@@ -288,7 +288,7 @@ built — including the three vocabulary shapes, so it follows US-8.
 
   - an optional field with an empty set validates;
   - a required field with an empty set is refused with a message naming the field;
-  - a model carrying **two** required `ConceptsField`s refuses on each of them independently — one
+  - a model carrying **two** required `MultiConceptField`s refuses on each of them independently — one
     empty and the other populated, then the reverse, then both empty reporting both. This is the case
     the once-per-class install would silently skip, and it fails against a closed-over wrapper;
   - an unsaved instance passes `full_clean()` without raising `ValueError`;
@@ -303,7 +303,7 @@ built — including the three vocabulary shapes, so it follows US-8.
   cover both field types and change nothing else: same warning id, same single query for the distinct
   slugs, same silence on `DatabaseError`, same hint.
 
-  Two adjustments from the 2026-08-12 refinement (D9, FR-004). A `ConceptsField` contributes **each**
+  Two adjustments from the 2026-08-12 refinement (D9, FR-004). A `MultiConceptField` contributes **each**
   slug it names to the distinct set rather than one, so the existing single-query shape holds but the
   set is built from a flattened collection. And a field naming **no** vocabulary contributes nothing
   and can never be warned about — it names nothing that could be missing. Where a field names several
@@ -312,7 +312,7 @@ built — including the three vocabulary shapes, so it follows US-8.
 
   This is the one task permitted to touch existing tests, and only to **extend** them —
   `tests/test_checks.py` keeps every assertion it has, and gains the multiple-value cases: a
-  `ConceptsField` naming an absent vocabulary is reported; one naming a present vocabulary is not;
+  `MultiConceptField` naming an absent vocabulary is reported; one naming a present vocabulary is not;
   a model carrying both field types against one absent vocabulary reports both fields; a field naming
   three vocabularies of which one is absent reports that one and not the others; **a field naming no
   vocabulary is never reported**; the unmigrated-database path stays silent. Assert the real

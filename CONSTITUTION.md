@@ -84,7 +84,7 @@ between the caller and the work is not.
 ### Article VIII — Compatibility is a dual contract
 This package exposes **two** public contracts, versioned differently:
 
-1. **The Python/Django API** — `ConceptField`/`ConceptsField`, models, and the import/export
+1. **The Python/Django API** — `ConceptField`/`MultiConceptField`, models, and the import/export
    surface. Governed by semantic versioning with a one-minor-version deprecation window after 1.0.
 2. **The vocabulary data contract** — the concept **URIs** and the **RDF serialization** the app
    publishes. Downstream systems and stored user data depend on these; they are stable

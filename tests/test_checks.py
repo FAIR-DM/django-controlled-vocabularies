@@ -137,8 +137,8 @@ class TestCheckConceptFieldVocabularies:
 
 
 @pytest.mark.django_db
-class TestCheckConceptsFieldVocabularies:
-    def test_warns_about_a_concepts_field_whose_vocabulary_is_absent(self):
+class TestCheckMultiConceptFieldVocabularies:
+    def test_warns_about_a_multi_concept_field_whose_vocabulary_is_absent(self):
         warnings = check_concept_field_vocabularies(None)
 
         matches = [
@@ -153,7 +153,7 @@ class TestCheckConceptsFieldVocabularies:
         assert "rock_types" in message
         assert "rock-type" in message
 
-    def test_reports_nothing_once_the_concepts_fields_vocabulary_exists(self):
+    def test_reports_nothing_once_the_multi_concept_fields_vocabulary_exists(self):
         ConceptSchemeFactory(name="Rock Type")
 
         warnings = check_concept_field_vocabularies(None)

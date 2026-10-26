@@ -4,8 +4,8 @@
 
 ## Decision
 
-A `ConceptField` or `ConceptsField` declaration may narrow its choices inside its vocabulary in one
-of three ways — a collection, an explicit list of concepts, or a branch of the broader/narrower
+A `ConceptField` or `MultiConceptField` declaration may narrow its choices inside its vocabulary in
+one of three ways — a collection, an explicit list of concepts, or a branch of the broader/narrower
 hierarchy — and may use **at most one** of them. A declaration carrying two or more is refused with
 a `TypeError` when the model is imported.
 

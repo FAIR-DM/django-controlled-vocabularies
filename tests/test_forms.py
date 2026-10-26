@@ -15,7 +15,7 @@ from django.utils.functional import Promise
 from django_tomselect.middleware import TomSelectMiddleware
 
 from controlled_vocabularies import forms as forms_module
-from controlled_vocabularies.forms import ConceptChoiceField, ConceptsChoiceField
+from controlled_vocabularies.forms import ConceptChoiceField, MultiConceptChoiceField
 from tests.factories import (
     ConceptSchemeFactory,
     OutcropFactory,
@@ -92,10 +92,10 @@ class TestConceptFieldRendersAsTheControl:
 
         assert isinstance(bound_field, ConceptChoiceField)
 
-    def test_a_concepts_field_binds_this_packages_form_field_and_widget(self):
+    def test_a_multi_concept_field_binds_this_packages_form_field_and_widget(self):
         bound_field = DepositForm().fields["rock_types"]
 
-        assert isinstance(bound_field, ConceptsChoiceField)
+        assert isinstance(bound_field, MultiConceptChoiceField)
 
 
 @pytest.mark.django_db
@@ -132,16 +132,16 @@ class TestConceptFieldSubmissionSurvives:
     def test_a_legitimate_concept_is_valid_and_saves_for_a_concept_field(self):
         concept = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
 
-        form = SampleForm(data={"name": "Sample A", "mineral": concept.pk})
+        form = SampleForm(data={"name": "Sample A", "mineral": concept.uri})
 
         assert form.is_valid(), form.errors
         instance = form.save()
-        assert instance.mineral_id == concept.pk
+        assert instance.mineral_id == concept.uri
 
     def test_a_foreign_concept_is_still_refused_for_a_concept_field(self):
         foreign_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
 
-        form = SampleForm(data={"name": "Sample B", "mineral": foreign_concept.pk})
+        form = SampleForm(data={"name": "Sample B", "mineral": foreign_concept.uri})
 
         assert not form.is_valid()
         assert form.has_error("mineral")
@@ -151,31 +151,31 @@ class TestConceptFieldSubmissionSurvives:
             scheme=ConceptSchemeFactory(name="Mineral")
         )
 
-        form = SampleForm(data={"name": "Sample C", "mineral": collection.pk})
+        form = SampleForm(data={"name": "Sample C", "mineral": collection.uri})
 
         assert not form.is_valid()
         assert form.has_error("mineral")
 
-    def test_a_legitimate_concept_is_valid_and_saves_for_a_concepts_field(self):
+    def test_a_legitimate_concept_is_valid_and_saves_for_a_multi_concept_field(self):
         # Outcrop (blank=True), not Deposit: editing a saved row whose required
         # relation is still empty is refused for an unrelated reason (#124).
         concept = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
         outcrop = OutcropFactory()
 
         form = OutcropForm(
-            data={"name": "Outcrop A", "minerals": [concept.pk]}, instance=outcrop
+            data={"name": "Outcrop A", "minerals": [concept.uri]}, instance=outcrop
         )
 
         assert form.is_valid(), form.errors
         instance = form.save()
         assert list(instance.minerals.values_list("pk", flat=True)) == [concept.pk]
 
-    def test_a_foreign_concept_is_still_refused_for_a_concepts_field(self):
+    def test_a_foreign_concept_is_still_refused_for_a_multi_concept_field(self):
         foreign_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
         outcrop = OutcropFactory()
 
         form = OutcropForm(
-            data={"name": "Outcrop B", "minerals": [foreign_concept.pk]},
+            data={"name": "Outcrop B", "minerals": [foreign_concept.uri]},
             instance=outcrop,
         )
 
@@ -254,7 +254,7 @@ class TestConceptFieldShowsWhatARowAlreadyHolds:
         assert "Quarz" in rendered
         assert "Quartz" not in rendered
 
-    def test_a_concepts_field_shows_every_attached_concept_under_its_active_language_label(
+    def test_a_multi_concept_field_shows_every_attached_concept_under_its_active_language_label(
         self,
     ):
         scheme = ConceptSchemeFactory(name="Mineral")
@@ -274,7 +274,7 @@ class TestConceptFieldShowsWhatARowAlreadyHolds:
             assert f"Begriff {i}" in rendered
             assert f"Concept {i}" not in rendered
 
-    def test_submitting_the_concepts_field_form_untouched_leaves_all_three_attached(
+    def test_submitting_the_multi_concept_field_form_untouched_leaves_all_three_attached(
         self,
     ):
         scheme = ConceptSchemeFactory(name="Mineral")
@@ -285,7 +285,7 @@ class TestConceptFieldShowsWhatARowAlreadyHolds:
         form = OutcropForm(
             data={
                 "name": outcrop.name,
-                "minerals": [concept.pk for concept in concepts],
+                "minerals": [concept.uri for concept in concepts],
             },
             instance=outcrop,
         )
@@ -304,7 +304,7 @@ class TestConceptFieldShowsWhatARowAlreadyHolds:
         kept = concepts[:2]
 
         form = OutcropForm(
-            data={"name": outcrop.name, "minerals": [concept.pk for concept in kept]},
+            data={"name": outcrop.name, "minerals": [concept.uri for concept in kept]},
             instance=outcrop,
         )
 
@@ -330,7 +330,7 @@ class TestConceptFieldShowsWhatARowAlreadyHolds:
 
         assert "Basalt" in rendered
 
-    def test_a_concepts_field_still_shows_an_attached_concept_outside_the_current_vocabulary(
+    def test_a_multi_concept_field_still_shows_an_attached_concept_outside_the_current_vocabulary(
         self,
     ):
         # Attaching a foreign concept is refused, so the state is reached the way an
@@ -427,11 +427,11 @@ class TestConceptFieldDeclinesTheAdminWrapper:
 
         assert field.widget is ordinary_widget
 
-    def test_a_concepts_field_unwraps_a_related_field_widget_wrapper_to_its_own_widget(
+    def test_a_multi_concept_field_unwraps_a_related_field_widget_wrapper_to_its_own_widget(
         self,
     ):
         model_field = Outcrop._meta.get_field("minerals")
-        field = ConceptsChoiceField(model_field=model_field, required=False)
+        field = MultiConceptChoiceField(model_field=model_field, required=False)
         original_widget = field.widget
         wrapper = RelatedFieldWidgetWrapper(
             field.widget, model_field.remote_field, AdminSite()
@@ -442,9 +442,9 @@ class TestConceptFieldDeclinesTheAdminWrapper:
         assert field.widget is original_widget
         assert field.widget.model_field is model_field
 
-    def test_a_concepts_field_holds_an_ordinary_widget_as_given(self):
+    def test_a_multi_concept_field_holds_an_ordinary_widget_as_given(self):
         model_field = Outcrop._meta.get_field("minerals")
-        field = ConceptsChoiceField(model_field=model_field, required=False)
+        field = MultiConceptChoiceField(model_field=model_field, required=False)
         ordinary_widget = forms.SelectMultiple()
 
         field.widget = ordinary_widget
@@ -470,7 +470,7 @@ class TestConceptWidgetsShipTheInlineInitialisationScript:
         assert self.ASSET in widget.media._js
 
     def test_the_concepts_widget_declares_the_asset_in_its_media(self):
-        widget = ConceptsChoiceField(
+        widget = MultiConceptChoiceField(
             model_field=Outcrop._meta.get_field("minerals"), required=False
         ).widget
 

@@ -180,6 +180,6 @@ objects with `&` is the larger design change and is not what the failure demande
 needs a narrower set can filter the form field's queryset in their own `ModelForm`.
 
 **ADR:** none yet — the same call as D2's. It is a feature-level choice about one field's
-constructor today. If #87's `ConceptsField` and #88's widget reach the same answer, "a field that
+constructor today. If #87's `MultiConceptField` and #88's widget reach the same answer, "a field that
 owns a relation option refuses a consumer's override rather than merging it" becomes a standing
 rule for the package's field family and earns an ADR then.

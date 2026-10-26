@@ -54,16 +54,16 @@ def unrestricted_get(**params):
     )
 
 
-def result_ids(response):
-    """Return the ids of a response's results, in the order served.
+def result_uris(response):
+    """Return the URIs of a response's results, in the order served.
 
     Args:
         response: The endpoint's response.
 
     Returns:
-        The list of ids.
+        The list of URIs.
     """
-    return [result["id"] for result in json.loads(response.content)["results"]]
+    return [result["uri"] for result in json.loads(response.content)["results"]]
 
 
 def reorder(collection, *members):
@@ -104,8 +104,8 @@ class TestConceptAutocompleteResults:
         body = json.loads(response.content)
         assert len(body["results"]) == 1
         result = body["results"][0]
-        assert set(result.keys()) == {"id", "display_label", "vocabulary"}
-        assert result["id"] == concept.pk
+        assert set(result.keys()) == {"uri", "display_label", "vocabulary"}
+        assert result["uri"] == concept.uri
         assert result["display_label"] == "Granite"
         assert result["vocabulary"] == "Rock types"
 
@@ -151,7 +151,7 @@ class TestConceptAutocompleteSearch:
 
         response = unrestricted_get(q="granitic")
 
-        assert result_ids(response) == [concept.pk]
+        assert result_uris(response) == [concept.uri]
         assert json.loads(response.content)["results"][0]["display_label"] == "Granite"
 
     def test_a_fragment_of_a_hidden_label_finds_the_concept_by_its_preferred_label(
@@ -169,7 +169,7 @@ class TestConceptAutocompleteSearch:
 
         response = unrestricted_get(q="granyte")
 
-        assert result_ids(response) == [concept.pk]
+        assert result_uris(response) == [concept.uri]
         assert json.loads(response.content)["results"][0]["display_label"] == "Granite"
 
     def test_a_fragment_of_a_preferred_label_in_any_language_finds_the_concept(
@@ -190,7 +190,7 @@ class TestConceptAutocompleteSearch:
             by_english = unrestricted_get(q="Granite")
 
         for response in (by_german, by_english):
-            assert result_ids(response) == [concept.pk]
+            assert result_uris(response) == [concept.uri]
             result = json.loads(response.content)["results"][0]
             assert result["display_label"] == "Granitgestein"
 
@@ -203,7 +203,7 @@ class TestConceptAutocompleteSearch:
         with translation.override("de"):
             response = unrestricted_get(q="Granite")
 
-        assert result_ids(response) == [concept.pk]
+        assert result_uris(response) == [concept.uri]
         assert json.loads(response.content)["results"][0]["display_label"] == "Granite"
 
     def test_a_label_in_another_language_finds_the_concept_in_every_active_language(
@@ -223,8 +223,8 @@ class TestConceptAutocompleteSearch:
         with translation.override("de"):
             in_german = unrestricted_get(q="Tiefengestein")
 
-        assert result_ids(in_english) == [concept.pk]
-        assert result_ids(in_german) == [concept.pk]
+        assert result_uris(in_english) == [concept.uri]
+        assert result_uris(in_german) == [concept.uri]
 
     def test_a_search_differing_only_in_case_from_a_label_still_matches(self):
         concept = RecordFactory(label="Granite")
@@ -232,7 +232,7 @@ class TestConceptAutocompleteSearch:
 
         response = unrestricted_get(q="GRANITE")
 
-        assert result_ids(response) == [concept.pk]
+        assert result_uris(response) == [concept.uri]
         assert json.loads(response.content)["results"][0]["display_label"] == "Granite"
 
     def test_a_collection_is_never_offered(self):
@@ -243,8 +243,8 @@ class TestConceptAutocompleteSearch:
 
         response = unrestricted_get(q="Granite")
 
-        assert result_ids(response) == [concept.pk]
-        assert collection.pk not in result_ids(response)
+        assert result_uris(response) == [concept.uri]
+        assert collection.uri not in result_uris(response)
 
 
 @pytest.mark.django_db
@@ -265,7 +265,7 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
             {"q": "Granite", "field": field_reference(Specimen, "rock_type")},
         )
 
-        assert result_ids(response) == [rock_concept.pk]
+        assert result_uris(response) == [rock_concept.uri]
 
     def test_the_request_naming_a_different_vocabulary_directly_is_ignored(self):
         rock_concept = RecordFactory(
@@ -285,7 +285,7 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
             },
         )
 
-        assert result_ids(response) == [rock_concept.pk]
+        assert result_uris(response) == [rock_concept.uri]
 
     def test_a_field_declared_against_several_vocabularies_returns_exactly_those(self):
         rock_concept = RecordFactory(
@@ -301,7 +301,7 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
             {"q": "Basalt", "field": field_reference(Borehole, "dominant_material")},
         )
 
-        assert set(result_ids(response)) == {rock_concept.pk, mineral_concept.pk}
+        assert set(result_uris(response)) == {rock_concept.uri, mineral_concept.uri}
 
     def test_a_field_declared_against_no_vocabulary_makes_every_concept_eligible(self):
         concepts = [
@@ -316,7 +316,7 @@ class TestConceptAutocompleteRestrictionFromDeclaration:
             {"q": "Quartz", "field": field_reference(Sketch, "subject")},
         )
 
-        assert set(result_ids(response)) == {concept.pk for concept in concepts}
+        assert set(result_uris(response)) == {concept.uri for concept in concepts}
 
     def test_the_rendered_widget_carries_the_reference(self):
         # autocompleteParams only builds with the live request TomSelectMiddleware
@@ -393,19 +393,19 @@ class TestConceptAutocompletePagination:
         self,
     ):
         concepts = [RecordFactory(label=f"Quartz {i:02d}") for i in range(25)]
-        full_match_set = {concept.pk for concept in concepts}
+        full_match_set = {concept.uri for concept in concepts}
 
         first_page = unrestricted_get(q="Quartz")
         second_page = unrestricted_get(q="Quartz", p=2)
 
-        first_ids = result_ids(first_page)
-        second_ids = result_ids(second_page)
+        first_uris = result_uris(first_page)
+        second_uris = result_uris(second_page)
 
         # Collected from both pages and compared against the full ordered
         # match set, not page lengths: a repeat shrinks the union below the
         # combined count, a skip shrinks the union below the full set.
-        assert set(first_ids) | set(second_ids) == full_match_set
-        assert len(first_ids) + len(second_ids) == len(full_match_set)
+        assert set(first_uris) | set(second_uris) == full_match_set
+        assert len(first_uris) + len(second_uris) == len(full_match_set)
         assert json.loads(second_page.content)["has_more"] is False
 
     def test_opening_with_nothing_typed_offers_a_first_page_in_a_stable_order(self):
@@ -418,7 +418,7 @@ class TestConceptAutocompletePagination:
 
         response = unrestricted_get()
 
-        assert result_ids(response) == [concept.pk for concept in expected_order]
+        assert result_uris(response) == [concept.uri for concept in expected_order]
 
     def test_a_page_past_the_last_returns_nothing_and_says_no_more_exist(self):
         # The inherited behaviour re-serves page 1 for a page past the last.
@@ -498,9 +498,9 @@ class TestConceptAutocompleteRequestControlledSurfacesAreClosed:
             {"field": reference, "ordering": "-pref_label"},
         )
 
-        default_ids = result_ids(default)
-        assert default_ids  # the guard is being tested against real, non-empty results
-        assert result_ids(with_ordering) == default_ids
+        default_uris = result_uris(default)
+        assert default_uris  # the guard is being tested against real, non-empty results
+        assert result_uris(with_ordering) == default_uris
 
 
 @pytest.mark.django_db
@@ -526,7 +526,7 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         bravo, alpha, charlie = members
         reorder(collection, charlie, bravo, alpha)
 
-        assert result_ids(self.get()) == [charlie.pk, bravo.pk, alpha.pk]
+        assert result_uris(self.get()) == [charlie.uri, bravo.uri, alpha.uri]
 
     def test_a_position_change_is_reflected_on_the_next_read(self):
         scheme = ConceptSchemeFactory(name="Rock type")
@@ -538,11 +538,11 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         )
         bravo, alpha, charlie = members
         reorder(collection, charlie, bravo, alpha)
-        assert result_ids(self.get()) == [charlie.pk, bravo.pk, alpha.pk]
+        assert result_uris(self.get()) == [charlie.uri, bravo.uri, alpha.uri]
 
         reorder(collection, alpha, charlie, bravo)
 
-        assert result_ids(self.get()) == [alpha.pk, charlie.pk, bravo.pk]
+        assert result_uris(self.get()) == [alpha.uri, charlie.uri, bravo.uri]
 
     def test_a_typed_search_term_returns_to_relevance_order(self):
         scheme = ConceptSchemeFactory(name="Rock type")
@@ -556,7 +556,7 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         reorder(collection, charlie, bravo, alpha)
 
         # A search term falls back to the inherited ("pref_label", "pk") ordering.
-        assert result_ids(self.get(q="Basalt")) == [alpha.pk, bravo.pk, charlie.pk]
+        assert result_uris(self.get(q="Basalt")) == [alpha.uri, bravo.uri, charlie.uri]
 
     def test_an_unordered_collection_stays_restricted_with_no_sequence_promised(self):
         scheme = ConceptSchemeFactory(name="Rock type")
@@ -569,12 +569,12 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         charlie, bravo, alpha = members
         outsider = RecordFactory(scheme=scheme, label="Marble")
 
-        returned_ids = result_ids(self.get())
+        returned_uris = result_uris(self.get())
 
-        assert set(returned_ids) == {charlie.pk, bravo.pk, alpha.pk}
-        assert outsider.pk not in returned_ids
+        assert set(returned_uris) == {charlie.uri, bravo.uri, alpha.uri}
+        assert outsider.uri not in returned_uris
         # An unordered collection promises no sequence and gets the inherited ordering.
-        assert returned_ids == [alpha.pk, bravo.pk, charlie.pk]
+        assert returned_uris == [alpha.uri, bravo.uri, charlie.uri]
 
     def test_a_removed_member_leaves_the_survivors_in_relative_order(self):
         scheme = ConceptSchemeFactory(name="Rock type")
@@ -588,8 +588,8 @@ class TestConceptAutocompleteOrderedCollectionSequence:
         reorder(collection, delta, bravo, charlie, alpha)
         reorder(collection, delta, charlie, alpha)
 
-        assert result_ids(self.get()) == [delta.pk, charlie.pk, alpha.pk]
-        assert bravo.pk not in result_ids(self.get())
+        assert result_uris(self.get()) == [delta.uri, charlie.uri, alpha.uri]
+        assert bravo.uri not in result_uris(self.get())
 
 
 class TestViewsI18nSweep:

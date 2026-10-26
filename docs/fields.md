@@ -1,7 +1,7 @@
 # Attaching concepts to your models
 
 Two model fields attach concepts to your own records: `ConceptField` for one concept, and
-`ConceptsField` for several. Both can be restricted to the vocabularies you name, and narrowed
+`MultiConceptField` for several. Both can be restricted to the vocabularies you name, and narrowed
 further to the members of a collection.
 
 Both fields point at `Record`, the model that holds every concept and collection of a vocabulary
@@ -26,6 +26,19 @@ class Specimen(models.Model):
     keyword = ConceptField(null=True, blank=True)                        # no vocabulary named
 ```
 
+The column the field adds holds the concept's URI, not a database id: `rock_type_id` reads
+`https://example.org/rocks/granite`. A database dump, a CSV export or an API response can be read
+without a join, and the value keeps its meaning when the rows move to another database. It is
+still a foreign key, so the database refuses a URI no concept holds. Because the value is the URI,
+a default is written as one, with no lookup:
+
+```python
+status = ConceptField(
+    vocabulary="sample-status",
+    default="https://example.org/sample-status/unknown",
+)
+```
+
 `vocabulary` names the owning `ConceptScheme` by its slug rather than by a database relation. A
 field declaration is read when Python imports the module, and a vocabulary is rows in a table that
 may not exist yet, so the slug is all the field can carry.
@@ -46,7 +59,7 @@ Reading a concept back:
 specimen.rock_type              # the attached Record, or None
 specimen.get_rock_type_label()  # its name in the active language, falling back to its
                                 # preferred label in the vocabulary's default language
-specimen.get_rock_type_uri()    # its URI
+specimen.get_rock_type_uri()    # its URI, read from the column with no query
 ```
 
 If `"rock-type"` has not been imported yet, which is the state of a fresh install before the
@@ -56,25 +69,28 @@ slug. If the vocabulary genuinely arrives in a later deployment step, silence th
 `SILENCED_SYSTEM_CHECKS`.
 
 Reading `get_<field>_label()` on every row of a list costs a query for the concept, per row.
+`get_<field>_uri()` costs nothing, because the URI is the column's own value.
 `select_related("rock_type")` collapses that back to one query for the whole list.
 
 ## Attaching several concepts to your model
 
-`ConceptsField` is the many-to-many counterpart: several concepts on one record instead of one.
+`MultiConceptField` is the many-to-many counterpart: several concepts on one record instead of one.
 `vocabulary` takes the same three shapes it takes on `ConceptField`, and means the same thing by
 each:
 
 ```python
 from django.db import models
 
-from controlled_vocabularies.fields import ConceptsField
+from controlled_vocabularies.fields import MultiConceptField
 
 
 class Sample(models.Model):
     name = models.CharField(max_length=200)
-    rock_types = ConceptsField(vocabulary=["igneous", "sedimentary"])  # several vocabularies
-    keywords = ConceptsField(blank=True)  # no vocabulary named
+    rock_types = MultiConceptField(vocabulary=["igneous", "sedimentary"])  # several vocabularies
+    keywords = MultiConceptField(blank=True)  # no vocabulary named
 ```
+
+The table linking a row to its concepts holds each concept's URI too, the same way.
 
 One slug restricts to that vocabulary, a list restricts to the union of the named vocabularies, and
 leaving `vocabulary` out — as `keywords` does above — restricts nothing. A concept outside the
@@ -135,7 +151,7 @@ schema for any relation. The protection lives in application code, not in a data
 ## Restricting a field to a collection
 
 Naming a vocabulary offers every concept it holds. Large vocabularies are often too much to put in
-front of someone filling in one field. `ConceptField` and `ConceptsField` both take one more
+front of someone filling in one field. `ConceptField` and `MultiConceptField` both take one more
 argument on top of `vocabulary` for this: `collection`, the slug of a collection the publisher
 defined in that vocabulary. Both fields accept it with the same effect.
 

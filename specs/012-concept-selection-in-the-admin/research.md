@@ -22,7 +22,7 @@ Two consequences settle the design.
 (`controlled_vocabularies/fields.py:118-143`) sets `model_field` unconditionally and `form_class`
 by `setdefault`, and the admin reaches it through `db_field.formfield(**kwargs)` like any other
 caller. Measured: with `Concept` registered in a probe admin site, the wrapper's inner widget is
-`ConceptWidget`/`ConceptsWidget` with `model_field` correctly bound. So nothing has to be done to
+`ConceptWidget`/`MultiConceptWidget` with `model_field` correctly bound. So nothing has to be done to
 make the control *reachable* in the admin — that part is already true.
 
 **There is no hook to decline the wrapper.** The wrap at `options.py:215` is not conditional on the
@@ -44,7 +44,7 @@ project-side declaration that replaces the control entirely. Everything else is 
 | Field | Wrapped | add | change | delete | view |
 |---|---|---|---|---|---|
 | `Specimen.rock_type` (`ConceptField`) | yes | True | True | True | True |
-| `Outcrop.minerals` (`ConceptsField`) | yes | True | False | False | False |
+| `Outcrop.minerals` (`MultiConceptField`) | yes | True | False | False | False |
 
 This is the FR-004 problem in one table, and it confirms the specification's premise: nothing
 renders today only because the package registers nothing in the admin. The moment R5 registers
@@ -62,7 +62,7 @@ Prototyped and measured on the same probe:
 | Field | Widget after `formfield_for_dbfield` | Wrapped |
 |---|---|---|
 | `Specimen.rock_type` | `ConceptWidget` | no |
-| `Outcrop.minerals` | `ConceptsWidget` | no |
+| `Outcrop.minerals` | `MultiConceptWidget` | no |
 
 and a plain `ModelForm` outside the admin still gets `ConceptWidget` with `model_field` bound, so
 nothing outside the admin changes.

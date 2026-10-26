@@ -3,7 +3,7 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from controlled_vocabularies.fields import ConceptField, ConceptsField
+from controlled_vocabularies.fields import ConceptField, MultiConceptField
 
 
 class Specimen(models.Model):
@@ -83,14 +83,14 @@ class Artifact(models.Model):
 
 
 class Deposit(models.Model):
-    """Carry a required ``ConceptsField`` against the "rock-type" vocabulary."""
+    """Carry a required ``MultiConceptField`` against the "rock-type" vocabulary."""
 
     name = models.CharField(
         max_length=255,
         verbose_name=_("name"),
         help_text=_("The deposit's catalogue name."),
     )
-    rock_types = ConceptsField(
+    rock_types = MultiConceptField(
         vocabulary="rock-type",
         verbose_name=_("rock types"),
         help_text=_("The rock types present at this deposit."),
@@ -102,20 +102,20 @@ class Deposit(models.Model):
 
 
 class Survey(models.Model):
-    """Carry two required ``ConceptsField``s against the same vocabulary."""
+    """Carry two required ``MultiConceptField``s against the same vocabulary."""
 
     name = models.CharField(
         max_length=255,
         verbose_name=_("name"),
         help_text=_("The survey's catalogue name."),
     )
-    primary_minerals = ConceptsField(
+    primary_minerals = MultiConceptField(
         vocabulary="mineral",
         related_name="+",
         verbose_name=_("primary minerals"),
         help_text=_("The minerals this survey primarily targets."),
     )
-    secondary_minerals = ConceptsField(
+    secondary_minerals = MultiConceptField(
         vocabulary="mineral",
         related_name="+",
         verbose_name=_("secondary minerals"),
@@ -128,14 +128,14 @@ class Survey(models.Model):
 
 
 class Outcrop(models.Model):
-    """Carry an optional ``ConceptsField`` against the "mineral" vocabulary, with a reverse accessor."""
+    """Carry an optional ``MultiConceptField`` against the "mineral" vocabulary, with a reverse accessor."""
 
     name = models.CharField(
         max_length=255,
         verbose_name=_("name"),
         help_text=_("The outcrop's catalogue name."),
     )
-    minerals = ConceptsField(
+    minerals = MultiConceptField(
         vocabulary="mineral",
         blank=True,
         related_name="outcrops",
@@ -149,7 +149,7 @@ class Outcrop(models.Model):
 
 
 class RockSample(models.Model):
-    """Carry a ``ConceptField`` and a ``ConceptsField`` against the same "mineral" vocabulary."""
+    """Carry a ``ConceptField`` and a ``MultiConceptField`` against the same "mineral" vocabulary."""
 
     name = models.CharField(
         max_length=255,
@@ -165,7 +165,7 @@ class RockSample(models.Model):
             "The single mineral this sample is primarily classified as, if known."
         ),
     )
-    associated_minerals = ConceptsField(
+    associated_minerals = MultiConceptField(
         vocabulary="mineral",
         blank=True,
         related_name="+",
@@ -179,14 +179,14 @@ class RockSample(models.Model):
 
 
 class FieldNote(models.Model):
-    """Carry a ``ConceptsField`` naming two vocabularies."""
+    """Carry a ``MultiConceptField`` naming two vocabularies."""
 
     name = models.CharField(
         max_length=255,
         verbose_name=_("name"),
         help_text=_("The field note's catalogue name."),
     )
-    keywords = ConceptsField(
+    keywords = MultiConceptField(
         vocabulary=["rock-type", "mineral"],
         blank=True,
         related_name="+",
@@ -249,14 +249,14 @@ class Sketch(models.Model):
 
 
 class Photograph(models.Model):
-    """Carry a ``ConceptsField`` naming no vocabulary."""
+    """Carry a ``MultiConceptField`` naming no vocabulary."""
 
     name = models.CharField(
         max_length=255,
         verbose_name=_("name"),
         help_text=_("The photograph's catalogue name."),
     )
-    keywords = ConceptsField(
+    keywords = MultiConceptField(
         blank=True,
         related_name="+",
         verbose_name=_("keywords"),
@@ -296,14 +296,14 @@ class CoreSample(models.Model):
 
 
 class DrillCore(models.Model):
-    """Carry an optional ``ConceptsField`` restricted to a collection, with a reverse accessor."""
+    """Carry an optional ``MultiConceptField`` restricted to a collection, with a reverse accessor."""
 
     name = models.CharField(
         max_length=255,
         verbose_name=_("name"),
         help_text=_("The drill core's catalogue name."),
     )
-    rock_types = ConceptsField(
+    rock_types = MultiConceptField(
         vocabulary="rock-type",
         collection="core-samples",
         blank=True,

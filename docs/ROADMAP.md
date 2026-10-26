@@ -133,7 +133,7 @@ concepts to its own models as first-class data. It shipped as five features and 
 
 Two changes to the field are open: storing the concept's URI in the column the field adds
 ([#220](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/220)), and renaming
-`ConceptsField` to `MultiConceptField`
+`MultiConceptField` to `MultiConceptField`
 ([#222](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/222)).
 
 Serves G2. Out of scope: import, export and serving, the editing interface.

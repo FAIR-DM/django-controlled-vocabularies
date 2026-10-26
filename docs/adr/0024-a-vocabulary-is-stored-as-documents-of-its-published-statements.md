@@ -72,7 +72,7 @@ This is a breaking change, released as 0.2.0.
 
 - The migrations restart at a new `0001_initial`. No data migration is provided, because the
   package is before 1.0. A site on 0.1.0 imports its vocabularies again after upgrading.
-- `ConceptField` and `ConceptsField` point at `Record`, limited to concepts. `vocabulary=` and
+- `ConceptField` and `MultiConceptField` point at `Record`, limited to concepts. `vocabulary=` and
   `collection=` stay. `branch=` and `concepts=` are removed, so a field carries at most one
   restriction, `collection`, and the rule that a restriction names exactly one vocabulary still
   holds.
