@@ -49,6 +49,11 @@ in the database. The endpoint carries **no permission rule by default** — it s
 concept data the rest of this package publishes at stable URIs. A project holding vocabularies it
 does not want searched restricts the include instead, at whatever access level fits.
 
+The control is a form field and its widget, both in `controlled_vocabularies.forms`. A
+`ConceptField` renders as `ConceptChoiceField` with `ConceptWidget`, and a `MultiConceptField` as
+`MultiConceptChoiceField` with `MultiConceptWidget`. A form that declares one of these fields itself
+uses the same classes. The control submits each chosen concept's URI.
+
 The control needs a browser running JavaScript. Without it, both fields still work as an ordinary
 required-relation form field; only the search-as-you-type behaviour is unavailable.
 
