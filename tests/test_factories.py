@@ -2,239 +2,133 @@
 
 import pytest
 
-from controlled_vocabularies.models import (
-    Collection,
-    CollectionMember,
-    Concept,
-    ConceptLabel,
-    ConceptNote,
-    ConceptRelation,
-    ConceptScheme,
-)
+from controlled_vocabularies.models import ConceptScheme, Record
 from tests.factories import (
-    CollectionFactory,
-    CollectionMemberFactory,
-    ConceptFactory,
-    ConceptLabelFactory,
-    ConceptNoteFactory,
-    ConceptRelationFactory,
     ConceptSchemeFactory,
+    RecordFactory,
     collection_with_members,
+    labelled,
     relation_graph,
 )
 
 
 @pytest.mark.django_db
 class TestConceptSchemeFactory:
-    def test_scheme_factory_produces_saved_valid_object(self):
+    def test_scheme_factory_produces_a_saved_vocabulary_with_a_name_and_identity(self):
         scheme = ConceptSchemeFactory()
+
         assert isinstance(scheme, ConceptScheme)
         assert scheme.pk is not None
-        assert scheme.name
+        assert scheme.pref_label
         assert scheme.slug
-        assert scheme.uri == f"https://example.org/vocabularies/{scheme.slug}"
+        assert scheme.uri
 
     def test_scheme_factory_sequence_avoids_slug_collisions(self):
         first = ConceptSchemeFactory()
         second = ConceptSchemeFactory()
+
         assert first.slug != second.slug
         assert ConceptScheme.objects.count() == 2
 
-    def test_scheme_factory_without_the_external_trait_is_provisional(self):
+    def test_scheme_factory_accepts_a_name(self):
+        scheme = ConceptSchemeFactory(name="Rock types")
+
+        assert scheme.pref_label == "Rock types"
+
+
+@pytest.mark.django_db
+class TestRecordFactory:
+    def test_record_factory_produces_a_saved_concept_with_a_name_and_identity(self):
+        record = RecordFactory()
+
+        assert isinstance(record, Record)
+        assert record.pk is not None
+        assert record.type == Record.Type.CONCEPT
+        assert record.pref_label
+        assert record.slug
+        assert record.uri
+
+    def test_record_factory_auto_creates_its_vocabulary(self):
+        record = RecordFactory()
+
+        assert ConceptScheme.objects.filter(pk=record.scheme_id).exists()
+
+    def test_record_factory_repeated_calls_do_not_collide(self):
+        RecordFactory()
+        RecordFactory()
+
+        assert Record.objects.count() == 2
+
+    def test_record_factory_accepts_an_explicit_vocabulary(self):
         scheme = ConceptSchemeFactory()
-        assert scheme.static_uri is None
-        assert scheme.has_static_uri is False
 
-    def test_scheme_factory_external_trait_yields_a_fixed_externally_assigned_uri(
-        self,
-    ):
-        scheme = ConceptSchemeFactory(external=True)
-        assert scheme.has_static_uri is True
-        assert scheme.static_uri
-        assert scheme.uri == scheme.static_uri
+        record = RecordFactory(scheme=scheme)
 
+        assert record.scheme_id == scheme.pk
 
-@pytest.mark.django_db
-class TestConceptFactory:
-    def test_concept_factory_produces_saved_valid_object(self):
-        concept = ConceptFactory()
-        assert isinstance(concept, Concept)
-        assert concept.pk is not None
-        assert concept.label
-        assert concept.slug
-        assert concept.uri == f"{concept.scheme.uri}/{concept.slug}"
+    def test_record_factory_names_the_record_in_its_vocabularys_default_language(self):
+        scheme = ConceptSchemeFactory(default_language="de")
 
-    def test_concept_factory_auto_creates_its_scheme(self):
-        concept = ConceptFactory()
-        assert concept.scheme is not None
-        assert concept.scheme.pk is not None
-        assert ConceptScheme.objects.filter(pk=concept.scheme.pk).exists()
+        record = RecordFactory(scheme=scheme, label="Granit")
 
-    def test_concept_factory_repeated_calls_do_not_collide(self):
-        first = ConceptFactory()
-        second = ConceptFactory()
-        assert first.slug != second.slug or first.scheme_id != second.scheme_id
-        assert first.scheme_id != second.scheme_id
-        assert Concept.objects.count() == 2
-
-    def test_concept_factory_accepts_an_explicit_scheme(self):
-        scheme = ConceptSchemeFactory()
-        concept = ConceptFactory(scheme=scheme)
-        assert concept.scheme_id == scheme.pk
-
-    def test_concept_factory_has_no_extra_labels_or_notes_without_the_trait(self):
-        concept = ConceptFactory()
-        assert concept.labels.count() == 0
-        assert concept.concept_notes.count() == 0
-
-    def test_multilingual_trait_yields_preferred_labels_in_more_than_one_language(
-        self,
-    ):
-        concept = ConceptFactory(multilingual=True)
-        # The default language's preferred label is the anchor field; de is a separate row.
-        default_pref = concept.preferred_label()
-        german_pref = concept.preferred_label("de")
-        assert default_pref
-        assert german_pref
-        assert default_pref != german_pref
-        languages_with_a_preferred_label = {
-            language for language in ("en", "de") if concept.preferred_label(language)
-        }
-        assert len(languages_with_a_preferred_label) > 1
-
-    def test_multilingual_trait_yields_notes_in_more_than_one_language(self):
-        concept = ConceptFactory(multilingual=True)
-        assert concept.notes("en")
-        assert concept.notes("de")
-        languages_with_a_note = {
-            language for language in ("en", "de") if concept.notes(language)
-        }
-        assert len(languages_with_a_note) > 1
-
-    def test_multilingual_trait_uses_the_concepts_own_scheme_default_language(self):
-        concept = ConceptFactory(multilingual=True)
-        assert concept.labels.filter(
-            language="de", kind=ConceptLabel.Kind.PREFERRED
-        ).exists()
-        assert concept.preferred_label("en") == concept.label
-
-    def test_concept_factory_without_the_external_trait_is_provisional(self):
-        concept = ConceptFactory()
-        assert concept.static_uri is None
-        assert concept.has_static_uri is False
-
-    def test_concept_factory_external_trait_yields_a_fixed_externally_assigned_uri(
-        self,
-    ):
-        concept = ConceptFactory(external=True)
-        assert concept.has_static_uri is True
-        assert concept.uri == concept.static_uri
-        assert concept.scheme.has_static_uri is False
+        assert record.label("de") == "Granit"
 
 
-@pytest.mark.django_db
-class TestConceptLabelFactory:
-    def test_concept_label_factory_produces_saved_valid_object(self):
-        label = ConceptLabelFactory()
-        assert isinstance(label, ConceptLabel)
-        assert label.pk is not None
-        assert label.concept_id is not None
-        assert label.language
-        assert label.kind == ConceptLabel.Kind.PREFERRED
-        assert label.text
+class TestLabelled:
+    def test_labelled_names_its_subject_in_the_given_language(self):
+        document = labelled("Granit", language="de")
 
+        assert document == {"skos:prefLabel": [{"@value": "Granit", "@language": "de"}]}
 
-@pytest.mark.django_db
-class TestConceptNoteFactory:
-    def test_concept_note_factory_produces_saved_valid_object(self):
-        note = ConceptNoteFactory()
-        assert isinstance(note, ConceptNote)
-        assert note.pk is not None
-        assert note.concept_id is not None
-        assert note.language
-        assert note.kind == ConceptNote.Kind.DEFINITION
-        assert note.value
+    def test_labelled_adds_the_further_statements(self):
+        statements = {"skos:notation": [{"@value": "GR-01"}]}
 
+        document = labelled("Granite", statements=statements)
 
-@pytest.mark.django_db
-class TestConceptRelationFactory:
-    def test_relation_factory_produces_a_broader_edge_navigable_both_ways(self):
-        relation = ConceptRelationFactory()
-        assert isinstance(relation, ConceptRelation)
-        assert relation.pk is not None
-        assert relation.kind == ConceptRelation.Kind.BROADER
-        assert relation.source.scheme_id == relation.target.scheme_id
-        assert relation.target in relation.source.broader()
-        assert relation.source in relation.target.narrower()
-
-    def test_relation_factory_builds_a_single_related_association(self):
-        relation = ConceptRelationFactory(kind=ConceptRelation.Kind.RELATED)
-        assert relation.source in relation.target.related()
-        assert relation.target in relation.source.related()
-        assert (
-            ConceptRelation.objects.filter(kind=ConceptRelation.Kind.RELATED).count()
-            == 1
-        )
+        assert document["skos:notation"] == [{"@value": "GR-01"}]
 
 
 @pytest.mark.django_db
 class TestRelationGraph:
-    def test_relation_graph_helper_yields_a_navigable_graph(self):
+    def test_relation_graph_states_the_broader_link_from_the_child(self):
         graph = relation_graph()
-        assert graph["parent"] in graph["child"].broader()
-        assert graph["child"] in graph["parent"].narrower()
-        assert graph["right"] in graph["left"].related()
-        schemes = {
-            c.scheme_id
-            for c in (graph["parent"], graph["child"], graph["left"], graph["right"])
-        }
-        assert len(schemes) == 1
 
+        assert graph["child"].linked_uris("skos:broader") == [graph["parent"].uri]
 
-@pytest.mark.django_db
-class TestCollectionFactory:
-    def test_collection_factory_produces_saved_valid_object(self):
-        collection = CollectionFactory()
-        assert isinstance(collection, Collection)
-        assert collection.pk is not None
-        assert collection.name
-        assert collection.slug
-        assert collection.ordered is False
-        assert collection.uri == f"{collection.scheme.uri}/collection/{collection.slug}"
+    def test_relation_graph_states_the_related_link_from_the_left(self):
+        graph = relation_graph()
 
-    def test_collection_factory_without_the_external_trait_is_provisional(self):
-        collection = CollectionFactory()
-        assert collection.static_uri is None
-        assert collection.has_static_uri is False
+        assert graph["left"].linked_uris("skos:related") == [graph["right"].uri]
 
-    def test_collection_factory_external_trait_yields_a_fixed_externally_assigned_uri(
-        self,
-    ):
-        collection = CollectionFactory(external=True)
-        assert collection.has_static_uri is True
-        assert collection.uri == collection.static_uri
+    def test_relation_graph_builds_every_concept_in_one_vocabulary(self):
+        graph = relation_graph()
 
-
-@pytest.mark.django_db
-class TestCollectionMemberFactory:
-    def test_collection_member_factory_joins_a_collection_and_a_concept_in_one_scheme(
-        self,
-    ):
-        member = CollectionMemberFactory()
-        assert isinstance(member, CollectionMember)
-        assert member.pk is not None
-        assert member.collection.scheme_id == member.concept.scheme_id
-        assert member.concept in member.collection.members()
+        concepts = (graph["parent"], graph["child"], graph["left"], graph["right"])
+        assert {concept.scheme_id for concept in concepts} == {graph["scheme"].pk}
 
 
 @pytest.mark.django_db
 class TestCollectionWithMembers:
-    def test_collection_with_members_helper_yields_a_populated_collection(self):
+    def test_collection_with_members_yields_a_collection_listing_its_members(self):
         collection, members = collection_with_members()
-        assert set(collection.members()) == set(members)
-        assert {c.scheme_id for c in members} == {collection.scheme_id}
 
-    def test_collection_with_members_helper_builds_an_ordered_collection(self):
+        assert collection.type == Record.Type.COLLECTION
+        assert collection.member_uris() == [member.uri for member in members]
+
+    def test_collection_with_members_builds_everything_in_one_vocabulary(self):
+        collection, members = collection_with_members()
+
+        assert {member.scheme_id for member in members} == {collection.scheme_id}
+
+    def test_collection_with_members_builds_an_ordered_collection(self):
         collection, members = collection_with_members(ordered=True)
-        assert collection.ordered is True
-        assert list(collection.members()) == members
+
+        assert collection.type == Record.Type.ORDERED_COLLECTION
+        assert collection.values("skos:memberList") == [
+            {"@id": member.uri} for member in members
+        ]
+
+    def test_collection_with_members_accepts_a_name(self):
+        collection, _ = collection_with_members(name="Igneous rocks")
+
+        assert collection.pref_label == "Igneous rocks"

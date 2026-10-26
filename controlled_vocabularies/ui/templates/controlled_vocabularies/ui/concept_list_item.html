@@ -10,9 +10,9 @@
       <div class="text-xs text-base-content/60 truncate">{{ object.broader_label }}</div>
     {% endif %}
     <a class="link link-hover font-medium"
-       href="{% url 'controlled_vocabularies_ui:concept-detail' object.scheme.slug object.slug %}">{{ object.resolved_label }}</a>
-    {% if object.resolved_definition %}
-      <p class="text-sm text-base-content/70">{{ object.resolved_definition|truncatewords:30 }}</p>
+       href="{% url 'controlled_vocabularies_ui:concept-detail' object.scheme.slug object.slug %}">{{ object.display_label }}</a>
+    {% if object.definition %}
+      <p class="text-sm text-base-content/70">{{ object.definition|truncatewords:30 }}</p>
     {% endif %}
     {% comment %}
       The concept's identifier, not its page here: for an imported concept it is the publisher's
@@ -20,19 +20,19 @@
       competing with the label. An outbound link, hence rel="noopener".
     {% endcomment %}
     <div class="text-xs text-base-content/60 break-words mt-1">
-      <c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" />
+      <c-controlled-vocabularies.identifier :uri="object.uri" />
     </div>
     {% comment %}
       The collections holding the concept, each a badge linking to the collection's page. The view
-      prefetches the memberships with their collections, so this costs no query per row.
+      reads them for the whole page at once, so this costs no query per row.
     {% endcomment %}
-    {% if object.collection_memberships.all %}
+    {% if object.collections %}
       <div class="flex flex-wrap gap-1 mt-2">
-        {% for membership in object.collection_memberships.all %}
+        {% for collection in object.collections %}
           {% comment %} A badge does not wrap, so a long name is cut short; the link's title carries it whole. {% endcomment %}
-          <a href="{% url 'controlled_vocabularies_ui:collection-detail' object.scheme.slug membership.collection.slug %}"
-             title="{{ membership.collection.name }}">
-            <c-badge text="{{ membership.collection.name|truncatechars:40 }}" size="sm" outline />
+          <a href="{% url 'controlled_vocabularies_ui:collection-detail' object.scheme.slug collection.slug %}"
+             title="{{ collection.display_label }}">
+            <c-badge text="{{ collection.display_label|truncatechars:40 }}" size="sm" outline />
           </a>
         {% endfor %}
       </div>

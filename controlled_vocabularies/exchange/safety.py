@@ -69,7 +69,7 @@ def scan_rdf_xml(data: bytes) -> None:
         ) from exc
 
 
-def _refused_remote_context(value: str) -> None:
+def refused_remote_context(value: str) -> None:
     """Raise :class:`UnsafeJsonLdError` for a remote ``@context`` reference.
 
     Args:
@@ -88,7 +88,7 @@ def _refused_remote_context(value: str) -> None:
     )
 
 
-def _refused_context_import(value: str) -> None:
+def refused_context_import(value: str) -> None:
     """Raise :class:`UnsafeJsonLdError` for an ``@import`` inside a context.
 
     Args:
@@ -108,7 +108,7 @@ def _refused_context_import(value: str) -> None:
     )
 
 
-def _check_context_value(context: Any) -> None:
+def check_context_value(context: Any) -> None:
     """Refuse ``context`` if it is or carries a reference rdflib would fetch.
 
     Raises :class:`UnsafeJsonLdError` for a string, or for an object with a string
@@ -119,21 +119,21 @@ def _check_context_value(context: Any) -> None:
         context: One value found under an ``@context`` key.
     """
     if isinstance(context, str):
-        _refused_remote_context(context)
+        refused_remote_context(context)
     elif isinstance(context, list):
         # rdflib recurses into nested arrays and fetches every string inside, so each entry
         # goes back through this check whatever its type (Article V).
         for entry in context:
-            _check_context_value(entry)
+            check_context_value(entry)
     elif isinstance(context, dict):
         # @import is the only key in a context object that makes rdflib fetch; every other
         # key only sets local state.
         imports = context.get("@import")
         if isinstance(imports, str):
-            _refused_context_import(imports)
+            refused_context_import(imports)
 
 
-def _iter_context_values(node: Any) -> list[Any]:
+def iter_context_values(node: Any) -> list[Any]:
     """Collect every value keyed ``@context`` anywhere in ``node``.
 
     Args:
@@ -148,10 +148,10 @@ def _iter_context_values(node: Any) -> list[Any]:
         if "@context" in node:
             found.append(node["@context"])
         for value in node.values():
-            found.extend(_iter_context_values(value))
+            found.extend(iter_context_values(value))
     elif isinstance(node, list):
         for item in node:
-            found.extend(_iter_context_values(item))
+            found.extend(iter_context_values(item))
     return found
 
 
@@ -172,5 +172,5 @@ def scan_json_ld(data: bytes) -> None:
         document = json.loads(data)
     except ValueError:
         return
-    for context in _iter_context_values(document):
-        _check_context_value(context)
+    for context in iter_context_values(document):
+        check_context_value(context)

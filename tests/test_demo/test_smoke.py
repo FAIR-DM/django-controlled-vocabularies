@@ -98,7 +98,7 @@ class TestExtractVocabularyUrl:
 @pytest.fixture
 def seeded_vocabulary_page_response(client, db):
     call_command(SeedDemoCommand())
-    slug = ConceptScheme.objects.get(name=IMPORTED_NAME).slug
+    slug = ConceptScheme.objects.get(pref_label=IMPORTED_NAME).slug
     url = reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug})
     response = client.get(url)
     return url, response
@@ -130,7 +130,7 @@ class TestCheckVocabularyPage:
 class TestCheckConceptSearch:
     def test_passes_when_a_search_by_hidden_label_narrows_to_one_concept(self, client):
         call_command(SeedDemoCommand())
-        slug = ConceptScheme.objects.get(name=IMPORTED_NAME).slug
+        slug = ConceptScheme.objects.get(pref_label=IMPORTED_NAME).slug
         detail_url = reverse(
             "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug}
         )
@@ -146,7 +146,7 @@ class TestCheckConceptSearch:
         # The unsearched page carries both concepts, so this exercises the half of
         # check_concept_search that requires the other concept to be excluded.
         call_command(SeedDemoCommand())
-        slug = ConceptScheme.objects.get(name=IMPORTED_NAME).slug
+        slug = ConceptScheme.objects.get(pref_label=IMPORTED_NAME).slug
         detail_url = reverse(
             "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug}
         )
@@ -160,7 +160,7 @@ class TestCheckConceptSearch:
 
     def test_fails_when_the_matching_concept_did_not_load(self, client):
         call_command(SeedDemoCommand())
-        slug = ConceptScheme.objects.get(name=IMPORTED_NAME).slug
+        slug = ConceptScheme.objects.get(pref_label=IMPORTED_NAME).slug
         detail_url = reverse(
             "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": slug}
         )

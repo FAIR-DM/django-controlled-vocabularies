@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -168,9 +169,10 @@ class TestSourceResolverFetch:
         assert url in str(exc_info.value)
 
     def test_a_response_exceeding_the_byte_ceiling_is_abandoned_and_writes_nothing(
-        self, http_stub, monkeypatch
+        self, http_stub, monkeypatch, tmp_path
     ):
-        monkeypatch.setattr(sources, "_MAX_RESPONSE_BYTES", 16)
+        monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+        monkeypatch.setattr(sources, "MAX_RESPONSE_BYTES", 16)
         url = http_stub.url + "/big.ttl"
         http_stub.set_response(
             "/big.ttl", status=200, body=b"x" * 1000, content_type="text/turtle"
@@ -179,18 +181,18 @@ class TestSourceResolverFetch:
         with pytest.raises(CommandError) as exc_info:
             resolver.resolve()
         assert url in str(exc_info.value)
-        temp_path = resolver._temp_path
-        assert temp_path is not None
+        assert list(tmp_path.iterdir()) != []
         resolver.cleanup()
-        assert not temp_path.exists()
+        assert list(tmp_path.iterdir()) == []
 
     def test_a_transfer_exceeding_the_total_deadline_is_abandoned(
-        self, http_stub, monkeypatch
+        self, http_stub, monkeypatch, tmp_path
     ):
+        monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
         # The read timeout is per read and the byte ceiling counts bytes, so a slow
         # trickle escapes both and only the total deadline stops it. The deadline is
         # shortened here rather than the trickle slowed.
-        monkeypatch.setattr(sources, "_MAX_TOTAL_SECONDS", 0)
+        monkeypatch.setattr(sources, "MAX_TOTAL_SECONDS", 0)
         url = http_stub.url + "/slow.ttl"
         http_stub.set_response(
             "/slow.ttl", status=200, body=b"x" * 1000, content_type="text/turtle"
@@ -199,10 +201,9 @@ class TestSourceResolverFetch:
         with pytest.raises(CommandError) as exc_info:
             resolver.resolve()
         assert url in str(exc_info.value)
-        temp_path = resolver._temp_path
-        assert temp_path is not None
+        assert list(tmp_path.iterdir()) != []
         resolver.cleanup()
-        assert not temp_path.exists()
+        assert list(tmp_path.iterdir()) == []
 
     def test_an_ordinary_fetch_is_well_inside_the_total_deadline(self, http_stub):
         http_stub.set_response(
@@ -212,7 +213,7 @@ class TestSourceResolverFetch:
         started = time.monotonic()
         resolver.resolve()
         resolver.cleanup()
-        assert time.monotonic() - started < sources._MAX_TOTAL_SECONDS
+        assert time.monotonic() - started < sources.MAX_TOTAL_SECONDS
 
 
 class TestSourceResolverSerializationLadder:

@@ -1,15 +1,30 @@
 """Filtersets carrying the search, sort and facets of the browsing front end's list pages."""
 
+from collections import Counter
+from dataclasses import dataclass
+
 import django_filters
 from django import forms
-from django.conf import settings
-from django.db.models import Count, F, Value
-from django.db.models.functions import Coalesce, Lower, NullIf
-from django.utils.translation import get_language_info
+from django.db.models import F
+from django.db.models.functions import Lower
+from django.utils.translation import get_language, get_language_info
 from django.utils.translation import gettext_lazy as _
 from mvp.filters import SearchFilter, SortFilter
 
-from controlled_vocabularies.models import Concept, ConceptScheme
+from controlled_vocabularies.models import ConceptScheme, Record
+from controlled_vocabularies.ui.rows import PropertyRows, PublicationDetails
+
+__all__ = [
+    "FACETS",
+    "LICENCE_NAMES",
+    "MAX_SEARCH_WORDS",
+    "ConceptFilter",
+    "CountedCheckboxes",
+    "Profile",
+    "VocabularyFilter",
+    "language_name",
+    "licence_name",
+]
 
 # Far above any real search, because dropping words from an OR search drops matches. The bound
 # exists because the search builds one condition per word, and past roughly 400 words the
@@ -29,7 +44,7 @@ LICENCE_NAMES = {
 }
 
 #: The facets of the list of vocabularies, in the order the filter panel draws them.
-FACETS = ("publisher", "license", "language", "source")
+FACETS = ("publisher", "license", "language")
 
 
 def licence_name(value: str) -> str:
@@ -61,17 +76,6 @@ def language_name(code: str) -> str:
         return str(get_language_info(code)["name_translated"])
     except KeyError:
         return code
-
-
-def language_expression():
-    """Return the expression for a vocabulary's effective default language.
-
-    Returns:
-        The vocabulary's own default language, or ``LANGUAGE_CODE`` when it gives none.
-    """
-    return Coalesce(
-        NullIf("default_language", Value("")), Value(settings.LANGUAGE_CODE)
-    )
 
 
 class CountedCheckboxes(forms.CheckboxSelectMultiple):
@@ -110,45 +114,107 @@ class CountedCheckboxes(forms.CheckboxSelectMultiple):
         )
 
 
+@dataclass(frozen=True)
+class Profile:
+    """What the list of vocabularies searches and facets on, read from one vocabulary.
+
+    Attributes:
+        publisher: The publisher, or an empty string.
+        license: The licence, or an empty string.
+        language: The default language.
+        text: The lower-cased name and description searched for words.
+    """
+
+    publisher: str
+    license: str
+    language: str
+    text: str
+
+    @classmethod
+    def of(cls, scheme: ConceptScheme) -> "Profile":
+        """Read a vocabulary's profile.
+
+        Args:
+            scheme: The vocabulary.
+
+        Returns:
+            Its profile.
+        """
+        details = PublicationDetails.of(scheme)
+        descriptions = PropertyRows.in_reading_language(
+            scheme.values("dcterms:description"),
+            get_language() or "",
+            scheme.default_language,
+        )
+        words = [scheme.display_label(), *(str(d["@value"]) for d in descriptions)]
+        return cls(
+            publisher=scheme.first_value("dcterms:publisher"),
+            license=details.license,
+            language=scheme.default_language,
+            text=" ".join(words).lower(),
+        )
+
+
+class VocabularySearch(SearchFilter):
+    """Match any word of the term against a vocabulary's name and description."""
+
+    def filter(self, qs, value):
+        """Keep the vocabularies whose profile text holds some word of ``value``.
+
+        Args:
+            qs: The vocabularies to narrow.
+            value: The search term.
+
+        Returns:
+            The matching vocabularies, or ``qs`` unchanged for an empty term.
+        """
+        words = (value or "").lower().split()[: self.max_words]
+        if not words:
+            return qs
+        profiles = self.parent.profiles
+        return qs.filter(
+            pk__in=[
+                pk
+                for pk, profile in profiles.items()
+                if any(word in profile.text for word in words)
+            ]
+        )
+
+
 class VocabularyFilter(django_filters.FilterSet):
     """The search, sort and facets of the list of vocabularies.
 
-    Each facet offers the values the site's vocabularies carry, and is left out when
-    fewer than two vocabularies differ on it. The view annotates ``concept_count`` and
-    ``language`` onto the queryset.
+    A site holds few vocabularies, so every facet is computed in Python over all of
+    them. Each facet offers the values the site's vocabularies carry, and is left out
+    when fewer than two vocabularies differ on it. The view annotates ``concept_count``
+    and ``modified`` onto the queryset.
     """
 
-    q = SearchFilter(fields=["name", "description"], max_words=MAX_SEARCH_WORDS)
+    q = VocabularySearch(fields=[], max_words=MAX_SEARCH_WORDS)
     publisher = django_filters.MultipleChoiceFilter(
-        label=_("Publisher"), widget=CountedCheckboxes
+        label=_("Publisher"), widget=CountedCheckboxes, method="filter_facet"
     )
     license = django_filters.MultipleChoiceFilter(
-        label=_("Licence"), widget=CountedCheckboxes
+        label=_("Licence"), widget=CountedCheckboxes, method="filter_facet"
     )
     language = django_filters.MultipleChoiceFilter(
-        label=_("Language"), widget=CountedCheckboxes
-    )
-    source = django_filters.MultipleChoiceFilter(
-        label=_("Source"),
-        widget=CountedCheckboxes,
-        method="filter_source",
-        choices=[("imported", _("Imported")), ("here", _("Held here"))],
+        label=_("Language"), widget=CountedCheckboxes, method="filter_facet"
     )
     # The option keys are the ones the address has always carried, so bookmarked sorts keep
     # working. `pk` makes each order total, so equal names cannot swap between pages.
     o = SortFilter(
         options=[
-            ("name_asc", _("Name (A-Z)"), [Lower("name"), "pk"]),
-            ("name_desc", _("Name (Z-A)"), [Lower("name").desc(), "-pk"]),
+            ("name_asc", _("Name (A-Z)"), [Lower("pref_label"), "pk"]),
+            ("name_desc", _("Name (Z-A)"), [Lower("pref_label").desc(), "-pk"]),
             (
                 "concepts_desc",
                 _("Most concepts"),
-                [F("concept_count").desc(), Lower("name"), "pk"],
+                [F("concept_count").desc(), Lower("pref_label"), "pk"],
             ),
             (
                 "modified_desc",
                 _("Recently updated"),
-                [F("modified").desc(nulls_last=True), Lower("name"), "pk"],
+                [F("modified").desc(nulls_last=True), Lower("pref_label"), "pk"],
             ),
         ]
     )
@@ -160,41 +226,34 @@ class VocabularyFilter(django_filters.FilterSet):
     def __init__(self, *args, request=None, **kwargs):
         """Offer each facet the values vocabularies carry, and drop those that cannot narrow."""
         super().__init__(*args, request=request, **kwargs)
-        every = ConceptScheme.objects.annotate(language=language_expression())
-        self.offer_values("publisher", every, str)
-        self.offer_values("license", every, licence_name)
-        self.offer_values("language", every, language_name)
-        # Whether a vocabulary was imported decides whether it may be edited here, which is an
-        # editor's concern only, as on the vocabulary's own page.
-        user = getattr(request, "user", None)
-        if user is None or not user.has_perm(
-            "controlled_vocabularies.change_conceptscheme"
-        ):
-            del self.filters["source"]
+        self.profiles = {
+            scheme.pk: Profile.of(scheme) for scheme in ConceptScheme.objects.all()
+        }
+        self.offer_values("publisher", str)
+        self.offer_values("license", licence_name)
+        self.offer_values("language", language_name)
 
-    def offer_values(self, name: str, every, label) -> None:
+    def offer_values(self, name: str, label) -> None:
         """Make a facet's choices the values vocabularies carry, most common first.
 
         A facet with fewer than two values is removed, because it cannot narrow the list.
 
         Args:
-            name: The facet, which is also the field it reads.
-            every: Every vocabulary, annotated as the facet needs.
+            name: The facet, which is also the profile field it reads.
             label: Turns a value into the text its option shows.
         """
-        values = (
-            every.exclude(**{name: ""})
-            .order_by()
-            .values(name)
-            .annotate(vocabularies=Count("pk"))
-            .order_by("-vocabularies", name)
-            .values_list(name, flat=True)
+        counts = Counter(
+            getattr(profile, name)
+            for profile in self.profiles.values()
+            if getattr(profile, name)
         )
-        choices = [(value, label(value)) for value in values]
-        if len(choices) < 2:
+        values = sorted(counts, key=lambda value: (-counts[value], value))
+        if len(values) < 2:
             del self.filters[name]
         else:
-            self.filters[name].extra["choices"] = choices
+            self.filters[name].extra["choices"] = [
+                (value, label(value)) for value in values
+            ]
 
     def count_facets(self) -> None:
         """Set beside each facet option how many vocabularies choosing it would leave.
@@ -211,35 +270,17 @@ class VocabularyFilter(django_filters.FilterSet):
             for other, a_filter in self.filters.items():
                 if other not in (name, "o") and other in chosen:
                     queryset = a_filter.filter(queryset, chosen[other])
-            remaining = ConceptScheme.objects.filter(
-                pk__in=queryset.values("pk")
-            ).annotate(language=language_expression())
-            self.form.fields[name].widget.counts = (
-                self.count_sources(remaining)
-                if name == "source"
-                else dict(
-                    remaining.order_by()
-                    .values(name)
-                    .annotate(vocabularies=Count("pk"))
-                    .values_list(name, "vocabularies")
+            remaining = set(queryset.values_list("pk", flat=True))
+            self.form.fields[name].widget.counts = dict(
+                Counter(
+                    getattr(profile, name)
+                    for pk, profile in self.profiles.items()
+                    if pk in remaining
                 )
             )
 
-    @staticmethod
-    def count_sources(remaining) -> dict[str, int]:
-        """Count the imported vocabularies and those held here.
-
-        Args:
-            remaining: The vocabularies to count.
-
-        Returns:
-            The count for each of the source facet's options.
-        """
-        imported = remaining.filter(static_uri__isnull=False).count()
-        return {"imported": imported, "here": remaining.count() - imported}
-
-    def filter_source(self, queryset, name, value):
-        """Keep the imported vocabularies, those held here, or both.
+    def filter_facet(self, queryset, name, value):
+        """Keep the vocabularies whose value for the facet is any of the chosen ones.
 
         Args:
             queryset: The vocabularies to narrow.
@@ -249,27 +290,28 @@ class VocabularyFilter(django_filters.FilterSet):
         Returns:
             The vocabularies matching any chosen option.
         """
-        if not value or set(value) == {"imported", "here"}:
-            return queryset
-        return queryset.filter(static_uri__isnull="imported" not in value)
+        return queryset.filter(
+            pk__in=[
+                pk
+                for pk, profile in self.profiles.items()
+                if getattr(profile, name) in value
+            ]
+        )
 
 
 class ConceptFilter(django_filters.FilterSet):
-    """The search and sort of the concepts on a vocabulary's page.
+    """The search and sort of the concepts on a vocabulary's page."""
 
-    Sorts by ``resolved_label``, the label shown, which the view annotates onto its queryset.
-    """
-
-    # `labels__text` reaches every label: other languages, alternative and hidden. Notes are left out
-    # on purpose. A hidden label is matched but never shown, since display reads only preferred labels.
-    q = SearchFilter(fields=["label", "labels__text"])
+    # `search_text` reaches every label: other languages, alternative and hidden. Notes
+    # are left out on purpose. A hidden label is matched but never shown.
+    q = SearchFilter(fields=["pref_label", "search_text"])
     o = SortFilter(
         options=[
-            ("label_asc", _("Label (A-Z)"), [Lower("resolved_label"), "pk"]),
-            ("label_desc", _("Label (Z-A)"), [Lower("resolved_label").desc(), "-pk"]),
+            ("label_asc", _("Label (A-Z)"), [Lower("pref_label"), "pk"]),
+            ("label_desc", _("Label (Z-A)"), [Lower("pref_label").desc(), "-pk"]),
         ]
     )
 
     class Meta:
-        model = Concept
+        model = Record
         fields: list[str] = []

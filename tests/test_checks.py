@@ -1,5 +1,6 @@
 """Tests for controlled_vocabularies.checks."""
 
+import ast
 import inspect
 import io
 import os
@@ -30,14 +31,15 @@ from controlled_vocabularies.checks import (
     check_django_tomselect_installed,
     check_tomselect_middleware_installed,
 )
-from tests.factories import CollectionFactory, ConceptFactory, ConceptSchemeFactory
+from controlled_vocabularies.models import Record
+from tests.factories import ConceptSchemeFactory, RecordFactory, collection_with_members
 from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import Specimen
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _run_django_admin(
+def run_django_admin(
     *args: str, settings: str = "tests.settings"
 ) -> subprocess.CompletedProcess:
     """Run ``django-admin`` in a fresh subprocess against a never-migrated database.
@@ -229,57 +231,46 @@ class TestCheckConceptFieldRestrictionTargets:
         assert "core-samples" in message
         assert "rock-type" in message
 
-    def test_warns_about_an_absent_concepts_target_naming_the_specific_slug(self):
-        scheme = ConceptSchemeFactory(name="Rock Type")
-        ConceptFactory(scheme=scheme, label="Granite")
-
-        warnings = check_concept_field_restriction_targets(None)
-
-        matches = [
-            w
-            for w in warnings
-            if w.obj.model._meta.label == "testapp.ChipSample"
-            and w.obj.name == "rock_type"
-        ]
-        assert len(matches) == 1
-        message = str(matches[0].msg)
-        assert "basalt" in message
-        assert "granite" not in message
-
-    def test_warns_about_an_absent_branch_target(self):
-        warnings = check_concept_field_restriction_targets(None)
-
-        matches = [
-            w for w in warnings if w.obj.model._meta.label == "testapp.BranchSample"
-        ]
-        assert len(matches) == 1
-        message = str(matches[0].msg)
-        assert "igneous" in message
-
     def test_reports_nothing_once_every_named_target_exists(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        CollectionFactory(scheme=scheme, name="Core samples")
-        ConceptFactory(scheme=scheme, label="Granite")
-        ConceptFactory(scheme=scheme, label="Basalt")
-        ConceptFactory(scheme=scheme, label="Igneous")
+        collection_with_members(scheme=scheme, name="Core samples", labels=())
 
         warnings = check_concept_field_restriction_targets(None)
 
-        restricted_labels = {
-            "testapp.CoreSample",
-            "testapp.DrillCore",
-            "testapp.ChipSample",
-            "testapp.ChipTray",
-            "testapp.BranchSample",
-            "testapp.BranchTray",
-        }
         assert [
-            w for w in warnings if w.obj.model._meta.label in restricted_labels
+            w
+            for w in warnings
+            if w.obj.model._meta.label in {"testapp.CoreSample", "testapp.DrillCore"}
         ] == []
+
+    def test_an_ordered_collection_satisfies_the_target(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        collection_with_members(
+            scheme=scheme, name="Core samples", labels=(), ordered=True
+        )
+
+        warnings = check_concept_field_restriction_targets(None)
+
+        assert [
+            w for w in warnings if w.obj.model._meta.label == "testapp.CoreSample"
+        ] == []
+
+    def test_a_concept_sharing_the_slug_does_not_satisfy_the_target(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        concept = RecordFactory(scheme=scheme, label="Core samples")
+        assert concept.slug == "core-samples"
+        assert concept.type == Record.Type.CONCEPT
+
+        warnings = check_concept_field_restriction_targets(None)
+
+        matches = [
+            w for w in warnings if w.obj.model._meta.label == "testapp.CoreSample"
+        ]
+        assert len(matches) == 1
 
     def test_resolves_on_the_vocabulary_and_target_pair_not_a_flat_set_of_slugs(self):
         other_scheme = ConceptSchemeFactory(name="Mineral")
-        CollectionFactory(scheme=other_scheme, name="Core samples")
+        collection_with_members(scheme=other_scheme, name="Core samples", labels=())
 
         warnings = check_concept_field_restriction_targets(None)
 
@@ -299,20 +290,18 @@ class TestCheckConceptFieldRestrictionTargets:
             assert isinstance(warning, django_checks.Warning)
             assert warning.id == CHECK_ID_MISSING_RESTRICTION_TARGET
 
-    def test_costs_three_queries_however_many_fields_are_declared(self):
-        # One batched query per target kind (collection, concepts, branch), never one
-        # per field.
+    def test_costs_one_query_however_many_fields_are_declared(self):
         with CaptureQueriesContext(connection) as ctx:
             check_concept_field_restriction_targets(None)
 
-        assert len(ctx.captured_queries) == 3
+        assert len(ctx.captured_queries) == 1
 
 
 @pytest.mark.django_db
 class TestCheckConceptFieldRestrictionTargetsStaysQuietWhenItShould:
     def test_a_collection_that_exists_and_holds_no_members_is_not_reported(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        CollectionFactory(scheme=scheme, name="Core samples")
+        collection_with_members(scheme=scheme, name="Core samples", labels=())
 
         warnings = check_concept_field_restriction_targets(None)
 
@@ -336,28 +325,10 @@ class TestCheckConceptFieldRestrictionTargetsStaysQuietWhenItShould:
             call_command("check", stderr=stderr)
         assert CHECK_ID_MISSING_RESTRICTION_TARGET not in stderr.getvalue()
 
-    def test_still_reports_a_target_whose_slug_exists_in_a_different_vocabulary(self):
-        rock_type = ConceptSchemeFactory(name="Rock Type")
-        ConceptFactory(scheme=rock_type, label="Basalt")
-        other_scheme = ConceptSchemeFactory(name="Mineral")
-        ConceptFactory(scheme=other_scheme, label="Granite")
-
-        warnings = check_concept_field_restriction_targets(None)
-
-        matches = [
-            w
-            for w in warnings
-            if w.obj.model._meta.label == "testapp.ChipSample"
-            and w.obj.name == "rock_type"
-        ]
-        assert len(matches) == 1
-        message = str(matches[0].msg)
-        assert "granite" in message
-
 
 class TestCheckRestrictionTargetsSurvivesUnmigratedDatabase:
     def test_check_reports_nothing_against_an_unmigrated_connection(self):
-        result = _run_django_admin("check")
+        result = run_django_admin("check")
 
         assert result.returncode == 0, result.stderr
         assert CHECK_ID_MISSING_RESTRICTION_TARGET not in result.stdout
@@ -387,7 +358,7 @@ class TestNothingAboutAnAbsentRestrictionTargetStopsTheProject:
     def test_check_makemigrations_and_migrate_all_succeed_with_every_target_absent(
         self,
     ):
-        result = _run_django_admin(
+        result = run_django_admin(
             "shell",
             "--no-startup",
             "--no-imports",
@@ -401,19 +372,19 @@ class TestNothingAboutAnAbsentRestrictionTargetStopsTheProject:
 
 class TestCheckSurvivesUnmigratedDatabase:
     def test_check_reports_nothing_against_an_unmigrated_connection(self):
-        result = _run_django_admin("check")
+        result = run_django_admin("check")
 
         assert result.returncode == 0, result.stderr
         assert CHECK_ID not in result.stdout
         assert "System check identified no issues" in result.stdout
 
     def test_makemigrations_succeeds_against_an_unmigrated_connection(self):
-        result = _run_django_admin("makemigrations", "--check", "--dry-run")
+        result = run_django_admin("makemigrations", "--check", "--dry-run")
 
         assert result.returncode == 0, result.stderr
 
     def test_migrate_succeeds_against_an_unmigrated_connection(self):
-        result = _run_django_admin("migrate", "--no-input")
+        result = run_django_admin("migrate", "--no-input")
 
         assert result.returncode == 0, result.stderr
 
@@ -610,7 +581,7 @@ print("ADMIN_NOT_IMPORTED")
 
 class TestProjectWithoutTheAdminIsUnaffected:
     def test_check_is_as_clean_without_the_admin_as_it_is_with_it(self):
-        result = _run_django_admin("check", settings="tests.settings_no_admin")
+        result = run_django_admin("check", settings="tests.settings_no_admin")
 
         assert result.returncode == 0, result.stderr
         assert "System check identified no issues" in result.stdout
@@ -623,7 +594,7 @@ class TestProjectWithoutTheAdminIsUnaffected:
             assert check_id not in result.stdout
 
     def test_django_contrib_admin_never_reaches_sys_modules_after_a_form_renders(self):
-        result = _run_django_admin(
+        result = run_django_admin(
             "shell",
             "--no-startup",
             "--no-imports",
@@ -645,6 +616,60 @@ class TestProjectWithoutTheAdminIsUnaffected:
             model._meta.app_label for model in django_admin.site._registry
         }
         assert "controlled_vocabularies" not in registered_app_labels
+
+
+def translation_call_string_literals(func) -> list[str]:
+    """Return every string ``func`` passes straight to ``_()`` or ``gettext_lazy()``.
+
+    Reads the function's source rather than calling it: ``checks.py`` interpolates
+    the lazy proxy with ``%`` immediately, so a rendered warning carries no trace
+    of having been translatable.
+
+    Args:
+        func: The function whose source is inspected.
+
+    Returns:
+        The string literals, in source order.
+    """
+    tree = ast.parse(inspect.getsource(func))
+    literals = []
+
+    class LiteralCollector(ast.NodeVisitor):
+        def visit_Call(self, node: ast.Call) -> None:
+            if isinstance(node.func, ast.Name) and node.func.id in {
+                "_",
+                "gettext_lazy",
+            }:
+                for arg in node.args:
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                        literals.append(arg.value)
+            self.generic_visit(node)
+
+    LiteralCollector().visit(tree)
+    return literals
+
+
+class TestW005MessagesAreStaticWithNamedPlaceholders:
+    def test_none_of_them_carries_a_positional_placeholder(self):
+        literals = translation_call_string_literals(
+            checks_module.check_concept_field_restriction_targets
+        )
+
+        assert literals, "expected the W005 messages to be found at all"
+        for literal in literals:
+            assert "%s" not in literal
+            assert "%d" not in literal
+
+    def test_the_message_carries_the_four_named_placeholders(self):
+        literals = translation_call_string_literals(
+            checks_module.check_concept_field_restriction_targets
+        )
+
+        messages = [literal for literal in literals if "%(target)s" in literal]
+        assert len(messages) == 1
+        assert "%(model)s" in messages[0]
+        assert "%(field)s" in messages[0]
+        assert "%(vocabulary)s" in messages[0]
 
 
 class TestChecksI18nSweep:

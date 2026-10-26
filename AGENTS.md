@@ -4,8 +4,9 @@
      files: CONTEXT.md, docs/adr/, docs/agents/. -->
 
 django-controlled-vocabularies is a Django app for **importing published SKOS controlled
-vocabularies and referencing their concepts** in research infrastructure. Relational models are the
-source of truth, and RDF is a projection produced only at the import/export boundary. See the
+vocabularies and referencing their concepts** in research infrastructure. The database is the
+source of truth, each vocabulary and record holding a JSON document of its published statements, and
+RDF is read only at the import boundary. See the
 [`README`](README.md) for scope, [`docs/index.md`](docs/index.md) for the manual,
 [`CONTEXT.md`](CONTEXT.md) for the ubiquitous language, and [`docs/adr/`](docs/adr/) for the
 reasoning behind the design.

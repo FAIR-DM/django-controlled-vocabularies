@@ -6,12 +6,12 @@
 
 **Status**: Draft
 
-**Input**: Issue [#142](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/142) — "Every concept, collection and ordered collection in the database already has an address on this site, and nothing serves it — the address leads nowhere. Each should open a page showing what the record holds and where it sits among the records around it, in the languages its names and descriptions were recorded in. All three kinds are addressed the same way, by the vocabulary they belong to and their own slug, so one path serves them all."
+**Input**: Issue [#142](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/142) — "Every concept, collection and ordered collection in the database already has an address on this site, and nothing serves it — the address leads nowhere. Each should open a page showing what the record holds and where it sits among the records around it, in the languages its names and descriptions were recorded in. All three kinds are addressed the same way, by the vocabulary they belong to and their own slug, so one path serves them all."
 
 **Serves**: G7 (vocabulary browsing) · **Roadmap**: R6 · **Issue**: #142
 
 > Scope note: this is the third and last slice of roadmap item R6. It depends on
-> [#141](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/141), which served a
+> [#141](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/141), which served a
 > vocabulary's own page and deliberately left every concept and collection on it unlinked, because
 > nothing served an individual record's address yet. This feature owns **the pages an individual
 > record's address leads to** — one for a concept, one for a collection — everything the database
@@ -20,12 +20,11 @@
 > **Out of scope:** stepping through the broader/narrower hierarchy as a tree, which the maintainer
 > removed from #141 and which a page showing one step in each direction does not reintroduce;
 > searching for a term without knowing which vocabulary holds it, which no roadmap item currently
-> covers; storing a concept's links to concepts in other vocabularies, which nothing in the package
-> records (see Assumptions); returning a machine-readable representation when a record's address is
+> covers; returning a machine-readable representation when a record's address is
 > asked for one, which belongs with export rather than with browsing; editing anything shown; any
 > access rule of the package's own; keeping
-> these pages fast at a scale the project has not yet met, which is R7; and publication, deprecation
-> and the curator interface, which are R4 and R5.
+> these pages fast at a scale the project has not yet met, which is R7; and publication and
+> deprecation, which are R4.
 
 ## Clarifications
 
@@ -34,24 +33,24 @@
 Seven decisions were taken with the maintainer at intake, each deciding what the feature is rather
 than how it is built.
 
-- **Q: The issue says all three kinds are addressed the same way, so one path serves them all. The shipped models compose a concept's address as `{vocabulary}/{slug}` and a collection's as `{vocabulary}/collection/{slug}`. Which is it?** → A: The addresses stay exactly as the records already compose them. The maintainer's requirement is that a published record's identifier must equal the address it is served at, so an external consumer's stored identifier leads a reader back to the record here — and both shapes satisfy that. The extra segment is what keeps the two address spaces disjoint, because a concept's slug is unique only among concepts and a collection's only among collections, so the same slug can legitimately exist as both. Evidence that a type discriminator is normal and permitted: SKOS constrains nothing about URI shape, AGROVOC distinguishes `…/agrovoc/c_1234` from `…/agrovoc/skosCollection_cb7b7c4a`, and GEMET distinguishes `…/gemet/concept/95` from `…/gemet/group/96`. Integrated into FR-001 and FR-002.
-- **Q: Does this feature serve collections as well as concepts?** → A: Yes. The vocabulary page lists a vocabulary's collections unlinked on the explicit grounds that this feature gives them somewhere to lead, so serving only concepts would leave the dead address precisely where the previous feature promised it would be filled. There are two record types rather than the issue's three: an ordered collection is a collection carrying an `ordered` flag, whose members hold a position, so it is the same page with its members in their curated sequence. Integrated into User Story 2, FR-002 and FR-013.
+- **Q: The issue says all three kinds are addressed the same way, so one path serves them all. The shipped models compose a concept's address as `{vocabulary}/{slug}` and a collection's as `{vocabulary}/collection/{slug}`. Which is it?** → A: The addresses stay exactly as the records already compose them. The maintainer's requirement is that a published record's identifier must equal the address it is served at, so an external consumer's stored identifier leads a reader back to the record here — and both shapes satisfy that. The extra segment is what keeps a collection's address visibly apart from a concept's. Evidence that a type discriminator is normal and permitted: SKOS constrains nothing about URI shape, AGROVOC distinguishes `…/agrovoc/c_1234` from `…/agrovoc/skosCollection_cb7b7c4a`, and GEMET distinguishes `…/gemet/concept/95` from `…/gemet/group/96`. Integrated into FR-001 and FR-002.
+- **Q: Does this feature serve collections as well as concepts?** → A: Yes. The vocabulary page lists a vocabulary's collections unlinked on the explicit grounds that this feature gives them somewhere to lead, so serving only concepts would leave the dead address precisely where the previous feature promised it would be filled. There are two pages rather than the issue's three: an ordered collection is a collection of type `skos:OrderedCollection`, whose members are listed in a sequence, so it is the same page with its members in the publisher's sequence. Integrated into User Story 2, FR-002 and FR-013.
 - **Q: The issue asks for a record "in the languages its names and descriptions were recorded in", which is a different rule from the one the vocabulary page ships with. Which applies?** → A: The same rule the vocabulary page uses — the language the site is being read in, falling back to the vocabulary's own default language. One language, not all of them. Integrated into FR-005.
 - **Q: What does "where it sits among the records around it" cover?** → A: One step in every direction and no further: its broader concept, its narrower concepts, its related concepts, the collections it belongs to, and the vocabulary that holds it. No path back up to the top of the hierarchy — walking up one step at a time reaches it, and computing an ancestor chain on every page view is a cost R7 exists to deal with. Integrated into User Story 3, FR-010 and FR-011.
 - **Q: What shape is the page?** → A: A definition list of everything recorded about the record, each row keyed by the predicate's CURIE — `skos:prefLabel`, `skos:broader` — with the value beside it. Any value that is itself a record shows as a CURIE too, carrying that record's full canonical identifier on hover and linking to it. Integrated into User Stories 1 and 3, and FR-003, FR-006 and FR-007.
 - **Q: "Everything" includes hidden labels, which the previous feature established exist to be matched on and never shown. Do they appear?** → A: No. Every predicate except hidden labels, which stay out of sight — a hidden label is where a vocabulary keeps misspellings, superseded wording and terms deliberately retired, and a raw complete view would put all of them in front of any reader. Integrated into FR-004.
-- **Q: A CURIE needs a prefix per vocabulary, and nothing records one. Where does it come from?** → A: Derived from the vocabulary's slug, which is already unique across every vocabulary on the site, so the short form is never ambiguous and no curator has to maintain one. The cost, accepted: an imported vocabulary is shown under our slug rather than the prefix its own community uses, with the full canonical identifier still on hover and behind the link. Storing a real prefix per vocabulary changes what the package records and belongs with identity, not with browsing. Integrated into FR-006 and Assumptions.
+- **Q: A CURIE needs a prefix per vocabulary, and nothing records one. Where does it come from?** → A: Derived from the vocabulary's slug, which is already unique across every vocabulary on the site, so the short form is never ambiguous and nobody has to maintain one. The cost, accepted: an imported vocabulary is shown under our slug rather than the prefix its own community uses, with the full canonical identifier still on hover and behind the link. Storing a real prefix per vocabulary changes what the package records and belongs with identity, not with browsing. Integrated into FR-006 and Assumptions.
 
 ### Session 2026-08-24 (drafting)
 
 Ambiguities the intake decisions left open, resolved while drafting against the shipped models,
 `CONTEXT.md` and the constitution.
 
-- **Q: A CURIE links to "it" — the record's page on this site, or the canonical identifier the hover shows?** → A: The record's page on this site. Every value the page can render refers to a record the site holds, because the links to records elsewhere are the cross-vocabulary mappings nothing stores. The hover carries the canonical identifier, which for an imported record belongs to its publisher, while the link carries the reader somewhere they can actually read. Integrated into FR-007.
-- **Q: Which collections a concept belongs to has no SKOS property to key it on. Where does it go?** → A: Its own section below the definition list, with a plain-language heading. Every row in the list is a statement the record makes about itself and has a real property behind it, including `skos:narrower`, which is the inverse of the broader links the database stores. Membership is a statement other records make about this one, and inventing a CURIE for it would misrepresent the data. Integrated into FR-014.
+- **Q: A CURIE links to "it" — the record's page on this site, or the canonical identifier the hover shows?** → A: The record's page on this site. The hover carries the canonical identifier, which for an imported record belongs to its publisher, while the link carries the reader somewhere they can actually read. A value that names a record this site does not hold, such as a mapping to another vocabulary, is shown as its URI, and is a link to that address when it is a web address. Integrated into FR-007.
+- **Q: Which collections a concept belongs to has no SKOS property to key it on. Where does it go?** → A: Its own section below the definition list, with a plain-language heading. Every row in the list is a statement the record makes about itself and has a real property behind it, including `skos:narrower`, which is shown from the broader links other concepts state. Membership is a statement other records make about this one, and inventing a CURIE for it would misrepresent the data. Integrated into FR-014.
 - **Q: What distinguishes an ordered collection from an unordered one on the page?** → A: Its type row, which reads `skos:OrderedCollection` rather than `skos:Collection`, and the property its members appear under, which is `skos:memberList` rather than `skos:member`. Both are honest SKOS: an ordered collection genuinely is a distinct class with a distinct membership property. Integrated into FR-012 and FR-013.
 - **Q: A concept's page shows a definition. Which of the seven kinds of note does it show?** → A: All of them the record carries. The maintainer asked for everything recorded except hidden labels, and each kind of note has its own SKOS property to key its row on, so nothing has to be grouped or interpreted. Integrated into FR-003.
-- **Q: What does a reader see for a predicate the record carries no value for in any available language?** → A: No row at all. A list of rows reading "none" for every property a curator has not filled in tells a reader nothing and buries what was filled in. A record carrying nothing beyond its label shows its label, its type, its identifier and its vocabulary. Integrated into FR-018.
+- **Q: What does a reader see for a predicate the record carries no value for in any available language?** → A: No row at all. A list of rows reading "none" for every property a publisher has not filled in tells a reader nothing and buries what was filled in. A record carrying nothing beyond its label shows its label, its type, its identifier and its vocabulary. Integrated into FR-018.
 - **Q: What happens at an address naming no record?** → A: The page is reported as not found, the same as an address naming no vocabulary. An address whose vocabulary segment names no vocabulary is equally not found, rather than reported differently. Integrated into FR-001 and FR-002.
 
 ### Session 2026-08-24 (coverage scan)
@@ -62,8 +61,8 @@ the scale assumptions and the glossary already covered; these four were not.
 
 - **Q: The full identifier is disclosed on hover. A keyboard user, a touch user and a screen reader have no hover. Is it unreachable for them?** → A: No, and the specification must not say hover as though it were the only way. Hovering is how a pointer reveals it; the requirement is that every reader can obtain the full identifier behind a short form without leaving the page, by whatever means their device offers. How that is done is a design question, but a page where a whole class of readers cannot expand a single short form does not meet the goal the short forms exist for. Integrated into FR-007 and SC-003.
 - **Q: This is a linked-data package, and the address being served is the record's own identifier. Does asking that address for RDF return RDF?** → A: Not in this feature. Serving a machine-readable representation at the same address is a real and expected thing for a published vocabulary, and it is a different feature from a page a person reads: it has its own formats, its own round-trip fidelity rules, and it belongs with export rather than with browsing. Declared out of scope in the scope note and raised at the spec gate as the obvious thing R6 leaves behind.
-- **Q: A concept's status — draft, published, deprecated — is part of the ubiquitous language. "Everything recorded" would include it.** → A: Nothing records it. No field on a concept holds a status, and `CONTEXT.md` describes the lifecycle as design intent for the publication and curation features, which are R4 and R5. A page cannot show what nothing stores, and a browsing feature is the wrong place to start storing it. Integrated into Assumptions.
-- **Q: A record's identifier can be a string an external publisher supplied, and the page puts it in a link and in whatever carries the full form.** → A: Values reach the reader as text through the template layer with nothing marked safe, and a publisher-supplied identifier reaches an attribute only as a link's destination — the same treatment the vocabulary page already gives an identifier it did not author. A stored identifier is separately constrained to an allowed set of schemes when it is written. Integrated into FR-021.
+- **Q: A concept's status — draft, published, deprecated — "Everything recorded" would include it.** → A: The package keeps no status of its own. A concept its publisher marked `owl:deprecated` carries that statement in its document, and the page shows it as a row like any other statement. A lifecycle of the package's own belongs to the publication feature, R4. Integrated into Assumptions.
+- **Q: A record's identifier can be a string an external publisher supplied, and the page puts it in a link and in whatever carries the full form.** → A: Values reach the reader as text through the template layer with nothing marked safe, and a publisher-supplied identifier reaches an attribute only as a link's destination — the same treatment the vocabulary page already gives an identifier it did not author. An import separately refuses an identifier that begins `javascript:`, `data:` or `vbscript:`. Integrated into FR-021.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -106,7 +105,7 @@ for an address naming no concept.
 
 Someone follows a collection's identifier and gets a page about that collection: its name, its
 identifier, what kind of collection it is, and the concepts it gathers. An ordered collection shows
-its members in the sequence its curator chose; an unordered one shows them as the set it is.
+its members in the sequence its publisher gave; an unordered one shows them as the set it is.
 
 **Why this priority**: A collection's address is dead in exactly the same way a concept's is, and the
 vocabulary page already lists collections on the promise that this feature reaches them. It ranks
@@ -119,9 +118,9 @@ the collection, lists its members, and distinguishes an ordered collection from 
 
 1. **Given** an unordered collection holding three concepts, **When** a visitor opens its address,
    **Then** the page shows its name, its type as an unordered collection, and its three members.
-2. **Given** an ordered collection whose members carry positions, **When** a visitor opens its
-   address, **Then** the members appear in that sequence and the page shows its type as an ordered
-   collection.
+2. **Given** an ordered collection whose members are listed in a sequence, **When** a visitor opens
+   its address, **Then** the members appear in that sequence and the page shows its type as an
+   ordered collection.
 3. **Given** a collection holding no members, **When** a visitor opens its address, **Then** the page
    shows the collection and says it holds nothing, rather than showing an empty membership row.
 
@@ -206,23 +205,20 @@ list of properties and each leads to its collection's page.
 
 - A concept whose vocabulary has one default language and whose labels exist only in another: every
   value falls back to the vocabulary's default, and nothing is shown blank.
-- A concept and a collection in the same vocabulary carrying the same slug: both are reachable,
-  because their addresses differ by the segment that keeps the two spaces disjoint.
+- A concept and a collection whose slugs differ: each is reachable at its own address, a
+  collection's carrying its own segment.
 - A record whose identifier was assigned by an external publisher: the page shows that identifier as
   its own, while remaining served at this site's composed address for it.
-- ~~A concept related to a concept in another vocabulary held on this site: the short form carries
-  the other vocabulary's prefix, and the link leads to its page here.~~ **Unreachable — no test is
-  owed** (recorded 2026-08-24, D-015-01). `ConceptRelation` refuses a relation whose endpoints differ
-  in vocabulary, in `clean()` and again in `save()`, so the state this describes cannot be built. The
-  Key Entities section says the same: a relation links two concepts of one vocabulary.
-- ~~A collection gathering a concept from another vocabulary: the member is shown with its own
-  vocabulary's prefix, so a reader can see it comes from elsewhere.~~ **Unreachable — no test is
-  owed** (recorded 2026-08-24, D-015-01). `CollectionMember` refuses a cross-vocabulary membership on
-  the same two paths, and the factories tie a member to its parent's vocabulary.
+- A concept related to a concept in another vocabulary held on this site: the short form carries the
+  other vocabulary's prefix, and the link leads to its page here.
+- A collection gathering a concept from another vocabulary: the member is shown with its own
+  vocabulary's prefix, so a reader can see it comes from elsewhere.
+- A link to a record this site does not hold: the value is shown as the URI it names, as a link to
+  that address when it is a web address and as text otherwise.
 - An address whose vocabulary segment names no vocabulary: reported as not found, not distinguished
   from an address whose record segment names no record.
-- A vocabulary whose slug would collide with a reserved segment of a record address: prevented by the
-  addresses already composed, which this feature serves rather than invents.
+- A concept and a collection of one vocabulary cannot share a slug, because both are records of one
+  vocabulary, and a collection's address keeps its own segment all the same.
 
 ## Requirements *(mandatory)*
 
@@ -266,7 +262,7 @@ list of properties and each leads to its collection's page.
   distinguished from one another.
 - **FR-013**: A collection's page MUST show the concepts it gathers, keyed by the SKOS membership
   property for an unordered collection and by the ordered-membership property for an ordered one, and
-  an ordered collection's members MUST appear in the sequence their positions record.
+  an ordered collection's members MUST appear in the sequence the list gives.
 - **FR-014**: A concept's page MUST name the collections that gather it, below the term-and-value
   pairs and outside them, under a heading in plain language rather than a CURIE, each linking to that
   collection's page. A concept no collection gathers MUST show no such section rather than an empty
@@ -281,21 +277,23 @@ list of properties and each leads to its collection's page.
   row at all, rather than a row reading as empty or absent.
 - **FR-019**: Every string these pages show a reader MUST be translatable, none being fixed in one
   language.
-- **FR-020**: The pages MUST NOT show a concept's links to concepts in vocabularies this site does
-  not hold, because nothing in the package records them (see Assumptions).
+- **FR-020**: The pages MUST show every statement of a record, including a link to a record this
+  site does not hold, which MUST be shown as the URI it names, as a link when it is a web address and
+  as text otherwise.
 - **FR-021**: Every value these pages show MUST reach the reader as text escaped by the template
   layer, with no value marked safe, and a value an external publisher supplied MUST reach an
   attribute only as the destination of a link.
 
 ### Key Entities
 
-- **Concept**: a term within a vocabulary; carries a preferred label, alternative and hidden labels
-  per language, notes of seven kinds, and an identifier that is its publisher's where it has one and
-  this site's composed address otherwise.
-- **Collection**: a curator's grouping of concepts within a vocabulary, carrying a flag marking it
-  ordered, its members holding a position that is meaningful only when it is.
-- **Concept relation**: a link between two concepts of one vocabulary, stored in one canonical
-  direction as broader or as related, the narrower direction derived from it.
+- **Concept**: a term within a vocabulary, a `Record` of type `skos:Concept`; carries preferred,
+  alternative and hidden labels per language, notes of several kinds, and an identifier that is its
+  publisher's where it has one and this site's composed address otherwise.
+- **Collection**: a publisher's grouping of concepts within a vocabulary, a `Record` of type
+  `skos:Collection` or `skos:OrderedCollection`, whose members are listed in its document, in a
+  sequence when it is ordered.
+- **Link**: an entry in a record's document naming another resource by URI, stored as the publisher
+  stated it, with the inverse of a broader, narrower or related link shown from the other end.
 - **Vocabulary**: the container a record belongs to, supplying the record's address, the default
   language its values fall back to, and the slug the record's short form is prefixed with.
 
@@ -324,21 +322,16 @@ list of properties and each leads to its collection's page.
 
 ## Assumptions
 
-- **Cross-vocabulary links are not stored, so they cannot be shown.** The import path reads a
-  concept's exact, close, broad, narrow and related matches, reports them, and sets them aside,
-  because the store they were meant to land in was deferred past the import feature. A page cannot
-  show what nothing records. This is a gap raised at the spec gate, not a thing this feature builds a
-  store for.
+- **Cross-vocabulary links are statements like any other.** A concept's exact, close, broad, narrow and
+  related matches are kept in its document, and the page shows them. The target usually has no row
+  here, so it is shown as its URI.
 - **No vocabulary records a short prefix**, so short forms are built from a vocabulary's slug. A
   vocabulary published elsewhere is therefore shown under this site's slug for it rather than the
   prefix its own community uses. Recording a real prefix changes what the package stores and belongs
   with identity rather than with browsing.
-- **Nothing records who publishes a vocabulary**, unchanged from the previous feature, so no page
-  claims to name a publisher.
-- **Nothing records a concept's status.** The draft, published and deprecated lifecycle is part of
-  the project's language but no field holds it, and it is described as design intent for the
-  publication and curation features. No row for it appears, and this feature does not start storing
-  one.
+- **The package keeps no concept status of its own.** A concept its publisher marked
+  `owl:deprecated` shows that statement as a row like any other. A draft, published and deprecated
+  lifecycle belongs to the publication feature, R4.
 - **A record's page is served for every record the site holds**, whether its vocabulary is held here
   or was imported, because a record's page is where the record is read and its identifier is a
   separate question from its address.

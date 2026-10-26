@@ -5,31 +5,6 @@
   else the page says about the vocabulary sits in the side panel, so the content column is the
   concept list and nothing else.
 {% endcomment %}
-{% block page.title %}
-  {% comment %}
-    The curator's actions sit at the end of the title row, so they are there whether or not the
-    list below has anything in it. django-mvp's own page.actions block is inside the toolbar,
-    which is not drawn while the list is empty.
-  {% endcomment %}
-  <c-mvp.page.title :title="page.title"
-                    :subtitle="page.subtitle"
-                    :info="page.info"
-                    :info_actions="page.info_actions"
-                    inline_actions only>
-    <c-slot name="actions">
-      {% comment %}
-        Edit only for a vocabulary held here: an imported one is the publisher's, and the side panel
-        tells a curator which this is. Delete for either, to whoever may delete.
-      {% endcomment %}
-      {% if perms.controlled_vocabularies.change_conceptscheme and not vocabulary.static_uri %}
-        <c-button text="{% trans "Edit" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-update' vocabulary.slug %}" icon="edit" outline only />
-      {% endif %}
-      {% if perms.controlled_vocabularies.delete_conceptscheme %}
-        <c-button text="{% trans "Delete" %}" href="{% url 'controlled_vocabularies_ui:vocabulary-delete' vocabulary.slug %}" icon="delete" variant="error" outline only />
-      {% endif %}
-    </c-slot>
-  </c-mvp.page.title>
-{% endblock page.title %}
 {% block page.results %}
   {% comment %}
     A daisyUI list rather than django-mvp's grid of cards: the grid is a <div>, and list rows are <li>.
@@ -87,31 +62,20 @@
         <div>
           <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Identifier" %}</dt>
           <dd class="break-words">
-            <c-link href="{{ vocabulary.uri }}" text="{{ vocabulary.uri }}" hover=True rel="noopener" />
+            <c-controlled-vocabularies.identifier :uri="vocabulary.uri" />
           </dd>
         </div>
-        {% comment %}
-          Only for someone who can edit the vocabulary: whether it was imported decides whether it may
-          be edited here, which is no concern of a reader. Both cases are stated, so an editor does not
-          infer provenance from the identifier's domain (FS-013).
-        {% endcomment %}
-        {% if perms.controlled_vocabularies.change_conceptscheme %}
-          <div>
-            <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Source" %}</dt>
-            <dd>{% if vocabulary.static_uri %}{% trans "Imported" %}{% else %}{% trans "Held here" %}{% endif %}</dd>
-          </div>
-        {% endif %}
         <div>
           <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Language" %}</dt>
           <dd>{{ language_name }}</dd>
         </div>
       </dl>
       <dl id="vocabulary-publication" class="flex flex-col gap-3 border-t border-base-300 pt-4">
-        <c-controlled-vocabularies.publication-detail term="{% trans "Publisher" %}" value="{{ vocabulary.publisher }}" />
-        <c-controlled-vocabularies.publication-detail term="{% trans "Creator" %}" value="{{ vocabulary.creator }}" />
-        <c-controlled-vocabularies.publication-detail term="{% trans "Licence" %}" value="{{ vocabulary.license }}" />
-        <c-controlled-vocabularies.publication-detail term="{% trans "Version" %}" value="{{ vocabulary.version }}" />
-        <c-controlled-vocabularies.publication-detail term="{% trans "Last modified" %}" value="{{ vocabulary.modified|date }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Publisher" %}" value="{{ details.publisher }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Creator" %}" value="{{ details.creator }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Licence" %}" value="{{ details.license }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Version" %}" value="{{ details.version }}" />
+        <c-controlled-vocabularies.publication-detail term="{% trans "Last modified" %}" value="{{ details.modified }}" />
       </dl>
       <dl class="flex flex-col gap-3 border-t border-base-300 pt-4">
         <div>
@@ -127,7 +91,7 @@
                 {% for concept in top_concepts %}
                   <li>
                     <c-link href="{% url 'controlled_vocabularies_ui:concept-detail' vocabulary.slug concept.slug %}"
-                            text="{{ concept.resolved_label }}"
+                            text="{{ concept.display_label }}"
                             hover=True />
                   </li>
                 {% endfor %}
@@ -143,10 +107,10 @@
                 {% for collection in collections %}
                   <li class="leading-snug">
                     <c-link href="{% url 'controlled_vocabularies_ui:collection-detail' vocabulary.slug collection.slug %}"
-                            text="{{ collection.name }}"
+                            text="{{ collection.display_label }}"
                             hover=True />
                     <span class="block text-xs text-base-content/60">
-                      {% blocktrans count counter=collection.member_count %}{{ counter }} member{% plural %}{{ counter }} members{% endblocktrans %}{% if collection.ordered %} · {% trans "ordered" %}{% endif %}
+                      {% blocktrans count counter=collection.member_count %}{{ counter }} member{% plural %}{{ counter }} members{% endblocktrans %}{% if collection.type == "skos:OrderedCollection" %} · {% trans "ordered" %}{% endif %}
                     </span>
                   </li>
                 {% endfor %}

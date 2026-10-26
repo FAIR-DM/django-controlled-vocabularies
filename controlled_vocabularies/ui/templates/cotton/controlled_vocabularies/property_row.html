@@ -1,13 +1,8 @@
-{# @description One term and its value as a <dt>/<dd> pair for a definition list. The term discloses the URI its CURIE abbreviates. The value is plain text, a link to a record on this site, or a list of such links. #}
-{# @prop term:string | description:"The property name as a CURIE, such as skos:broader." #}
+{# @description One predicate and its values as a <dt>/<dd> pair for a definition list. The term discloses the URI its CURIE abbreviates. Each value is plain text, or a link to a record on this site or to a web address. #}
+{# @prop term:string | description:"The predicate as a CURIE, such as skos:broader." #}
 {# @prop term_uri:string | description:"The URI the term's CURIE abbreviates, shown on hover and read by assistive technology." #}
-{# @prop value:string | description:"A plain value, shown when neither entries nor short_form is given." #}
-{# @prop short_form:string | description:"Link text of a record-valued row, such as data-collection-methods:fieldwork. Give it with uri, href and identifier_id." #}
-{# @prop uri:string | description:"The record's canonical identifier, disclosed on hover behind the link." #}
-{# @prop href:string | description:"The address of the record's own page on this site." #}
-{# @prop entries:list | description:"Records listed in one row, each a dict of short_form, uri, href and identifier_id. Wins over short_form and value." #}
-{# @prop identifier_id:string | description:"An id, unique on the page, for the hidden span naming the identifier that aria-describedby points at." #}
-<c-vars term term_uri value short_form uri href entries identifier_id />
+{# @prop entries:list | description:"The values, each a dict of text and, for a link, uri, href and identifier_id." #}
+<c-vars term term_uri entries />
 {# Namespaced under cotton/controlled_vocabularies/: a top-level data_field.html would shadow django-mvp's own for projects installing both (FS-015). #}
 {# The two literal classes below are copied from django-mvp's data_field.html, whose prebuilt stylesheet omits any class its own templates do not use. #}
 {% comment %}
@@ -20,29 +15,22 @@
   <span class="sr-only">{{ term_uri }}</span>
 </dt>
 <dd class="mb-3">
-  {% if entries %}
-    <ul>
-      {% for entry in entries %}
-        <li>
+  <ul>
+    {% for entry in entries %}
+      <li>
+        {% if entry.href %}
           <span class="tooltip tooltip-right" data-tip="{{ entry.uri }}">
             <c-link href="{{ entry.href }}"
-                    text="{{ entry.short_form }}"
+                    text="{{ entry.text }}"
                     hover=True
+                    rel="noopener"
                     aria-describedby="{{ entry.identifier_id }}" />
             <span id="{{ entry.identifier_id }}" class="sr-only">{{ entry.uri }}</span>
           </span>
-        </li>
-      {% endfor %}
-    </ul>
-  {% elif short_form %}
-    <span class="tooltip tooltip-right" data-tip="{{ uri }}">
-      <c-link href="{{ href }}"
-              text="{{ short_form }}"
-              hover=True
-              aria-describedby="{{ identifier_id }}" />
-      <span id="{{ identifier_id }}" class="sr-only">{{ uri }}</span>
-    </span>
-  {% else %}
-    {{ value }}
-  {% endif %}
+        {% else %}
+          {{ entry.text }}
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
 </dd>

@@ -1,0 +1,4 @@
+{# @description A record's or vocabulary's identifier: a link when it is a web address, plain text otherwise, so an identifier in any other scheme an imported file used is never followed. #}
+{# @prop uri:string | description:"The identifier." #}
+<c-vars uri />
+{% if uri|slice:":8" == "https://" or uri|slice:":7" == "http://" %}<c-link href="{{ uri }}" text="{{ uri }}" hover=True rel="noopener" />{% else %}{{ uri }}{% endif %}

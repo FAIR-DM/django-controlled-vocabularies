@@ -1,90 +1,164 @@
 """Tests for controlled_vocabularies.ui.views."""
 
-import datetime
 import inspect
+import itertools
 import re
 from pathlib import Path
 
 import pytest
 from bs4 import BeautifulSoup
-from django.conf import settings as django_settings
-from django.contrib import messages
 from django.db import connection
-from django.contrib.auth.models import Permission
 from django.http import Http404
-from django.template.loader import render_to_string
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import translation
 from django.utils.functional import Promise
 
-from controlled_vocabularies.exchange.mapping import (
-    BROADER_CURIE,
-    COLLECTION_TYPE_CURIE,
-    CONCEPT_TYPE_CURIE,
-    IN_SCHEME_CURIE,
-    LABEL_CURIES,
-    MEMBER_CURIE,
-    MEMBER_LIST_CURIE,
-    NARROWER_CURIE,
-    NOTE_CURIES,
-    ORDERED_COLLECTION_TYPE_CURIE,
-    RELATED_CURIE,
-    TYPE_CURIE,
-)
 from controlled_vocabularies.exchange.skos import import_skos
-from controlled_vocabularies.models import (
-    Collection,
-    Concept,
-    ConceptLabel,
-    ConceptNote,
-    ConceptRelation,
-    ConceptScheme,
-)
+from controlled_vocabularies.models import Record
 from controlled_vocabularies.ui import views as views_module
-from controlled_vocabularies.ui.views import (
-    CollectionDetailView,
-    ConceptDetailView,
-    VocabularyDetailView,
-    VocabularyListView,
-    collection_property_rows,
-    concept_property_rows,
+from controlled_vocabularies.ui.rows import PropertyRows, PublicationDetails
+from controlled_vocabularies.ui.views import CollectionDetailView, ConceptDetailView
+from tests.factories import (
+    ConceptSchemeFactory,
+    RecordFactory,
+    collection_with_members,
+    labelled,
 )
 from tests.i18n_sweep import visit_fields_checks_source
-from tests.factories import (
-    CollectionFactory,
-    ConceptFactory,
-    ConceptNoteFactory,
-    ConceptRelationFactory,
-    ConceptSchemeFactory,
-    DepositFactory,
-    SpecimenFactory,
-    collection_with_members,
-)
 
-
-def alert_items(response):
-    """Return the text of each list item in the page's alerts.
-
-    Args:
-        response: The rendered page.
-
-    Returns:
-        The items' text, stripped.
-    """
-    soup = BeautifulSoup(response.content, "html.parser")
-    return [
-        item.get_text(" ", strip=True)
-        for alert in soup.select('[role="alert"]')
-        for item in alert.select("li")
-    ]
-
-ROW_TEMPLATE = "controlled_vocabularies/ui/conceptscheme_list_item.html"
-CONCEPT_ROW_TEMPLATE = "controlled_vocabularies/ui/concept_list_item.html"
+LIST_URL = reverse("controlled_vocabularies_ui:vocabulary-list")
 
 #: The vocabulary page's side panel, and the region holding its list of concepts.
 SIDE_PANEL = "#vocabulary-about"
 CONCEPT_ROWS = "#mvp-list li.list-row"
+
+serial = itertools.count()
+
+
+def text(value, language=None):
+    """Return a literal entry, tagged with a language when one is given.
+
+    Args:
+        value: The literal.
+        language: The language tag, or None for an untagged literal.
+
+    Returns:
+        The entry.
+    """
+    entry = {"@value": value}
+    if language:
+        entry["@language"] = language
+    return entry
+
+
+def link(uri):
+    """Return a link entry.
+
+    Args:
+        uri: The address linked to.
+
+    Returns:
+        The entry.
+    """
+    return {"@id": uri}
+
+
+def published(name=None, *, description=None, **details):
+    """Create a vocabulary that gives publication details and a description.
+
+    Args:
+        name: Its English name; a unique one is made when omitted.
+        description: Its English description.
+        **details: Publication details by name (``publisher``, ``creator``, ``license``,
+            ``version``, ``modified``).
+
+    Returns:
+        The saved vocabulary.
+    """
+    statements = {
+        PublicationDetails.CURIES[key]: [text(value)] for key, value in details.items()
+    }
+    if description:
+        statements["dcterms:description"] = [text(description, "en")]
+    return ConceptSchemeFactory(
+        data=labelled(name or f"Published {next(serial)}", statements=statements)
+    )
+
+
+def concept_with(scheme, label, **statements):
+    """Create a concept with further statements.
+
+    Args:
+        scheme: The vocabulary.
+        label: Its English preferred label.
+        **statements: Further predicates, keyed by CURIE with ``:`` written as ``__``.
+
+    Returns:
+        The saved concept.
+    """
+    document = labelled(
+        label,
+        statements={key.replace("__", ":"): value for key, value in statements.items()},
+    )
+    return RecordFactory(scheme=scheme, data=document)
+
+
+def gather(collection, *members):
+    """Make a collection list further concepts as members.
+
+    Args:
+        collection: The collection.
+        *members: The concepts to add.
+    """
+    collection.data.setdefault("skos:member", []).extend(
+        link(member.uri) for member in members
+    )
+    collection.save()
+
+
+def vocabulary_page(scheme):
+    """Return the address of a vocabulary's page.
+
+    Args:
+        scheme: The vocabulary.
+
+    Returns:
+        The address.
+    """
+    return reverse(
+        "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
+    )
+
+
+def concept_page(concept):
+    """Return the address of a concept's page.
+
+    Args:
+        concept: The concept.
+
+    Returns:
+        The address.
+    """
+    return reverse(
+        "controlled_vocabularies_ui:concept-detail",
+        kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
+    )
+
+
+def collection_page(collection):
+    """Return the address of a collection's page.
+
+    Args:
+        collection: The collection.
+
+    Returns:
+        The address.
+    """
+    return reverse(
+        "controlled_vocabularies_ui:collection-detail",
+        kwargs={"slug": collection.scheme.slug, "collection_slug": collection.slug},
+    )
 
 
 def visible_text(element) -> str:
@@ -110,9 +184,6 @@ def visible_text(element) -> str:
 def term_text(dt) -> str:
     """Read a ``<dt>``'s visible term, leaving out its hidden URI span.
 
-    The URI sits in a ``.sr-only`` span inside the ``<dt>``, so ``dt.get_text()`` glues the
-    CURIE to the URI it abbreviates.
-
     Args:
         dt: The parsed ``<dt>`` element.
 
@@ -120,6 +191,71 @@ def term_text(dt) -> str:
         The term as a sighted reader sees it.
     """
     return visible_text(dt).strip()
+
+
+def soup_of(response):
+    """Parse a response.
+
+    Args:
+        response: The test client's response.
+
+    Returns:
+        The parsed page.
+    """
+    return BeautifulSoup(response.content, "html.parser")
+
+
+def pairs_of(response):
+    """Pair each term on a record's page with the text of its value.
+
+    Args:
+        response: The record page's response.
+
+    Returns:
+        ``(term, value)`` tuples in page order.
+    """
+    return [
+        (term_text(dt), dt.find_next_sibling("dd").get_text(strip=True))
+        for dt in soup_of(response)("dt")
+    ]
+
+
+def terms_of(response):
+    """List the terms on a record's page.
+
+    Args:
+        response: The record page's response.
+
+    Returns:
+        The terms in page order.
+    """
+    return [term_text(dt) for dt in soup_of(response)("dt")]
+
+
+def dd_after(soup, term):
+    """Find the ``<dd>`` following a term's ``<dt>``.
+
+    Args:
+        soup: The parsed page.
+        term: The term as a sighted reader sees it.
+
+    Returns:
+        The ``<dd>`` element paired with the term.
+    """
+    dt = next(dt for dt in soup("dt") if term_text(dt) == term)
+    return dt.find_next_sibling("dd")
+
+
+def listed_pks(response):
+    """Return the primary keys of the objects a list response shows, in order.
+
+    Args:
+        response: The list page's response.
+
+    Returns:
+        The primary keys.
+    """
+    return [obj.pk for obj in response.context["object_list"]]
 
 
 def submits_to(soup, name) -> str | None:
@@ -145,399 +281,6 @@ def submits_to(soup, name) -> str | None:
     return form.get("id") if form else None
 
 
-class TestVocabularyList:
-    @pytest.mark.django_db
-    def test_every_vocabulary_appears_exactly_once(self, client):
-        schemes = ConceptSchemeFactory.create_batch(3)
-
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-
-        assert response.status_code == 200
-        listed = list(response.context["object_list"])
-        assert len(listed) == len(schemes)
-        assert {vocabulary.pk for vocabulary in listed} == {
-            scheme.pk for scheme in schemes
-        }
-
-    @pytest.mark.django_db
-    def test_a_vocabulary_added_after_the_first_request_appears_on_the_next(
-        self, client
-    ):
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
-        client.get(url)
-
-        added = ConceptSchemeFactory()
-
-        response = client.get(url)
-
-        assert added.pk in {
-            vocabulary.pk for vocabulary in response.context["object_list"]
-        }
-
-
-class TestVocabularyListEntry:
-    # The row partial is rendered directly, so a row's assertions are not confused by the
-    # page's own chrome (the pagination summary and empty state also render <p> output).
-
-    def test_an_entry_names_and_describes_its_vocabulary(self):
-        # Every other case builds a scheme with a blank description, so only this one would
-        # fail if the partial dropped the name or the description.
-        scheme = ConceptSchemeFactory.build(
-            name="Geological Time Scale",
-            description="Periods, epochs and ages of the geological record.",
-        )
-        scheme.concept_count = 0
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-
-        assert scheme.name in html
-        assert scheme.description in html
-
-    def test_an_entry_leads_to_the_vocabularys_own_page(self):
-        scheme = ConceptSchemeFactory.build(name="Geological Time Scale")
-        scheme.concept_count = 0
-        detail_url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-        anchor = BeautifulSoup(html, "html.parser").find("a", href=detail_url)
-
-        assert anchor is not None
-        assert anchor.text.strip() == scheme.name
-
-    def test_a_description_running_to_several_paragraphs_is_shortened(self):
-        # Asserts on the rendered text, not a CSS clamp class: the entry must not carry the
-        # whole description, however it avoids doing so.
-        description = " ".join(f"word{index}" for index in range(400))
-        scheme = ConceptSchemeFactory.build(name="Verbose", description=description)
-        scheme.concept_count = 0
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-
-        assert "word0" in html
-        assert "word399" not in html
-        assert len(BeautifulSoup(html, "html.parser").get_text()) < len(description)
-
-    @pytest.mark.django_db
-    def test_get_queryset_annotates_the_real_concept_count(self, client):
-        populated = ConceptSchemeFactory()
-        ConceptFactory.create_batch(3, scheme=populated)
-        empty = ConceptSchemeFactory()
-
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-
-        counts = {
-            vocabulary.pk: vocabulary.concept_count
-            for vocabulary in response.context["object_list"]
-        }
-        assert counts[populated.pk] == 3
-        assert counts[empty.pk] == 0
-
-    def test_imported_vocabulary_shows_its_publisher_identifier_as_a_link(self):
-        # The anchor's href and text are the publisher's identifier, unrewritten, and it
-        # carries rel="noopener" because the address is not this site's.
-        scheme = ConceptSchemeFactory.build(external=True)
-        scheme.concept_count = 0
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-        soup = BeautifulSoup(html, "html.parser")
-        anchor = soup.find("a", href=scheme.static_uri)
-
-        assert anchor is not None
-        assert anchor.text == scheme.static_uri
-        assert anchor.get("rel") == ["noopener"]
-
-    def test_a_locally_authored_vocabulary_shows_its_identifier_too(self):
-        # As a concept row does: a vocabulary held here has an identifier of its own.
-        scheme = ConceptSchemeFactory.build()
-        scheme.concept_count = 0
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-        anchor = BeautifulSoup(html, "html.parser").find("a", href=scheme.uri)
-
-        assert anchor is not None
-        assert anchor.text == scheme.uri
-
-    def test_names_its_publisher_when_it_gives_one(self):
-        scheme = ConceptSchemeFactory.build(publisher="Dublin Core Metadata Initiative")
-        scheme.concept_count = 0
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-
-        assert "Dublin Core Metadata Initiative" in html
-
-    def test_reports_its_collections_and_when_it_was_last_updated(self):
-        scheme = ConceptSchemeFactory.build(modified=datetime.date(2024, 3, 2))
-        scheme.concept_count = 5
-        scheme.collection_count = 2
-
-        with translation.override("en"):
-            html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-
-        assert "2 collections" in html
-        assert "2 March 2024" in html or "March 2, 2024" in html
-
-    def test_a_vocabulary_with_no_collections_and_no_date_says_nothing_about_either(self):
-        scheme = ConceptSchemeFactory.build()
-        scheme.concept_count = 5
-        scheme.collection_count = 0
-
-        text = BeautifulSoup(
-            render_to_string(ROW_TEMPLATE, {"object": scheme}), "html.parser"
-        ).get_text()
-
-        assert "collection" not in text
-        assert "·" not in text
-
-    def test_a_urn_identifier_is_still_rendered_as_a_link_unrewritten(self):
-        scheme = ConceptSchemeFactory.build(static_uri="urn:nbn:example:vocab-1")
-        scheme.concept_count = 0
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-        soup = BeautifulSoup(html, "html.parser")
-        anchor = soup.find("a", href="urn:nbn:example:vocab-1")
-
-        assert anchor is not None
-        assert anchor.text == "urn:nbn:example:vocab-1"
-
-    def test_reports_the_number_of_concepts_it_holds(self):
-        scheme = ConceptSchemeFactory.build()
-        scheme.concept_count = 3
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-
-        assert "3 concepts" in html
-
-    def test_a_vocabulary_with_no_concepts_reports_none_rather_than_blank(self):
-        scheme = ConceptSchemeFactory.build()
-        scheme.concept_count = 0
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-
-        assert "0 concepts" in html
-
-    def test_a_vocabulary_with_no_description_renders_without_a_stray_label_or_punctuation(
-        self,
-    ):
-        scheme = ConceptSchemeFactory.build(description="")
-        scheme.concept_count = 0
-
-        html = render_to_string(ROW_TEMPLATE, {"object": scheme})
-
-        # The description is the row's only paragraph, and nothing stands in for it.
-        assert html.count("<p") == 0
-
-
-class TestVocabularyListOrdering:
-    # Each test gives the vocabulary whose name sorts last a slug that sorts first. Count()
-    # groups by every selected column including the unique slug, so without the mismatch a
-    # slug-ordered page and a name-ordered one agree and the test proves nothing.
-
-    @pytest.mark.django_db
-    def test_a_name_beginning_with_a_lowercase_letter_still_sorts_before_an_uppercase_one_later_in_the_alphabet(
-        self, client
-    ):
-        zebra = ConceptSchemeFactory(name="Zebra")
-        zebra.set_slug("aaa-sorts-first-by-slug")
-        ConceptSchemeFactory(name="antelope")
-
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-
-        names = [vocabulary.name for vocabulary in response.context["object_list"]]
-        # Byte order (capital Z = 0x5A, lowercase a = 0x61) would sort "Zebra" first, and
-        # so would zebra's own (deliberately mis-set) slug; case-insensitive order by name
-        # puts "antelope" first, as a reader expects.
-        assert names == ["antelope", "Zebra"]
-
-    @pytest.mark.django_db
-    def test_two_requests_return_the_same_sequence(self, client):
-        ConceptSchemeFactory.create_batch(5)
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
-
-        first = [vocabulary.pk for vocabulary in client.get(url).context["object_list"]]
-        second = [
-            vocabulary.pk for vocabulary in client.get(url).context["object_list"]
-        ]
-
-        assert first == second
-
-    @pytest.mark.django_db
-    def test_two_vocabularies_sharing_a_name_still_produce_a_deterministic_order(
-        self, client
-    ):
-        first = ConceptSchemeFactory(name="Duplicate")
-        # The slug is derived from the name and is unique app-wide, so a second same-named
-        # scheme needs its own explicit slug to save at all. It sorts first by slug but
-        # second by pk, so only a real pk tiebreak produces [first.pk, second.pk].
-        second = ConceptSchemeFactory.build(name="Duplicate")
-        second.set_slug("aaa-sorts-first-by-slug")
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
-
-        first_request = [
-            vocabulary.pk for vocabulary in client.get(url).context["object_list"]
-        ]
-        second_request = [
-            vocabulary.pk for vocabulary in client.get(url).context["object_list"]
-        ]
-
-        assert first_request == second_request == [first.pk, second.pk]
-
-    @pytest.mark.django_db
-    def test_query_count_is_flat_regardless_of_how_many_vocabularies_the_site_holds(
-        self, client, django_assert_num_queries
-    ):
-        # Proves the annotation costs a flat number of queries as the table grows, not that
-        # thirty rows render on one page (the page size is django-mvp's default).
-        ConceptSchemeFactory.create_batch(3)
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
-
-        with CaptureQueriesContext(connection) as captured:
-            client.get(url)
-        baseline = len(captured.captured_queries)
-
-        ConceptSchemeFactory.create_batch(27)
-
-        with django_assert_num_queries(baseline):
-            client.get(url)
-
-
-class TestVocabularyListChosenOrdering:
-    # ?o= does nothing unless the view's filterset declares a sort, and the sort control is drawn
-    # only for one, so a view declaring none ignores it in silence.
-
-    @pytest.mark.django_db
-    def test_the_page_offers_name_both_ways_size_and_recency(self, client):
-        ConceptSchemeFactory()
-
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-
-        assert [
-            key for key, _label, _columns in response.context["filter"].filters["o"].options
-        ] == [
-            "name_asc",
-            "name_desc",
-            "concepts_desc",
-            "modified_desc",
-        ]
-
-    @pytest.mark.django_db
-    def test_most_concepts_puts_the_largest_vocabulary_first(self, client):
-        small = ConceptSchemeFactory(name="Alpha")
-        ConceptFactory.create_batch(1, scheme=small)
-        large = ConceptSchemeFactory(name="Beta")
-        ConceptFactory.create_batch(3, scheme=large)
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
-
-        response = client.get(url, {"o": "concepts_desc"})
-
-        assert [v.pk for v in response.context["object_list"]] == [large.pk, small.pk]
-
-    @pytest.mark.django_db
-    def test_recently_updated_puts_the_newest_first_and_undated_ones_last(
-        self, client
-    ):
-        undated = ConceptSchemeFactory(name="Alpha")
-        older = ConceptSchemeFactory(name="Beta", modified=datetime.date(2020, 1, 1))
-        newer = ConceptSchemeFactory(name="Gamma", modified=datetime.date(2025, 1, 1))
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
-
-        response = client.get(url, {"o": "modified_desc"})
-
-        assert [v.pk for v in response.context["object_list"]] == [
-            newer.pk,
-            older.pk,
-            undated.pk,
-        ]
-
-    @pytest.mark.django_db
-    def test_choosing_z_to_a_reverses_the_page(self, client):
-        # The slug is set against the name so slug order and name order differ.
-        zebra = ConceptSchemeFactory(name="Zebra")
-        zebra.set_slug("aaa-sorts-first-by-slug")
-        ConceptSchemeFactory(name="antelope")
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
-
-        ascending = [
-            v.name for v in client.get(url, {"o": "name_asc"}).context["object_list"]
-        ]
-        descending = [
-            v.name for v in client.get(url, {"o": "name_desc"}).context["object_list"]
-        ]
-
-        assert ascending == ["antelope", "Zebra"]
-        assert descending == ["Zebra", "antelope"]
-
-    @pytest.mark.django_db
-    def test_the_chosen_order_is_marked_as_the_current_one(self, client):
-        ConceptSchemeFactory()
-
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"o": "name_desc"}
-        )
-
-        assert response.context["sort_label"] == "Name (Z-A)"
-
-    @pytest.mark.django_db
-    def test_an_ordering_nobody_offered_is_ignored_rather_than_obeyed(self, client):
-        # `?o=` is matched against declared keys, so a field name or SQL fragment is neither
-        # honoured nor an error.
-        zebra = ConceptSchemeFactory(name="Zebra")
-        zebra.set_slug("aaa-sorts-first-by-slug")
-        ConceptSchemeFactory(name="antelope")
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
-
-        response = client.get(url, {"o": "-slug"})
-
-        assert response.status_code == 200
-        assert [v.name for v in response.context["object_list"]] == [
-            "antelope",
-            "Zebra",
-        ]
-        assert response.context["sort_label"] == ""
-
-    @pytest.mark.django_db
-    def test_a_search_and_a_chosen_order_apply_together(self, client):
-        ConceptSchemeFactory(name="Soil Zebra")
-        ConceptSchemeFactory(name="Soil Antelope")
-        ConceptSchemeFactory(name="Rock Badger")
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
-
-        response = client.get(url, {"q": "Soil", "o": "name_desc"})
-
-        assert [v.name for v in response.context["object_list"]] == [
-            "Soil Zebra",
-            "Soil Antelope",
-        ]
-
-    @pytest.mark.django_db
-    def test_the_sort_control_submits_to_the_same_form_as_the_search_box(self, client):
-        # Before django-mvp 0.19.2 no element with this id existed on a page showing neither
-        # a filter nor a create button, so choosing an order submitted nothing.
-        ConceptSchemeFactory()
-
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        assert soup.find("form", id="filterForm") is not None
-        assert submits_to(soup, "o") == "filterForm"
-
-
-LIST_URL_NAME = "controlled_vocabularies_ui:vocabulary-list"
-
-
-def listed(response) -> set[int]:
-    """Return the primary keys of the vocabularies a list response shows.
-
-    Args:
-        response: The list page's response.
-
-    Returns:
-        The primary keys.
-    """
-    return {vocabulary.pk for vocabulary in response.context["object_list"]}
-
-
 def facet_options(response, name) -> dict[str, str]:
     """Return a facet's options as the filter panel draws them, by value.
 
@@ -548,382 +291,537 @@ def facet_options(response, name) -> dict[str, str]:
     Returns:
         Each option's drawn label, count included, keyed by its value.
     """
-    soup = BeautifulSoup(response.content, "html.parser")
+    soup = soup_of(response)
     return {
-        box["value"]: soup.find("label", attrs={"for": box["id"]}).get_text(" ", strip=True)
+        box["value"]: soup.find("label", attrs={"for": box["id"]}).get_text(
+            " ", strip=True
+        )
         for box in soup.find_all("input", attrs={"type": "checkbox", "name": name})
     }
 
 
-class TestVocabularyListFacets:
-    @pytest.mark.django_db
-    def test_choosing_a_publisher_keeps_only_its_vocabularies(self, client):
-        first = ConceptSchemeFactory(publisher="ODM2 Project")
-        ConceptSchemeFactory(publisher="NASA")
+def hrefs(response):
+    """Return every address a page links to.
 
-        response = client.get(reverse(LIST_URL_NAME), {"publisher": "ODM2 Project"})
+    Args:
+        response: The test client's response.
 
-        assert listed(response) == {first.pk}
+    Returns:
+        The ``href`` of every anchor on the page.
+    """
+    return {anchor["href"] for anchor in soup_of(response)("a", href=True)}
 
-    @pytest.mark.django_db
-    def test_choosing_two_publishers_keeps_the_vocabularies_of_either(self, client):
-        first = ConceptSchemeFactory(publisher="ODM2 Project")
-        second = ConceptSchemeFactory(publisher="NASA")
-        ConceptSchemeFactory(publisher="BODC")
 
-        response = client.get(
-            reverse(LIST_URL_NAME), {"publisher": ["ODM2 Project", "NASA"]}
+def query_count(client, url):
+    """Count the queries a request runs.
+
+    Args:
+        client: The test client.
+        url: The address to request.
+
+    Returns:
+        The number of queries.
+    """
+    with CaptureQueriesContext(connection) as captured:
+        client.get(url)
+    return len(captured.captured_queries)
+
+
+@pytest.mark.django_db
+class TestVocabularyList:
+    def test_every_vocabulary_appears_exactly_once(self, client):
+        schemes = ConceptSchemeFactory.create_batch(3)
+
+        response = client.get(LIST_URL)
+
+        assert response.status_code == 200
+        assert sorted(listed_pks(response)) == sorted(scheme.pk for scheme in schemes)
+
+    def test_a_vocabulary_added_after_the_first_request_appears_on_the_next(
+        self, client
+    ):
+        client.get(LIST_URL)
+
+        added = ConceptSchemeFactory()
+
+        assert added.pk in listed_pks(client.get(LIST_URL))
+
+    def test_an_empty_site_returns_200_with_no_vocabularies_listed(self, client):
+        response = client.get(LIST_URL)
+
+        assert response.status_code == 200
+        assert listed_pks(response) == []
+
+
+@pytest.mark.django_db
+class TestVocabularyListEntry:
+    @staticmethod
+    def row_for(client, scheme):
+        """Return the list row naming ``scheme``.
+
+        Args:
+            client: The test client.
+            scheme: The vocabulary whose row to find.
+
+        Returns:
+            The row element.
+        """
+        soup = soup_of(client.get(LIST_URL))
+        return next(
+            row
+            for row in soup.select("li.list-row")
+            if row.find("a", href=vocabulary_page(scheme))
         )
 
-        assert listed(response) == {first.pk, second.pk}
+    def test_the_counts_are_those_of_the_concepts_and_collections_it_holds(
+        self, client
+    ):
+        populated = ConceptSchemeFactory()
+        RecordFactory.create_batch(3, scheme=populated)
+        RecordFactory(scheme=populated, type=Record.Type.COLLECTION)
+        RecordFactory(scheme=populated, type=Record.Type.ORDERED_COLLECTION)
+        empty = ConceptSchemeFactory()
 
-    @pytest.mark.django_db
+        response = client.get(LIST_URL)
+
+        counts = {
+            scheme.pk: (scheme.concept_count, scheme.collection_count)
+            for scheme in response.context["object_list"]
+        }
+        assert counts[populated.pk] == (3, 2)
+        assert counts[empty.pk] == (0, 0)
+
+    def test_an_entry_names_and_describes_its_vocabulary(self, client):
+        scheme = published(
+            "Geological Time Scale",
+            description="Periods, epochs and ages of the geological record.",
+        )
+
+        row = self.row_for(client, scheme)
+
+        assert row.find("a", href=vocabulary_page(scheme)).get_text(strip=True) == (
+            "Geological Time Scale"
+        )
+        assert "Periods, epochs and ages" in row.get_text()
+
+    def test_a_description_running_to_several_paragraphs_is_shortened(self, client):
+        description = " ".join(f"word{index}" for index in range(400))
+        scheme = published("Verbose", description=description)
+
+        row = self.row_for(client, scheme)
+
+        assert "word0" in row.get_text()
+        assert "word399" not in row.get_text()
+
+    def test_an_entry_shows_the_identifier_of_its_vocabulary_as_a_link(self, client):
+        scheme = ConceptSchemeFactory(uri="http://publisher.example.org/vocab-1")
+
+        anchor = self.row_for(client, scheme).find("a", href=scheme.uri)
+
+        assert anchor.get_text(strip=True) == scheme.uri
+        assert anchor.get("rel") == ["noopener"]
+
+    def test_an_identifier_that_is_not_a_web_address_is_shown_but_not_linked(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory(uri="urn:nbn:example:vocab-1")
+
+        row = self.row_for(client, scheme)
+
+        assert row.find("a", href="urn:nbn:example:vocab-1") is None
+        assert "urn:nbn:example:vocab-1" in row.get_text()
+
+    def test_an_entry_names_its_publisher_when_it_gives_one(self, client):
+        scheme = published(publisher="Dublin Core Metadata Initiative")
+
+        row = self.row_for(client, scheme)
+
+        assert "Dublin Core Metadata Initiative" in row.get_text()
+
+    def test_an_entry_reports_the_number_of_concepts_it_holds(self, client):
+        scheme = ConceptSchemeFactory()
+        RecordFactory.create_batch(3, scheme=scheme)
+
+        assert "3 concepts" in self.row_for(client, scheme).get_text()
+
+    def test_a_vocabulary_with_no_concepts_reports_none_rather_than_blank(self, client):
+        scheme = ConceptSchemeFactory()
+
+        assert "0 concepts" in self.row_for(client, scheme).get_text()
+
+    def test_an_entry_reports_its_collections_and_when_it_was_last_updated(
+        self, client
+    ):
+        scheme = published(modified="2024-03-02")
+        RecordFactory.create_batch(2, scheme=scheme, type=Record.Type.COLLECTION)
+
+        with translation.override("en"):
+            row_text = self.row_for(client, scheme).get_text()
+
+        assert "2 collections" in row_text
+        assert "2 March 2024" in row_text or "March 2, 2024" in row_text
+
+    def test_a_vocabulary_with_no_collections_and_no_date_says_nothing_about_either(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        RecordFactory(scheme=scheme)
+
+        row_text = self.row_for(client, scheme).get_text()
+
+        assert "collection" not in row_text
+        assert "·" not in row_text
+
+    def test_a_vocabulary_with_no_description_renders_no_paragraph(self, client):
+        scheme = ConceptSchemeFactory()
+
+        assert self.row_for(client, scheme).find("p") is None
+
+
+@pytest.mark.django_db
+class TestVocabularyListOrdering:
+    # Each test gives the vocabulary whose name sorts last a slug that sorts first, so a
+    # slug-ordered page and a name-ordered one cannot agree by accident.
+
+    def test_a_lowercase_name_sorts_before_an_uppercase_one_later_in_the_alphabet(
+        self, client
+    ):
+        zebra = ConceptSchemeFactory(name="Zebra", slug="aaa-sorts-first-by-slug")
+        antelope = ConceptSchemeFactory(name="antelope")
+
+        response = client.get(LIST_URL)
+
+        # Byte order (capital Z = 0x5A, lowercase a = 0x61) would sort "Zebra" first.
+        assert listed_pks(response) == [antelope.pk, zebra.pk]
+
+    def test_two_requests_return_the_same_sequence(self, client):
+        ConceptSchemeFactory.create_batch(5)
+
+        assert listed_pks(client.get(LIST_URL)) == listed_pks(client.get(LIST_URL))
+
+    def test_two_vocabularies_sharing_a_name_are_ordered_by_creation(self, client):
+        # The first sorts last by slug, so only a real primary key tiebreak gives this
+        # order.
+        first = ConceptSchemeFactory(name="Duplicate", slug="zzz-sorts-last-by-slug")
+        second = ConceptSchemeFactory(name="Duplicate")
+
+        assert listed_pks(client.get(LIST_URL)) == [first.pk, second.pk]
+
+    def test_query_count_is_flat_regardless_of_how_many_vocabularies_the_site_holds(
+        self, client, django_assert_num_queries
+    ):
+        ConceptSchemeFactory.create_batch(3)
+        baseline = query_count(client, LIST_URL)
+        ConceptSchemeFactory.create_batch(27)
+
+        with django_assert_num_queries(baseline):
+            client.get(LIST_URL)
+
+
+@pytest.mark.django_db
+class TestVocabularyListChosenOrdering:
+    # ?o= does nothing unless the view's filterset declares a sort, and the sort control is drawn
+    # only for one, so a view declaring none ignores it in silence.
+
+    def test_the_page_offers_name_both_ways_size_and_recency(self, client):
+        ConceptSchemeFactory()
+
+        response = client.get(LIST_URL)
+
+        options = response.context["filter"].filters["o"].options
+        assert [key for key, _label, _columns in options] == [
+            "name_asc",
+            "name_desc",
+            "concepts_desc",
+            "modified_desc",
+        ]
+
+    def test_most_concepts_puts_the_largest_vocabulary_first(self, client):
+        small = ConceptSchemeFactory(name="Alpha")
+        RecordFactory.create_batch(1, scheme=small)
+        large = ConceptSchemeFactory(name="Beta")
+        RecordFactory.create_batch(3, scheme=large)
+
+        response = client.get(LIST_URL, {"o": "concepts_desc"})
+
+        assert listed_pks(response) == [large.pk, small.pk]
+
+    def test_recently_updated_puts_the_newest_first_and_undated_ones_last(self, client):
+        undated = published("Alpha")
+        older = published("Beta", modified="2020-01-01")
+        newer = published("Gamma", modified="2025-01-01")
+
+        response = client.get(LIST_URL, {"o": "modified_desc"})
+
+        assert listed_pks(response) == [newer.pk, older.pk, undated.pk]
+
+    def test_choosing_z_to_a_reverses_the_page(self, client):
+        zebra = ConceptSchemeFactory(name="Zebra", slug="aaa-sorts-first-by-slug")
+        antelope = ConceptSchemeFactory(name="antelope")
+
+        ascending = listed_pks(client.get(LIST_URL, {"o": "name_asc"}))
+        descending = listed_pks(client.get(LIST_URL, {"o": "name_desc"}))
+
+        assert ascending == [antelope.pk, zebra.pk]
+        assert descending == [zebra.pk, antelope.pk]
+
+    def test_the_chosen_order_is_marked_as_the_current_one(self, client):
+        ConceptSchemeFactory()
+
+        response = client.get(LIST_URL, {"o": "name_desc"})
+
+        options = response.context["filter"].filters["o"].options
+        label = next(label for key, label, _columns in options if key == "name_desc")
+        assert response.context["sort_label"] == str(label)
+
+    def test_an_ordering_nobody_offered_is_ignored_rather_than_obeyed(self, client):
+        # `?o=` is matched against declared keys, so a field name or SQL fragment is neither
+        # honoured nor an error.
+        zebra = ConceptSchemeFactory(name="Zebra", slug="aaa-sorts-first-by-slug")
+        antelope = ConceptSchemeFactory(name="antelope")
+
+        response = client.get(LIST_URL, {"o": "-slug"})
+
+        assert response.status_code == 200
+        assert listed_pks(response) == [antelope.pk, zebra.pk]
+        assert response.context["sort_label"] == ""
+
+    def test_a_search_and_a_chosen_order_apply_together(self, client):
+        ConceptSchemeFactory(name="Soil Zebra")
+        ConceptSchemeFactory(name="Soil Antelope")
+        ConceptSchemeFactory(name="Rock Badger")
+
+        response = client.get(LIST_URL, {"q": "Soil", "o": "name_desc"})
+
+        assert [v.pref_label for v in response.context["object_list"]] == [
+            "Soil Zebra",
+            "Soil Antelope",
+        ]
+
+    def test_the_sort_control_submits_to_the_same_form_as_the_search_box(self, client):
+        ConceptSchemeFactory()
+
+        soup = soup_of(client.get(LIST_URL))
+
+        assert soup.find("form", id="filterForm") is not None
+        assert submits_to(soup, "o") == "filterForm"
+
+
+@pytest.mark.django_db
+class TestVocabularyListFacets:
+    def test_choosing_a_publisher_keeps_only_its_vocabularies(self, client):
+        first = published(publisher="ODM2 Project")
+        published(publisher="NASA")
+
+        response = client.get(LIST_URL, {"publisher": "ODM2 Project"})
+
+        assert listed_pks(response) == [first.pk]
+
+    def test_choosing_two_publishers_keeps_the_vocabularies_of_either(self, client):
+        first = published(publisher="ODM2 Project")
+        second = published(publisher="NASA")
+        published(publisher="BODC")
+
+        response = client.get(LIST_URL, {"publisher": ["ODM2 Project", "NASA"]})
+
+        assert sorted(listed_pks(response)) == sorted([first.pk, second.pk])
+
     def test_choosing_a_licence_keeps_only_its_vocabularies(self, client):
         licence = "https://creativecommons.org/licenses/by/4.0/"
-        match = ConceptSchemeFactory(license=licence)
-        ConceptSchemeFactory(license="https://creativecommons.org/publicdomain/zero/1.0/")
+        match = published(license=licence)
+        published(license="https://creativecommons.org/publicdomain/zero/1.0/")
 
-        response = client.get(reverse(LIST_URL_NAME), {"license": licence})
+        response = client.get(LIST_URL, {"license": licence})
 
-        assert listed(response) == {match.pk}
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
     def test_a_known_licence_is_offered_by_its_short_name(self, client):
-        ConceptSchemeFactory(license="http://creativecommons.org/licenses/by/4.0")
-        ConceptSchemeFactory(license="Open Government Licence")
+        published(license="http://creativecommons.org/licenses/by/4.0")
+        published(license="Open Government Licence")
 
-        options = facet_options(client.get(reverse(LIST_URL_NAME)), "license")
+        options = facet_options(client.get(LIST_URL), "license")
 
         assert options["http://creativecommons.org/licenses/by/4.0"].startswith(
             "CC BY 4.0"
         )
         assert options["Open Government Licence"].startswith("Open Government Licence")
 
-    @pytest.mark.django_db
-    def test_a_vocabulary_giving_no_language_is_found_under_the_sites(
-        self, client, settings
-    ):
-        settings.LANGUAGE_CODE = "en"
-        unstated = ConceptSchemeFactory(default_language="")
-        english = ConceptSchemeFactory(default_language="en")
-        ConceptSchemeFactory(default_language="de")
+    def test_choosing_a_language_keeps_only_the_vocabularies_in_it(self, client):
+        german = ConceptSchemeFactory(default_language="de")
+        ConceptSchemeFactory(default_language="en")
 
-        response = client.get(reverse(LIST_URL_NAME), {"language": "en"})
+        response = client.get(LIST_URL, {"language": "de"})
 
-        assert listed(response) == {unstated.pk, english.pk}
+        assert listed_pks(response) == [german.pk]
 
-    @pytest.mark.django_db
     def test_a_facet_on_which_no_two_vocabularies_differ_is_not_offered(self, client):
-        ConceptSchemeFactory(publisher="ODM2 Project", license="")
-        ConceptSchemeFactory(publisher="ODM2 Project", license="")
+        published(publisher="ODM2 Project")
+        published(publisher="ODM2 Project")
 
-        response = client.get(reverse(LIST_URL_NAME))
+        response = client.get(LIST_URL)
 
         assert "publisher" not in response.context["filter"].filters
         assert "license" not in response.context["filter"].filters
 
-    @pytest.mark.django_db
     def test_each_option_counts_the_vocabularies_it_would_leave(self, client):
-        ConceptSchemeFactory.create_batch(2, publisher="ODM2 Project")
-        ConceptSchemeFactory(publisher="NASA")
+        published(publisher="ODM2 Project")
+        published(publisher="ODM2 Project")
+        published(publisher="NASA")
 
-        options = facet_options(client.get(reverse(LIST_URL_NAME)), "publisher")
+        options = facet_options(client.get(LIST_URL), "publisher")
 
         assert options["ODM2 Project"].endswith("(2)")
         assert options["NASA"].endswith("(1)")
 
-    @pytest.mark.django_db
     def test_the_counts_follow_the_search(self, client):
-        ConceptSchemeFactory(name="Soil one", publisher="ODM2 Project")
-        ConceptSchemeFactory(name="Rock one", publisher="ODM2 Project")
-        ConceptSchemeFactory(name="Rock two", publisher="NASA")
+        published("Soil one", publisher="ODM2 Project")
+        published("Rock one", publisher="ODM2 Project")
+        published("Rock two", publisher="NASA")
 
-        options = facet_options(
-            client.get(reverse(LIST_URL_NAME), {"q": "Soil"}), "publisher"
-        )
+        options = facet_options(client.get(LIST_URL, {"q": "Soil"}), "publisher")
 
         assert options["ODM2 Project"].endswith("(1)")
         assert options["NASA"].endswith("(0)")
 
-    @pytest.mark.django_db
     def test_a_choice_narrows_the_other_facets_counts_and_not_its_own(self, client):
         cc_by = "https://creativecommons.org/licenses/by/4.0/"
         cc_zero = "https://creativecommons.org/publicdomain/zero/1.0/"
-        ConceptSchemeFactory(publisher="ODM2 Project", license=cc_by)
-        ConceptSchemeFactory(publisher="NASA", license=cc_zero)
+        published(publisher="ODM2 Project", license=cc_by)
+        published(publisher="NASA", license=cc_zero)
 
-        response = client.get(reverse(LIST_URL_NAME), {"publisher": "ODM2 Project"})
+        response = client.get(LIST_URL, {"publisher": "ODM2 Project"})
 
         assert facet_options(response, "publisher")["NASA"].endswith("(1)")
         assert facet_options(response, "license")[cc_zero].endswith("(0)")
 
-    @pytest.mark.django_db
     def test_an_applied_filter_is_named_without_its_count(self, client):
-        ConceptSchemeFactory(publisher="ODM2 Project")
-        ConceptSchemeFactory(publisher="NASA")
+        published(publisher="ODM2 Project")
+        published(publisher="NASA")
 
-        response = client.get(reverse(LIST_URL_NAME), {"publisher": "ODM2 Project"})
+        response = client.get(LIST_URL, {"publisher": "ODM2 Project"})
 
         assert [
             refinement["value"] for refinement in response.context["refinements"]
         ] == ["ODM2 Project"]
 
 
-class TestVocabularyListSourceFacet:
-    """Whether a vocabulary was imported is a facet only for someone who can change vocabularies."""
-
-    @pytest.mark.django_db
-    def test_a_reader_is_not_offered_it(self, client):
-        ConceptSchemeFactory(external=True)
-        ConceptSchemeFactory()
-
-        response = client.get(reverse(LIST_URL_NAME))
-
-        assert "source" not in response.context["filter"].filters
-
-    @pytest.mark.django_db
-    def test_a_reader_choosing_it_by_address_still_sees_every_vocabulary(self, client):
-        imported = ConceptSchemeFactory(external=True)
-        held_here = ConceptSchemeFactory()
-
-        response = client.get(reverse(LIST_URL_NAME), {"source": "imported"})
-
-        assert listed(response) == {imported.pk, held_here.pk}
-
-    @pytest.mark.django_db
-    @pytest.mark.parametrize("source", ["imported", "here"])
-    def test_an_editor_can_keep_only_one_source(
-        self, client, django_user_model, source
-    ):
-        imported = ConceptSchemeFactory(external=True)
-        held_here = ConceptSchemeFactory()
-        client.force_login(editor(django_user_model))
-
-        response = client.get(reverse(LIST_URL_NAME), {"source": source})
-
-        assert listed(response) == {
-            "imported": {imported.pk},
-            "here": {held_here.pk},
-        }[source]
-
-
-class TestVocabularyListEmptyState:
-    @pytest.mark.django_db
-    def test_an_empty_site_returns_200_with_no_vocabularies_listed(self, client):
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-
-        assert response.status_code == 200
-        assert list(response.context["object_list"]) == []
-
-
+@pytest.mark.django_db
 class TestVocabularySearch:
-    @pytest.mark.django_db
     def test_a_word_from_the_name_narrows_to_that_vocabulary(self, client):
         match = ConceptSchemeFactory(name="Geological Time Scale")
         ConceptSchemeFactory(name="Soil Classification")
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": "Geological"}
-        )
+        response = client.get(LIST_URL, {"q": "Geological"})
 
-        listed = {vocabulary.pk for vocabulary in response.context["object_list"]}
-        assert listed == {match.pk}
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
     def test_a_word_appearing_only_in_the_description_narrows_too(self, client):
-        match = ConceptSchemeFactory(
-            name="Alpha", description="Covers stratigraphy and rock units"
-        )
-        ConceptSchemeFactory(name="Beta", description="Covers something else entirely")
+        match = published("Alpha", description="Covers stratigraphy and rock units")
+        published("Beta", description="Covers something else entirely")
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": "stratigraphy"}
-        )
+        response = client.get(LIST_URL, {"q": "stratigraphy"})
 
-        listed = {vocabulary.pk for vocabulary in response.context["object_list"]}
-        assert listed == {match.pk}
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
     def test_matching_ignores_case(self, client):
         match = ConceptSchemeFactory(name="Geological Time Scale")
         ConceptSchemeFactory(name="Soil Classification")
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": "geological"}
-        )
+        response = client.get(LIST_URL, {"q": "geological"})
 
-        listed = {vocabulary.pk for vocabulary in response.context["object_list"]}
-        assert listed == {match.pk}
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
+    @pytest.mark.parametrize(
+        ("name", "term"),
+        [
+            ("Ecology", "ECOLOGY"),
+            ("Ökologie", "ökologie"),
+            ("Гидрология", "ГИДРОЛОГИЯ"),
+        ],
+    )
+    def test_matching_ignores_case_in_any_script(self, client, name, term):
+        match = ConceptSchemeFactory(name=name)
+        ConceptSchemeFactory(name="Soil Classification")
+
+        response = client.get(LIST_URL, {"q": term})
+
+        assert listed_pks(response) == [match.pk]
+
     @pytest.mark.parametrize("term", ["%", "_", "'"])
     def test_a_term_containing_a_like_wildcard_or_a_quote_is_looked_for_literally(
         self, client, term
     ):
-        # icontains escapes %, _ and the backslash, and no seeded value contains the literal
-        # character, so a correct implementation matches nothing.
         ConceptSchemeFactory.create_batch(3)
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": term}
-        )
+        assert listed_pks(client.get(LIST_URL, {"q": term})) == []
 
-        assert list(response.context["object_list"]) == []
-
-    @pytest.mark.django_db
     def test_a_non_latin_term_matches_its_vocabulary(self, client):
         match = ConceptSchemeFactory(name="地質年代")
         ConceptSchemeFactory(name="Soil Classification")
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": "地質"}
-        )
+        response = client.get(LIST_URL, {"q": "地質"})
 
-        listed = {vocabulary.pk for vocabulary in response.context["object_list"]}
-        assert listed == {match.pk}
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
-    @pytest.mark.skipif(
-        connection.vendor != "sqlite", reason="the limitation under test is SQLite's"
-    )
-    @pytest.mark.parametrize(
-        ("name", "term", "matches"),
-        [
-            ("Ecology", "ECOLOGY", True),
-            ("Ökologie", "ÖKOLOGIE", True),
-            ("Ökologie", "ökologie", False),
-            ("Гидрология", "гидрология", False),
-        ],
-    )
-    def test_case_insensitive_matching_covers_ascii_letters_only_on_sqlite(
-        self, client, name, term, matches
-    ):
-        # SQLite `LIKE` folds ASCII letters only, so `ökologie` does not find `Ökologie`, and
-        # `Lower()` compiles to the same ASCII-only `LOWER()`. PostgreSQL folds all of
-        # Unicode. Pinned so a change shows as a failing test; the README discloses it.
-        scheme = ConceptSchemeFactory(name=name)
-
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": term}
-        )
-
-        listed = {vocabulary.pk for vocabulary in response.context["object_list"]}
-        assert (listed == {scheme.pk}) is matches
-
-    @pytest.mark.django_db
     def test_a_search_far_longer_than_any_real_one_still_answers(self, client):
-        # Unbounded, the upstream mixin ORs one condition per word per field, and past about
-        # 400 words the query exceeds SQLite's parser depth limit (django-mvp#281).
         ConceptSchemeFactory(name="Geology")
         term = " ".join(f"word{index}" for index in range(600))
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": term}
-        )
+        assert client.get(LIST_URL, {"q": term}).status_code == 200
 
-        assert response.status_code == 200
-
-    @pytest.mark.django_db
     def test_a_search_past_the_bound_keeps_its_first_words_and_drops_the_rest(
         self, client
     ):
         # Matching is OR, so a truncated term is answered on its first 100 words alone.
-        # Zero-padded so no word is a substring of another: unpadded, `word5` would match
-        # `word500` and the late vocabulary would be found for the wrong reason.
+        # Zero-padded so no word is a substring of another.
         early = ConceptSchemeFactory(name="word003 vocabulary")
         late = ConceptSchemeFactory(name="word500 vocabulary")
         term = " ".join(f"word{index:03d}" for index in range(600))
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": term}
-        )
+        response = client.get(LIST_URL, {"q": term})
 
-        listed = {vocabulary.pk for vocabulary in response.context["object_list"]}
-        assert early.pk in listed
-        assert late.pk not in listed
+        assert early.pk in listed_pks(response)
+        assert late.pk not in listed_pks(response)
 
-    @pytest.mark.django_db
     def test_a_search_of_nothing_but_whitespace_is_not_a_search(self, client):
-        # The search mixin strips before testing for a term, so this filters nothing.
         ConceptSchemeFactory.create_batch(2)
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": "   "}
-        )
+        assert len(listed_pks(client.get(LIST_URL, {"q": "   "}))) == 2
 
-        assert len(response.context["object_list"]) == 2
-
-    @pytest.mark.django_db
     def test_a_whitespace_only_search_does_not_come_back_in_the_box(self, client):
         ConceptSchemeFactory.create_batch(2)
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": "   "}
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(LIST_URL, {"q": "   "}))
 
         assert soup.find("input", attrs={"name": "q"}).get("value", "") == ""
 
-    @pytest.mark.django_db
-    def test_the_rendered_page_carries_a_search_input_and_nothing_else(self, client):
-        # The toolbar django-mvp renders can also offer a filter panel and create, and this
-        # page uses neither. Sort renders only because the view's filterset declares one.
-        ConceptSchemeFactory()
-
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-        content = response.content.decode()
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        assert 'name="q"' in content
-        assert 'name="o"' in content
-        assert soup.find(id="filters") is None
-
-    @pytest.mark.django_db
     def test_the_search_input_belongs_to_a_get_form_that_actually_exists(self, client):
-        # Before django-mvp 0.19.2 the search box named a form="filterForm" that existed only
-        # inside the filter action, so search alone was wired to nothing. A query-string test
-        # never touches the box's own wiring.
         ConceptSchemeFactory()
 
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(LIST_URL))
 
         form = soup.find("form", id="filterForm")
         assert form is not None
         assert form.get("method", "").lower() == "get"
-
         assert submits_to(soup, "q") == "filterForm"
         assert form.find(attrs={"type": "submit"}) is not None
-        assert submits_to(soup, "o") == "filterForm"
 
 
+@pytest.mark.django_db
 class TestVocabularySearchAcrossRequestsAndPages:
-    @pytest.mark.django_db
     def test_requesting_the_same_search_address_twice_returns_the_same_set_in_the_same_order(
         self, client
     ):
         ConceptSchemeFactory(name="Stratigraphy Unit A")
         ConceptSchemeFactory(name="Stratigraphy Unit B")
         ConceptSchemeFactory(name="Soil Classification")
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
 
-        first = [
-            vocabulary.pk
-            for vocabulary in client.get(url, {"q": "Stratigraphy"}).context[
-                "object_list"
-            ]
-        ]
-        second = [
-            vocabulary.pk
-            for vocabulary in client.get(url, {"q": "Stratigraphy"}).context[
-                "object_list"
-            ]
-        ]
+        first = listed_pks(client.get(LIST_URL, {"q": "Stratigraphy"}))
+        second = listed_pks(client.get(LIST_URL, {"q": "Stratigraphy"}))
 
         assert first == second
         assert len(first) == 2
 
-    @pytest.mark.django_db
     def test_following_the_rendered_link_to_page_two_keeps_the_search_applied(
         self, client
     ):
@@ -931,120 +829,68 @@ class TestVocabularySearchAcrossRequestsAndPages:
             ConceptSchemeFactory(name=f"Stratigraphy Unit {i:02d}") for i in range(30)
         ]
         ConceptSchemeFactory.create_batch(5)
-        url = reverse("controlled_vocabularies_ui:vocabulary-list")
 
-        first_page = client.get(url, {"q": "Stratigraphy"})
-        first_page_pks = {
-            vocabulary.pk for vocabulary in first_page.context["object_list"]
-        }
+        first_page = client.get(LIST_URL, {"q": "Stratigraphy"})
+        first_page_pks = set(listed_pks(first_page))
         assert len(first_page_pks) == first_page.context["paginator"].per_page
 
         # Read the link from the markup: a hand-built ?page=2 would hide a broken
         # query-string tag.
-        soup = BeautifulSoup(first_page.content, "html.parser")
         page_two_href = next(
-            a["href"]
-            for a in soup.find_all("a", href=True)
-            if "page=2" in a["href"] and "q=" in a["href"]
+            href for href in hrefs(first_page) if "page=2" in href and "q=" in href
         )
 
-        second_page = client.get(url + page_two_href)
+        second_page = client.get(LIST_URL + page_two_href)
 
         assert second_page.status_code == 200
-        second_page_pks = {
-            vocabulary.pk for vocabulary in second_page.context["object_list"]
-        }
-        matching_pks = {vocabulary.pk for vocabulary in matching}
-        # The second page continues the narrowed set: no overlap, all matched, none missing.
+        second_page_pks = set(listed_pks(second_page))
+        matching_pks = {scheme.pk for scheme in matching}
         assert second_page_pks.isdisjoint(first_page_pks)
-        assert second_page_pks <= matching_pks
         assert first_page_pks | second_page_pks == matching_pks
 
 
+@pytest.mark.django_db
 class TestVocabularySearchEmptyState:
-    @pytest.mark.django_db
     def test_a_search_matching_nothing_returns_200_and_echoes_the_term(self, client):
         ConceptSchemeFactory(name="Soil Classification")
 
-        response = client.get(
-            reverse("controlled_vocabularies_ui:vocabulary-list"), {"q": "Stratigraphy"}
-        )
-        content = response.content.decode()
+        response = client.get(LIST_URL, {"q": "Stratigraphy"})
 
         assert response.status_code == 200
-        assert "Stratigraphy" in content
+        assert "Stratigraphy" in response.content.decode()
 
-    @pytest.mark.django_db
     def test_a_search_matching_nothing_offers_a_link_back_to_the_unsearched_list(
         self, client
     ):
         ConceptSchemeFactory(name="Soil Classification")
-        list_url = reverse("controlled_vocabularies_ui:vocabulary-list")
 
-        response = client.get(list_url, {"q": "Stratigraphy"})
-        soup = BeautifulSoup(response.content, "html.parser")
+        assert LIST_URL in hrefs(client.get(LIST_URL, {"q": "Stratigraphy"}))
 
-        hrefs = {a["href"] for a in soup.find_all("a", href=True)}
-        assert list_url in hrefs
-
-    @pytest.mark.django_db
     def test_an_empty_site_with_no_search_shows_no_link_back_to_the_unsearched_list(
         self, client
     ):
-        list_url = reverse("controlled_vocabularies_ui:vocabulary-list")
+        assert LIST_URL not in hrefs(client.get(LIST_URL))
 
-        response = client.get(list_url)
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        hrefs = {a["href"] for a in soup.find_all("a", href=True)}
-        assert list_url not in hrefs
-
-    @pytest.mark.django_db
-    def test_the_no_match_and_site_empty_headings_are_different_strings(self, client):
-        list_url = reverse("controlled_vocabularies_ui:vocabulary-list")
-
-        site_empty = BeautifulSoup(client.get(list_url).content, "html.parser")
-        ConceptSchemeFactory(name="Soil Classification")
-        no_match = BeautifulSoup(
-            client.get(list_url, {"q": "Stratigraphy"}).content, "html.parser"
-        )
-
-        assert (
-            site_empty.select_one(".mvp-list-empty h2").get_text(strip=True)
-            != no_match.select_one(".mvp-list-empty h2").get_text(strip=True)
-        )
-
-    @pytest.mark.django_db
     def test_a_term_containing_markup_is_escaped_in_the_response(self, client):
         # Scoped to the applied-search chip, where the term is repeated, because the page's own
         # theme-toggle script is a <script>. An unescaped term parses as a real <script> inside
-        # the chip; a substring check on the raw response cannot tell the two apart.
+        # the chip.
         ConceptSchemeFactory(name="Soil Classification")
-        list_url = reverse("controlled_vocabularies_ui:vocabulary-list")
 
-        response = client.get(list_url, {"q": "<script>alert(1)</script>"})
-        soup = BeautifulSoup(response.content, "html.parser")
-        refinements = soup.find(class_="mvp-list-refinements")
+        response = client.get(LIST_URL, {"q": "<script>alert(1)</script>"})
+        refinements = soup_of(response).find(class_="mvp-list-refinements")
 
         assert refinements.find("script") is None
         assert "<script>alert(1)</script>" in refinements.get_text()
 
 
+@pytest.mark.django_db
 class TestVocabularyDetail:
-    @pytest.mark.django_db
     def test_a_known_vocabulary_serves_its_page_anonymously(self, client):
         scheme = ConceptSchemeFactory()
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
+        assert client.get(vocabulary_page(scheme)).status_code == 200
 
-        assert response.status_code == 200
-
-    @pytest.mark.django_db
     def test_a_slug_nothing_has_returns_404(self, client):
         response = client.get(
             reverse(
@@ -1055,360 +901,238 @@ class TestVocabularyDetail:
 
         assert response.status_code == 404
 
-    @pytest.mark.django_db
     def test_the_page_title_is_the_vocabularys_name(self, client):
         scheme = ConceptSchemeFactory(name="Geological Time Scale")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
+        response = client.get(vocabulary_page(scheme))
 
-        assert response.context["page"]["title"] == scheme.name
+        assert response.context["page"]["title"] == "Geological Time Scale"
 
-    @pytest.mark.django_db
     def test_a_vocabulary_named_in_a_non_latin_script_still_serves_its_own_page(
         self, client
     ):
-        # <str:slug>, not <slug:slug>: the model slugifies with allow_unicode=True, and
-        # Django's slug converter matches ASCII only. A vocabulary named this way would
-        # 404 on its own page under the obvious converter.
+        # <str:slug>, not <slug:slug>: Django's slug converter matches ASCII only.
         scheme = ConceptSchemeFactory(name="地質年代")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-
-        assert response.status_code == 200
+        assert client.get(vocabulary_page(scheme)).status_code == 200
 
 
-class TestVocabularyDetailDescriptionAndProvenance:
-    @pytest.mark.django_db
-    def test_a_vocabulary_with_a_description_shows_it(self, client):
-        scheme = ConceptSchemeFactory(
+@pytest.mark.django_db
+class TestVocabularyDetailDescriptionAndIdentifier:
+    def test_a_vocabulary_with_a_description_leads_with_it(self, client):
+        scheme = published(
             description="Periods, epochs and ages of the geological record."
         )
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
+        response = client.get(vocabulary_page(scheme))
+
+        assert response.context["page"]["subtitle"] == (
+            "Periods, epochs and ages of the geological record."
         )
 
-        assert scheme.description in response.content.decode()
+    def test_a_vocabulary_with_no_description_has_no_lead(self, client):
+        scheme = ConceptSchemeFactory()
 
-    @pytest.mark.django_db
-    def test_a_vocabulary_with_no_description_renders_no_heading_or_empty_element(
-        self, client
-    ):
-        scheme = ConceptSchemeFactory(description="")
+        response = client.get(vocabulary_page(scheme))
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        # The description is the page's lead text, so with none there is no lead.
         assert not response.context["page"]["subtitle"]
 
-    @pytest.mark.django_db
-    def test_a_vocabulary_published_elsewhere_shows_its_publisher_identifier(
-        self, client
-    ):
-        scheme = ConceptSchemeFactory(external=True)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
+    def test_the_lead_is_read_in_the_active_language(self, client):
+        scheme = ConceptSchemeFactory(
+            data=labelled(
+                "Rocks",
+                statements={
+                    "dcterms:description": [
+                        text("About rocks.", "en"),
+                        text("Über Gesteine.", "de"),
+                    ]
+                },
             )
         )
 
-        assert scheme.static_uri in response.content.decode()
+        with translation.override("de"):
+            response = client.get(vocabulary_page(scheme))
 
+        assert response.context["page"]["subtitle"] == "Über Gesteine."
 
-def editor(django_user_model):
-    """Return a signed-in-able user allowed to change vocabularies.
-
-    Args:
-        django_user_model: The user model.
-
-    Returns:
-        The user.
-    """
-    user = django_user_model.objects.create_user(username="editor", password="x")
-    user.user_permissions.add(Permission.objects.get(codename="change_conceptscheme"))
-    return user
-
-
-class TestVocabularyDetailSource:
-    """Whether a vocabulary was imported is shown only to someone who can change vocabularies."""
-
-    @pytest.mark.django_db
-    def test_an_editor_sees_a_vocabulary_authored_here_as_held_here(
-        self, client, django_user_model
-    ):
-        scheme = ConceptSchemeFactory()
-        client.force_login(editor(django_user_model))
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        panel = BeautifulSoup(response.content, "html.parser").select_one(SIDE_PANEL)
-
-        assert "Held here" in panel.get_text()
-        assert "Imported" not in panel.get_text()
-
-    @pytest.mark.django_db
-    def test_an_editor_sees_a_vocabulary_published_elsewhere_as_imported(
-        self, client, django_user_model
-    ):
-        scheme = ConceptSchemeFactory(external=True)
-        client.force_login(editor(django_user_model))
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        panel = BeautifulSoup(response.content, "html.parser").select_one(SIDE_PANEL)
-
-        assert "Imported" in panel.get_text()
-        assert "Held here" not in panel.get_text()
-
-    @pytest.mark.django_db
-    def test_a_visitor_not_signed_in_is_not_shown_the_source(self, client):
-        scheme = ConceptSchemeFactory(external=True)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        content = response.content.decode()
-
-        assert "Imported" not in content
-        assert "Held here" not in content
-
-    @pytest.mark.django_db
-    def test_a_signed_in_user_who_cannot_change_vocabularies_is_not_shown_the_source(
-        self, client, django_user_model
-    ):
-        scheme = ConceptSchemeFactory()
-        client.force_login(
-            django_user_model.objects.create_user(username="reader", password="x")
-        )
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        content = response.content.decode()
-
-        assert "Imported" not in content
-        assert "Held here" not in content
-
-    @pytest.mark.django_db
     def test_a_description_running_to_several_paragraphs_is_shortened(self, client):
         description = " ".join(f"word{index}" for index in range(400))
-        scheme = ConceptSchemeFactory(description=description)
+        scheme = published(description=description)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        content = response.content.decode()
+        content = client.get(vocabulary_page(scheme)).content.decode()
 
         assert "word0" in content
         assert "word399" not in content
 
+    def test_a_vocabulary_links_to_the_identifier_it_has(self, client):
+        scheme = ConceptSchemeFactory(uri="http://publisher.example.org/vocab-1")
 
+        panel = soup_of(client.get(vocabulary_page(scheme))).select_one(SIDE_PANEL)
+        anchor = panel.find("a", href=scheme.uri)
+
+        assert anchor.get_text(strip=True) == scheme.uri
+        assert anchor.get("rel") == ["noopener"]
+
+    def test_a_vocabulary_held_here_links_to_the_address_this_site_composes(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+
+        panel = soup_of(client.get(vocabulary_page(scheme))).select_one(SIDE_PANEL)
+
+        assert panel.find("a", href=scheme.uri) is not None
+
+    def test_an_identifier_that_is_not_a_web_address_is_shown_but_not_linked(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory(uri="urn:nbn:example:vocab-1")
+
+        panel = soup_of(client.get(vocabulary_page(scheme))).select_one(SIDE_PANEL)
+
+        assert panel.find("a", href="urn:nbn:example:vocab-1") is None
+        assert "urn:nbn:example:vocab-1" in panel.get_text()
+
+    def test_the_default_language_is_named_in_the_side_panel(self, client):
+        scheme = ConceptSchemeFactory(default_language="de")
+
+        response = client.get(vocabulary_page(scheme))
+
+        language_name = str(response.context["language_name"])
+        assert language_name != "de"
+        assert language_name in response.content.decode()
+
+    def test_a_language_django_does_not_know_is_shown_by_its_code(self, client):
+        scheme = ConceptSchemeFactory(default_language="xx-unknown")
+
+        response = client.get(vocabulary_page(scheme))
+
+        assert response.context["language_name"] == "xx-unknown"
+
+
+@pytest.mark.django_db
 class TestVocabularyDetailPublicationDetails:
     @staticmethod
     def details(client, scheme):
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
+        return soup_of(client.get(vocabulary_page(scheme))).find(
+            id="vocabulary-publication"
         )
-        soup = BeautifulSoup(response.content, "html.parser")
-        return soup.find(id="vocabulary-publication")
 
-    @pytest.mark.django_db
     def test_each_publication_detail_is_shown(self, client):
-        scheme = ConceptSchemeFactory(
+        scheme = published(
             publisher="Gem Survey",
             creator="A. Lapidary",
             license="CC BY 4.0",
             version="2.1",
-            modified=datetime.date(2026, 3, 14),
+            modified="2026-03-14",
         )
 
-        values = [
-            dd.get_text(strip=True) for dd in self.details(client, scheme)("dd")
-        ]
+        values = [dd.get_text(strip=True) for dd in self.details(client, scheme)("dd")]
 
         assert values[:4] == ["Gem Survey", "A. Lapidary", "CC BY 4.0", "2.1"]
         assert "2026" in values[4]
 
-    @pytest.mark.django_db
     def test_a_detail_given_as_an_address_links_to_it(self, client):
-        license_uri = "https://creativecommons.org/licenses/by/4.0/"
-        scheme = ConceptSchemeFactory(license=license_uri)
+        licence = "https://creativecommons.org/licenses/by/4.0/"
+        scheme = published(license=licence)
 
-        anchor = self.details(client, scheme).find("a", href=license_uri)
+        anchor = self.details(client, scheme).find("a", href=licence)
 
         assert anchor is not None
         assert anchor.get("rel") == ["noopener"]
 
-    @pytest.mark.django_db
     def test_a_detail_given_as_a_name_is_not_a_link(self, client):
-        scheme = ConceptSchemeFactory(publisher="Gem Survey")
+        scheme = published(publisher="Gem Survey")
 
         assert self.details(client, scheme).find("a") is None
 
-    @pytest.mark.django_db
+    def test_a_licence_stated_as_a_link_entry_is_shown_as_its_address(self, client):
+        licence = "https://creativecommons.org/licenses/by/4.0/"
+        scheme = ConceptSchemeFactory(
+            data=labelled("Rocks", statements={"dcterms:license": [link(licence)]})
+        )
+
+        assert self.details(client, scheme).find("a", href=licence) is not None
+
     def test_an_imported_value_is_escaped_and_only_a_web_address_is_linked(
         self, client
     ):
-        scheme = ConceptSchemeFactory(
-            publisher="<b>Gem Survey</b>", license="javascript:alert(1)"
-        )
+        scheme = published(publisher="<b>Gem Survey</b>", license="javascript:alert(1)")
 
         details = self.details(client, scheme)
 
         assert details.find("b") is None
         assert details.find("a") is None
 
-    @pytest.mark.django_db
     def test_a_vocabulary_without_details_shows_a_dash_for_each(self, client):
         scheme = ConceptSchemeFactory()
 
-        values = [
-            dd.get_text(strip=True) for dd in self.details(client, scheme)("dd")
-        ]
+        values = [dd.get_text(strip=True) for dd in self.details(client, scheme)("dd")]
 
         assert values == ["—"] * 5
 
 
-class TestVocabularyDetailIdentifierLink:
-    @pytest.mark.django_db
-    def test_a_vocabulary_published_elsewhere_links_to_its_publisher_address(
-        self, client
-    ):
-        scheme = ConceptSchemeFactory(external=True)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        anchor = soup.find("a", href=scheme.static_uri)
-
-        assert anchor is not None
-        assert anchor.text == scheme.static_uri
-        assert anchor.get("rel") == ["noopener"]
-
-    @pytest.mark.django_db
-    def test_a_vocabulary_held_here_links_to_the_address_this_site_composes(
-        self, client
-    ):
-        scheme = ConceptSchemeFactory()
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        anchor = soup.find("a", href=scheme.uri)
-
-        assert anchor is not None
-        assert anchor.text == scheme.uri
-        assert anchor.get("rel") == ["noopener"]
-
-    @pytest.mark.django_db
-    def test_a_urn_identifier_is_still_rendered_as_a_link_unrewritten(self, client):
-        scheme = ConceptSchemeFactory(static_uri="urn:nbn:example:vocab-1")
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        anchor = soup.find("a", href="urn:nbn:example:vocab-1")
-
-        assert anchor is not None
-        assert anchor.text == "urn:nbn:example:vocab-1"
-
-
+@pytest.mark.django_db
 class TestVocabularyDetailConceptList:
-    @pytest.mark.django_db
     def test_a_multi_level_hierarchy_renders_flat_with_every_concept_exactly_once(
         self, client
     ):
         scheme = ConceptSchemeFactory()
-        top = ConceptFactory(scheme=scheme, label="Top Concept")
-        middle = ConceptFactory(scheme=scheme, label="Middle Concept")
-        bottom = ConceptFactory(scheme=scheme, label="Bottom Concept")
-        middle.add_broader(top)
-        bottom.add_broader(middle)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
+        top = concept_with(scheme, "Top Concept")
+        middle = concept_with(scheme, "Middle Concept", skos__broader=[link(top.uri)])
+        bottom = concept_with(
+            scheme, "Bottom Concept", skos__broader=[link(middle.uri)]
         )
 
-        listed = list(response.context["object_list"])
-        assert len(listed) == 3
-        assert {concept.pk for concept in listed} == {top.pk, middle.pk, bottom.pk}
+        response = client.get(vocabulary_page(scheme))
 
-    @pytest.mark.django_db
+        assert sorted(listed_pks(response)) == sorted([top.pk, middle.pk, bottom.pk])
+
+    def test_a_record_that_is_not_a_concept_is_not_listed_among_them(self, client):
+        scheme = ConceptSchemeFactory()
+        concept = RecordFactory(scheme=scheme)
+        RecordFactory(scheme=scheme, type=Record.Type.COLLECTION)
+
+        assert listed_pks(client.get(vocabulary_page(scheme))) == [concept.pk]
+
     def test_a_concept_belonging_to_another_vocabulary_does_not_appear(self, client):
         scheme = ConceptSchemeFactory()
-        other_scheme = ConceptSchemeFactory()
-        concept = ConceptFactory(scheme=scheme, label="Granite")
-        foreign = ConceptFactory(scheme=other_scheme, label="Basalt")
+        concept = RecordFactory(scheme=scheme, label="Granite")
+        RecordFactory(scheme=ConceptSchemeFactory(), label="Basalt")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
+        assert listed_pks(client.get(vocabulary_page(scheme))) == [concept.pk]
+
+    def test_a_concept_in_the_list_links_to_and_reaches_its_own_page(self, client):
+        concept = RecordFactory(label="Granite")
+
+        response = client.get(vocabulary_page(concept.scheme))
+        anchor = next(
+            a
+            for a in soup_of(response)("a", href=True)
+            if a.get_text(strip=True) == "Granite"
         )
 
-        listed = {c.pk for c in response.context["object_list"]}
-        assert listed == {concept.pk}
-        assert foreign.pk not in listed
+        assert anchor["href"] == concept_page(concept)
+        follow = client.get(anchor["href"])
+        assert follow.status_code == 200
+        assert follow.context["object"] == concept
+
+    def test_a_search_narrowed_result_links_to_and_reaches_its_own_page(self, client):
+        match = RecordFactory(label="Granite")
+        RecordFactory(scheme=match.scheme, label="Basalt")
+
+        response = client.get(vocabulary_page(match.scheme), {"q": "Granite"})
+        anchor = next(
+            a
+            for a in soup_of(response)("a", href=True)
+            if a.get_text(strip=True) == "Granite"
+        )
+
+        assert anchor["href"] == concept_page(match)
+        assert client.get(anchor["href"]).context["object"] == match
 
 
+@pytest.mark.django_db
 class TestVocabularyDetailConceptRow:
-    """What a concept's row in the list carries beside its label."""
-
     @staticmethod
     def row_for(client, concept):
         """Return the list row naming ``concept`` on its vocabulary's page.
@@ -1420,299 +1144,226 @@ class TestVocabularyDetailConceptRow:
         Returns:
             The row element.
         """
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": concept.scheme.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        href = reverse(
-            "controlled_vocabularies_ui:concept-detail",
-            kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-        )
+        soup = soup_of(client.get(vocabulary_page(concept.scheme)))
         return next(
-            row for row in soup.select(CONCEPT_ROWS) if row.find("a", href=href)
+            row
+            for row in soup.select(CONCEPT_ROWS)
+            if row.find("a", href=concept_page(concept))
         )
 
-    @pytest.mark.django_db
     def test_a_row_shows_the_concepts_definition(self, client):
-        concept = ConceptFactory(label="Granite")
-        ConceptNoteFactory(concept=concept, value="A coarse-grained igneous rock.")
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__definition=[text("A coarse-grained igneous rock.", "en")],
+        )
 
-        row = self.row_for(client, concept)
+        assert (
+            "A coarse-grained igneous rock." in self.row_for(client, concept).get_text()
+        )
 
-        assert "A coarse-grained igneous rock." in row.get_text()
-
-    @pytest.mark.django_db
     def test_a_definition_missing_in_the_active_language_falls_back_to_the_default_one(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
-        ConceptNoteFactory(concept=concept, value="A coarse-grained igneous rock.")
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__definition=[text("A coarse-grained igneous rock.", "en")],
+        )
 
         with translation.override("de"):
             row = self.row_for(client, concept)
 
         assert "A coarse-grained igneous rock." in row.get_text()
 
-    @pytest.mark.django_db
     def test_a_definition_in_the_active_language_is_preferred_to_the_default_one(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
-        ConceptNoteFactory(concept=concept, value="A coarse-grained igneous rock.")
-        ConceptNoteFactory(
-            concept=concept, language="de", value="Ein grobkörniges Tiefengestein."
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__definition=[
+                text("A coarse-grained igneous rock.", "en"),
+                text("Ein grobkörniges Tiefengestein.", "de"),
+            ],
         )
 
         with translation.override("de"):
-            row = self.row_for(client, concept)
+            row_text = self.row_for(client, concept).get_text()
 
-        assert "Ein grobkörniges Tiefengestein." in row.get_text()
-        assert "A coarse-grained igneous rock." not in row.get_text()
+        assert "Ein grobkörniges Tiefengestein." in row_text
+        assert "A coarse-grained igneous rock." not in row_text
 
-    @pytest.mark.django_db
     def test_a_row_names_the_concepts_broader_concept(self, client):
-        concept = ConceptFactory(label="Granite")
-        concept.add_broader(ConceptFactory(scheme=concept.scheme, label="Plutonic rock"))
+        scheme = ConceptSchemeFactory()
+        parent = RecordFactory(scheme=scheme, label="Plutonic rock")
+        concept = concept_with(scheme, "Granite", skos__broader=[link(parent.uri)])
 
-        row = self.row_for(client, concept)
+        assert "Plutonic rock" in self.row_for(client, concept).get_text()
 
-        assert "Plutonic rock" in row.get_text()
+    def test_a_row_names_a_broader_concept_that_only_states_it_as_narrower(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        concept = RecordFactory(scheme=scheme, label="Granite")
+        concept_with(scheme, "Plutonic rock", skos__narrower=[link(concept.uri)])
 
-    @pytest.mark.django_db
+        assert "Plutonic rock" in self.row_for(client, concept).get_text()
+
     def test_the_broader_concept_is_named_in_the_active_language(self, client):
-        concept = ConceptFactory(label="Granite")
-        broader = ConceptFactory(scheme=concept.scheme, label="Plutonic rock")
-        broader.add_label(language="de", kind="preferred", text="Tiefengestein")
-        concept.add_broader(broader)
+        scheme = ConceptSchemeFactory()
+        parent = RecordFactory(
+            scheme=scheme,
+            data={
+                "skos:prefLabel": [
+                    text("Plutonic rock", "en"),
+                    text("Tiefengestein", "de"),
+                ]
+            },
+        )
+        concept = concept_with(scheme, "Granite", skos__broader=[link(parent.uri)])
 
         with translation.override("de"):
-            row = self.row_for(client, concept)
+            row_text = self.row_for(client, concept).get_text()
 
-        assert "Tiefengestein" in row.get_text()
-        assert "Plutonic rock" not in row.get_text()
+        assert "Tiefengestein" in row_text
+        assert "Plutonic rock" not in row_text
 
-    @pytest.mark.django_db
     def test_a_row_links_the_concepts_identifier_to_itself(self, client):
-        concept = ConceptFactory(label="Granite", external=True)
+        concept = RecordFactory(
+            label="Granite", uri="http://publisher.example.org/concept/granite"
+        )
 
-        row = self.row_for(client, concept)
-        anchor = row.find("a", href=concept.uri)
+        anchor = self.row_for(client, concept).find("a", href=concept.uri)
 
-        assert anchor is not None
         assert anchor.get_text(strip=True) == concept.uri
         assert anchor.get("rel") == ["noopener"]
 
-    @pytest.mark.django_db
     def test_a_row_links_each_collection_holding_the_concept_to_its_page(self, client):
         scheme = ConceptSchemeFactory()
         igneous, (granite,) = collection_with_members(
             scheme=scheme, labels=("Granite",)
         )
-        CollectionFactory(scheme=scheme)  # Holds nothing, so is on no row.
+        RecordFactory(scheme=scheme, type=Record.Type.COLLECTION)  # Holds nothing.
 
         row = self.row_for(client, granite)
         collection_links = [
-            anchor["href"]
-            for anchor in row.find_all("a")
-            if "/collection/" in anchor["href"]
+            anchor["href"] for anchor in row("a") if "/collection/" in anchor["href"]
         ]
 
-        assert collection_links == [
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={"slug": scheme.slug, "collection_slug": igneous.slug},
-            )
-        ]
+        assert collection_links == [collection_page(igneous)]
 
-    @pytest.mark.django_db
     def test_alternative_and_hidden_labels_are_not_shown_on_the_row(self, client):
-        concept = ConceptFactory(label="Granite")
-        concept.add_label(language="en", kind="alternative", text="granitic rock")
-        concept.add_label(language="en", kind=ConceptLabel.Kind.HIDDEN, text="granate")
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__altLabel=[text("granitic rock", "en")],
+            skos__hiddenLabel=[text("granate", "en")],
+        )
+
+        row_text = self.row_for(client, concept).get_text()
+
+        assert "granitic rock" not in row_text
+        assert "granate" not in row_text
+
+    def test_a_concept_with_no_extras_shows_only_its_label_and_identifier(self, client):
+        concept = RecordFactory(label="Granite")
 
         row = self.row_for(client, concept)
 
-        assert "granitic rock" not in row.get_text()
-        assert "granate" not in row.get_text()
-
-    @pytest.mark.django_db
-    def test_a_concept_with_no_definition_broader_concept_or_collection_shows_its_label(
-        self, client
-    ):
-        concept = ConceptFactory(label="Granite")
-
-        row = self.row_for(client, concept)
-
-        # The label and the identifier, and nothing standing in for what is absent.
         assert row.get_text(" ", strip=True) == f"Granite {concept.uri}"
 
 
+@pytest.mark.django_db
 class TestVocabularyDetailTopConcepts:
-    @pytest.mark.django_db
     def test_a_hierarchy_lists_the_concepts_with_no_broader_concept(self, client):
         scheme = ConceptSchemeFactory()
-        rock = ConceptFactory(scheme=scheme, label="Rock")
-        mineral = ConceptFactory(scheme=scheme, label="Mineral")
-        granite = ConceptFactory(scheme=scheme, label="Granite")
-        granite.add_broader(rock)
+        rock = RecordFactory(scheme=scheme, label="Rock")
+        mineral = RecordFactory(scheme=scheme, label="Mineral")
+        concept_with(scheme, "Granite", skos__broader=[link(rock.uri)])
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
+        response = client.get(vocabulary_page(scheme))
 
         assert [c.pk for c in response.context["top_concepts"]] == [mineral.pk, rock.pk]
-        panel = BeautifulSoup(response.content, "html.parser").select_one(SIDE_PANEL)
-        assert panel.find(
-            "a",
-            href=reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": scheme.slug, "concept_slug": rock.slug},
-            ),
-        )
+        panel = soup_of(response).select_one(SIDE_PANEL)
+        assert panel.find("a", href=concept_page(rock))
 
-    @pytest.mark.django_db
+    def test_a_hierarchy_stated_only_as_narrower_lists_the_concepts_at_its_top(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        granite = RecordFactory(scheme=scheme, label="Granite")
+        rock = concept_with(scheme, "Rock", skos__narrower=[link(granite.uri)])
+
+        response = client.get(vocabulary_page(scheme))
+
+        assert [c.pk for c in response.context["top_concepts"]] == [rock.pk]
+
     def test_a_flat_vocabulary_lists_no_top_concepts(self, client):
         scheme = ConceptSchemeFactory()
-        ConceptFactory.create_batch(3, scheme=scheme)
+        RecordFactory.create_batch(3, scheme=scheme)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
+        response = client.get(vocabulary_page(scheme))
 
         assert list(response.context["top_concepts"]) == []
 
-    @pytest.mark.django_db
     def test_a_top_concept_is_named_in_the_active_language(self, client):
         scheme = ConceptSchemeFactory()
-        rock = ConceptFactory(scheme=scheme, label="Rock")
-        rock.add_label(language="de", kind="preferred", text="Gestein")
-        ConceptFactory(scheme=scheme, label="Granite").add_broader(rock)
+        rock = RecordFactory(
+            scheme=scheme,
+            data={"skos:prefLabel": [text("Rock", "en"), text("Gestein", "de")]},
+        )
+        concept_with(scheme, "Granite", skos__broader=[link(rock.uri)])
 
         with translation.override("de"):
-            response = client.get(
-                reverse(
-                    "controlled_vocabularies_ui:vocabulary-detail",
-                    kwargs={"slug": scheme.slug},
-                )
-            )
+            response = client.get(vocabulary_page(scheme))
 
-        panel = BeautifulSoup(response.content, "html.parser").select_one(SIDE_PANEL)
+        panel = soup_of(response).select_one(SIDE_PANEL)
         assert "Gestein" in panel.get_text()
 
 
-class TestVocabularyDetailConceptListLinksToConceptPages:
-    @pytest.mark.django_db
-    def test_a_concept_in_the_full_list_links_to_and_reaches_its_own_page(self, client):
-        concept = ConceptFactory(label="Granite")
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": concept.scheme.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        anchor = next(
-            a
-            for a in soup.find_all("a", href=True)
-            if a.get_text(strip=True) == concept.label
-        )
-
-        assert anchor["href"] == reverse(
-            "controlled_vocabularies_ui:concept-detail",
-            kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-        )
-
-        follow = client.get(anchor["href"])
-
-        assert follow.status_code == 200
-        assert follow.context["object"] == concept
-
-    @pytest.mark.django_db
-    def test_a_search_narrowed_result_links_to_and_reaches_its_own_page(self, client):
-        match = ConceptFactory(label="Granite")
-        ConceptFactory(scheme=match.scheme, label="Basalt")
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": match.scheme.slug},
-            ),
-            {"q": "Granite"},
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        anchor = next(
-            a
-            for a in soup.find_all("a", href=True)
-            if a.get_text(strip=True) == match.label
-        )
-
-        assert anchor["href"] == reverse(
-            "controlled_vocabularies_ui:concept-detail",
-            kwargs={"slug": match.scheme.slug, "concept_slug": match.slug},
-        )
-
-        follow = client.get(anchor["href"])
-
-        assert follow.status_code == 200
-        assert follow.context["object"] == match
-
-
+@pytest.mark.django_db
 class TestVocabularyDetailConceptLabel:
-    @pytest.mark.django_db
     def test_a_concept_with_a_preferred_label_in_the_active_language_shows_it(
         self, client
     ):
         # Not a substring of the default label, so truncating "Granite" cannot pass.
         scheme = ConceptSchemeFactory()
-        concept = ConceptFactory(scheme=scheme, label="Granite")
-        concept.add_label(language="de", kind="preferred", text="Kristallgestein")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
+        RecordFactory(
+            scheme=scheme,
+            data={
+                "skos:prefLabel": [
+                    text("Granite", "en"),
+                    text("Kristallgestein", "de"),
+                ]
+            },
         )
 
         with translation.override("de"):
-            response = client.get(url)
+            content = client.get(vocabulary_page(scheme)).content.decode()
 
-        content = response.content.decode()
         assert "Kristallgestein" in content
-        assert concept.label not in content
+        assert "Granite" not in content
 
-    @pytest.mark.django_db
-    def test_a_concept_with_no_label_in_the_active_language_falls_back_to_its_default_one(
+    def test_a_concept_with_no_active_language_label_falls_back_to_its_stored_one(
         self, client
     ):
-        # Concept.label is the preferred label in the vocabulary's default language, so the
-        # fallback needs no ConceptLabel row.
         scheme = ConceptSchemeFactory()
-        ConceptFactory(scheme=scheme, label="Granite")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        RecordFactory(scheme=scheme, label="Granite")
 
         with translation.override("de"):
-            response = client.get(url)
+            content = client.get(vocabulary_page(scheme)).content.decode()
 
-        assert "Granite" in response.content.decode()
+        assert "Granite" in content
 
-    @pytest.mark.django_db
     def test_query_count_is_flat_regardless_of_how_many_concepts_the_vocabulary_holds(
         self, client, django_assert_num_queries
     ):
         # Every concept carries what a row shows beside its label: a definition, a broader
         # concept and a collection, so none of those can cost a query per row.
         scheme = ConceptSchemeFactory()
-        root = ConceptFactory(scheme=scheme)
-        collection = CollectionFactory(scheme=scheme)
+        root = RecordFactory(scheme=scheme)
+        collection = RecordFactory(scheme=scheme, type=Record.Type.COLLECTION)
 
         def decorated_concepts(count):
             """Create ``count`` concepts carrying everything a row shows.
@@ -1720,188 +1371,109 @@ class TestVocabularyDetailConceptLabel:
             Args:
                 count: How many to create.
             """
-            for concept in ConceptFactory.create_batch(count, scheme=scheme):
-                ConceptNoteFactory(concept=concept)
-                concept.add_broader(root)
-                collection.add(concept)
+            concepts = [
+                concept_with(
+                    scheme,
+                    f"Decorated {next(serial)}",
+                    skos__definition=[text("A definition.", "en")],
+                    skos__broader=[link(root.uri)],
+                )
+                for _ in range(count)
+            ]
+            gather(collection, *concepts)
 
         decorated_concepts(3)
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
-
-        with CaptureQueriesContext(connection) as captured:
-            client.get(url)
-        baseline = len(captured.captured_queries)
-
+        baseline = query_count(client, vocabulary_page(scheme))
         decorated_concepts(27)
 
         with django_assert_num_queries(baseline):
-            client.get(url)
+            client.get(vocabulary_page(scheme))
 
 
+@pytest.mark.django_db
 class TestVocabularyDetailConceptOrder:
-    @pytest.mark.django_db
-    def test_order_follows_the_label_shown_under_the_active_language_not_the_stored_one(
-        self, client
-    ):
+    def test_concepts_are_ordered_by_their_preferred_label_ignoring_case(self, client):
         scheme = ConceptSchemeFactory()
-        # zebra's default label sorts last and its German label first; antelope has no
-        # German label and falls back. Order must follow the resolved label.
-        zebra = ConceptFactory(scheme=scheme, label="Zebra")
-        zebra.add_label(language="de", kind="preferred", text="Aardvark")
-        antelope = ConceptFactory(scheme=scheme, label="Antelope")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        zebra = RecordFactory(scheme=scheme, label="Zebra")
+        antelope = RecordFactory(scheme=scheme, label="antelope")
 
-        with translation.override("de"):
-            german_order = [c.pk for c in client.get(url).context["object_list"]]
-        default_order = [c.pk for c in client.get(url).context["object_list"]]
+        assert listed_pks(client.get(vocabulary_page(scheme))) == [
+            antelope.pk,
+            zebra.pk,
+        ]
 
-        assert german_order == [zebra.pk, antelope.pk]
-        assert default_order == [antelope.pk, zebra.pk]
-
-    @pytest.mark.django_db
-    def test_two_identically_labelled_concepts_produce_a_deterministic_order(
-        self, client
-    ):
+    def test_two_identically_labelled_concepts_are_ordered_by_creation(self, client):
         scheme = ConceptSchemeFactory()
-        first = ConceptFactory(scheme=scheme, label="Duplicate")
-        # Same-label concepts collide on the derived slug, so give the second its own.
-        second = ConceptFactory.build(scheme=scheme, label="Duplicate")
-        second.set_slug("aaa-sorts-first-by-slug")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        # The first sorts last by slug, so only a real primary key tiebreak gives this
+        # order.
+        first = RecordFactory(scheme=scheme, label="Duplicate", slug="zzz-sorts-last")
+        second = RecordFactory(scheme=scheme, label="Duplicate")
 
-        first_request = [c.pk for c in client.get(url).context["object_list"]]
-        second_request = [c.pk for c in client.get(url).context["object_list"]]
+        first_request = listed_pks(client.get(vocabulary_page(scheme)))
+        second_request = listed_pks(client.get(vocabulary_page(scheme)))
 
         assert first_request == second_request == [first.pk, second.pk]
 
-    @pytest.mark.django_db
-    def test_two_requests_return_the_same_order(self, client):
-        scheme = ConceptSchemeFactory()
-        ConceptFactory.create_batch(5, scheme=scheme)
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
 
-        first = [c.pk for c in client.get(url).context["object_list"]]
-        second = [c.pk for c in client.get(url).context["object_list"]]
-
-        assert first == second
-
-
+@pytest.mark.django_db
 class TestVocabularyDetailChosenConceptOrder:
-    # The page renders django-mvp's actions block as the vocabulary list does, so both the
-    # control and the ?o= behind it are asserted.
-
-    @pytest.mark.django_db
     def test_the_page_offers_both_directions_by_label(self, client):
         scheme = ConceptSchemeFactory()
-        ConceptFactory(scheme=scheme)
+        RecordFactory(scheme=scheme)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
+        response = client.get(vocabulary_page(scheme))
 
-        assert [
-            key for key, _label, _columns in response.context["filter"].filters["o"].options
-        ] == [
+        options = response.context["filter"].filters["o"].options
+        assert [key for key, _label, _columns in options] == [
             "label_asc",
             "label_desc",
         ]
 
-    @pytest.mark.django_db
     def test_choosing_z_to_a_reverses_the_concepts(self, client):
         scheme = ConceptSchemeFactory()
-        zebra = ConceptFactory(scheme=scheme, label="Zebra")
-        antelope = ConceptFactory(scheme=scheme, label="Antelope")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        zebra = RecordFactory(scheme=scheme, label="Zebra")
+        antelope = RecordFactory(scheme=scheme, label="Antelope")
+        url = vocabulary_page(scheme)
 
-        ascending = [
-            c.pk for c in client.get(url, {"o": "label_asc"}).context["object_list"]
-        ]
-        descending = [
-            c.pk for c in client.get(url, {"o": "label_desc"}).context["object_list"]
-        ]
+        ascending = listed_pks(client.get(url, {"o": "label_asc"}))
+        descending = listed_pks(client.get(url, {"o": "label_desc"}))
 
         assert ascending == [antelope.pk, zebra.pk]
         assert descending == [zebra.pk, antelope.pk]
 
-    @pytest.mark.django_db
-    def test_the_chosen_order_follows_the_label_shown_not_the_one_stored(self, client):
-        # Sorting on the stored `label` column would put these the other way round.
-        scheme = ConceptSchemeFactory()
-        zebra = ConceptFactory(scheme=scheme, label="Zebra")
-        zebra.add_label(language="de", kind="preferred", text="Aardvark")
-        antelope = ConceptFactory(scheme=scheme, label="Antelope")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
-
-        with translation.override("de"):
-            german = [
-                c.pk
-                for c in client.get(url, {"o": "label_desc"}).context["object_list"]
-            ]
-
-        assert german == [antelope.pk, zebra.pk]
-
-    @pytest.mark.django_db
     def test_an_ordering_nobody_offered_is_ignored_rather_than_obeyed(self, client):
         scheme = ConceptSchemeFactory()
-        zebra = ConceptFactory(scheme=scheme, label="Zebra")
-        antelope = ConceptFactory(scheme=scheme, label="Antelope")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        zebra = RecordFactory(scheme=scheme, label="Zebra")
+        antelope = RecordFactory(scheme=scheme, label="Antelope")
 
-        response = client.get(url, {"o": "-label"})
+        response = client.get(vocabulary_page(scheme), {"o": "-label"})
 
         assert response.status_code == 200
-        assert [c.pk for c in response.context["object_list"]] == [
-            antelope.pk,
-            zebra.pk,
-        ]
+        assert listed_pks(response) == [antelope.pk, zebra.pk]
         assert response.context["sort_label"] == ""
 
-    @pytest.mark.django_db
     def test_a_search_and_a_chosen_order_apply_together(self, client):
         scheme = ConceptSchemeFactory()
-        ConceptFactory(scheme=scheme, label="Basalt Zebra")
-        ConceptFactory(scheme=scheme, label="Basalt Antelope")
-        ConceptFactory(scheme=scheme, label="Granite Badger")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
+        RecordFactory(scheme=scheme, label="Basalt Zebra")
+        RecordFactory(scheme=scheme, label="Basalt Antelope")
+        RecordFactory(scheme=scheme, label="Granite Badger")
+
+        response = client.get(
+            vocabulary_page(scheme), {"q": "Basalt", "o": "label_desc"}
         )
 
-        response = client.get(url, {"q": "Basalt", "o": "label_desc"})
+        assert [c.pref_label for c in response.context["object_list"]] == [
+            "Basalt Zebra",
+            "Basalt Antelope",
+        ]
 
-        labels = [c.label for c in response.context["object_list"]]
-        assert labels == ["Basalt Zebra", "Basalt Antelope"]
-
-    @pytest.mark.django_db
     def test_the_search_box_and_the_sort_control_both_submit_to_a_form_that_exists(
         self, client
     ):
         scheme = ConceptSchemeFactory()
-        ConceptFactory(scheme=scheme)
+        RecordFactory(scheme=scheme)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(vocabulary_page(scheme)))
 
         form = soup.find("form", id="filterForm")
         assert form is not None
@@ -1910,179 +1482,140 @@ class TestVocabularyDetailChosenConceptOrder:
         assert submits_to(soup, "o") == "filterForm"
 
 
+@pytest.mark.django_db
 class TestVocabularyDetailConceptPaging:
-    @pytest.mark.django_db
     def test_a_long_list_is_paged_and_the_second_page_renders(self, client):
         scheme = ConceptSchemeFactory()
-        ConceptFactory.create_batch(30, scheme=scheme)
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        RecordFactory.create_batch(30, scheme=scheme)
+        url = vocabulary_page(scheme)
 
         first_page = client.get(url)
         per_page = first_page.context["paginator"].per_page
         assert len(first_page.context["object_list"]) == per_page
 
-        soup = BeautifulSoup(first_page.content, "html.parser")
-        page_two_href = next(
-            a["href"] for a in soup.find_all("a", href=True) if "page=2" in a["href"]
-        )
-
+        page_two_href = next(href for href in hrefs(first_page) if "page=2" in href)
         second_page = client.get(url + page_two_href)
 
         assert second_page.status_code == 200
         assert len(second_page.context["object_list"]) == 30 - per_page
 
-    @pytest.mark.django_db
     def test_a_paging_link_carries_forward_an_active_query_parameter(self, client):
         # Uses a parameter the view gives no meaning to, so this is about the paging link
         # carrying it forward. Read the link from the markup: a hand-built one would hide a
         # broken querystring tag.
         scheme = ConceptSchemeFactory()
-        ConceptFactory.create_batch(30, scheme=scheme)
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        RecordFactory.create_batch(30, scheme=scheme)
+        url = vocabulary_page(scheme)
 
         response = client.get(url, {"unrelated": "kept"})
-        soup = BeautifulSoup(response.content, "html.parser")
 
-        page_two_href = next(
-            a["href"]
-            for a in soup.find_all("a", href=True)
-            if "page=2" in a["href"] and "unrelated=kept" in a["href"]
+        assert any(
+            "page=2" in href and "unrelated=kept" in href for href in hrefs(response)
         )
 
-        second_page = client.get(url + page_two_href)
-        assert second_page.status_code == 200
-
-    @pytest.mark.django_db
     def test_a_vocabulary_holding_no_concepts_still_renders_the_rest_of_the_page(
         self, client
     ):
-        scheme = ConceptSchemeFactory(
-            description="Periods, epochs and ages of the geological record."
+        scheme = published(
+            "Geological Time Scale",
+            description="Periods, epochs and ages of the geological record.",
         )
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        content = response.content.decode()
+        response = client.get(vocabulary_page(scheme))
 
         assert response.status_code == 200
-        assert list(response.context["object_list"]) == []
-        assert scheme.name in content
-        assert scheme.description in content
+        assert listed_pks(response) == []
+        assert response.context["page"]["title"] == "Geological Time Scale"
+        assert response.context["page"]["subtitle"] == (
+            "Periods, epochs and ages of the geological record."
+        )
 
 
+@pytest.mark.django_db
 class TestVocabularyDetailConceptSearch:
-    @pytest.mark.django_db
     def test_a_word_only_in_the_preferred_label_finds_it(self, client):
-        match = ConceptFactory(label="Granite")
-        ConceptFactory(scheme=match.scheme, label="Basalt")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail",
-            kwargs={"slug": match.scheme.slug},
-        )
+        match = RecordFactory(label="Granite")
+        RecordFactory(scheme=match.scheme, label="Basalt")
 
-        response = client.get(url, {"q": "Granite"})
+        response = client.get(vocabulary_page(match.scheme), {"q": "Granite"})
 
-        listed = {c.pk for c in response.context["object_list"]}
-        assert listed == {match.pk}
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
     def test_a_word_only_in_an_alternative_label_finds_it(self, client):
-        match = ConceptFactory(label="Granite")
-        match.add_label(
-            language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="granitic rock"
+        scheme = ConceptSchemeFactory()
+        match = concept_with(
+            scheme, "Granite", skos__altLabel=[text("granitic rock", "en")]
         )
-        ConceptFactory(scheme=match.scheme, label="Basalt")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail",
-            kwargs={"slug": match.scheme.slug},
+        RecordFactory(scheme=scheme, label="Basalt")
+
+        response = client.get(vocabulary_page(scheme), {"q": "granitic"})
+
+        assert listed_pks(response) == [match.pk]
+
+    def test_a_word_only_in_a_label_of_another_language_finds_it(self, client):
+        scheme = ConceptSchemeFactory()
+        match = RecordFactory(
+            scheme=scheme,
+            data={"skos:prefLabel": [text("Granite", "en"), text("Granit", "de")]},
         )
+        RecordFactory(scheme=scheme, label="Basalt")
 
-        response = client.get(url, {"q": "granitic"})
+        response = client.get(vocabulary_page(scheme), {"q": "Granit"})
 
-        listed = {c.pk for c in response.context["object_list"]}
-        assert listed == {match.pk}
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
     def test_a_word_only_in_a_hidden_label_finds_it_and_the_label_is_shown_nowhere(
         self, client
     ):
-        match = ConceptFactory(label="Granite")
-        match.add_label(language="en", kind=ConceptLabel.Kind.HIDDEN, text="granate")
-        ConceptFactory(scheme=match.scheme, label="Basalt")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail",
-            kwargs={"slug": match.scheme.slug},
+        scheme = ConceptSchemeFactory()
+        match = concept_with(
+            scheme, "Granite", skos__hiddenLabel=[text("granate", "en")]
+        )
+        RecordFactory(scheme=scheme, label="Basalt")
+
+        response = client.get(vocabulary_page(scheme), {"q": "granate"})
+        # Read from the result rows: the applied-search chip repeats what the reader
+        # typed, which is the term and not the concept's label.
+        rows_text = " ".join(
+            row.get_text() for row in soup_of(response).select(CONCEPT_ROWS)
         )
 
-        response = client.get(url, {"q": "granate"})
-        # Read from the result rows: the applied-search chip repeats what the reader typed, which
-        # is the term and not the concept's label.
-        soup = BeautifulSoup(response.content, "html.parser")
-        rows_text = " ".join(row.get_text() for row in soup.select(CONCEPT_ROWS))
-
-        listed = {c.pk for c in response.context["object_list"]}
-        assert listed == {match.pk}
+        assert listed_pks(response) == [match.pk]
         assert "Granite" in rows_text
         assert "granate" not in rows_text
 
-    @pytest.mark.django_db
     def test_a_concept_matching_on_several_labels_at_once_is_listed_once(self, client):
-        # Searching a reverse relation joins one row per matching label. Asserted as a list
-        # because a set cannot see a repeat.
-        match = ConceptFactory(label="Granite")
-        match.add_label(
-            language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="Granite rock"
-        )
-        match.add_label(
-            language="en", kind=ConceptLabel.Kind.HIDDEN, text="Granite stone"
-        )
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail",
-            kwargs={"slug": match.scheme.slug},
+        scheme = ConceptSchemeFactory()
+        match = concept_with(
+            scheme,
+            "Granite",
+            skos__altLabel=[text("Granite rock", "en")],
+            skos__hiddenLabel=[text("Granite stone", "en")],
         )
 
-        response = client.get(url, {"q": "Granite"})
+        response = client.get(vocabulary_page(scheme), {"q": "Granite"})
 
-        assert [concept.pk for concept in response.context["object_list"]] == [match.pk]
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
     def test_a_word_only_in_the_definition_does_not_find_the_concept(self, client):
-        concept = ConceptFactory(label="Granite")
-        ConceptNoteFactory(concept=concept, value="A coarse-grained igneous rock.")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail",
-            kwargs={"slug": concept.scheme.slug},
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__definition=[text("A coarse-grained igneous rock.", "en")],
         )
 
-        response = client.get(url, {"q": "igneous"})
+        response = client.get(vocabulary_page(concept.scheme), {"q": "igneous"})
 
-        assert list(response.context["object_list"]) == []
+        assert listed_pks(response) == []
 
-    @pytest.mark.django_db
     def test_a_matching_concept_in_another_vocabulary_is_not_returned(self, client):
-        match = ConceptFactory(label="Granite")
-        other_scheme = ConceptSchemeFactory()
-        foreign = ConceptFactory(scheme=other_scheme, label="Granite Boulder")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail",
-            kwargs={"slug": match.scheme.slug},
-        )
+        match = RecordFactory(label="Granite")
+        RecordFactory(scheme=ConceptSchemeFactory(), label="Granite Boulder")
 
-        response = client.get(url, {"q": "Granite"})
+        response = client.get(vocabulary_page(match.scheme), {"q": "Granite"})
 
-        listed = {c.pk for c in response.context["object_list"]}
-        assert listed == {match.pk}
-        assert foreign.pk not in listed
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
     def test_a_search_run_directly_from_the_second_page_still_reaches_every_concept(
         self, client
     ):
@@ -2090,81 +1623,49 @@ class TestVocabularyDetailConceptSearch:
         # filter only that page and leak the non-matching concepts through.
         scheme = ConceptSchemeFactory()
         matching = [
-            ConceptFactory(scheme=scheme, label=f"Stratigraphy Unit {i:02d}")
+            RecordFactory(scheme=scheme, label=f"Stratigraphy Unit {i:02d}")
             for i in range(30)
         ]
-        non_matching = ConceptFactory.create_batch(5, scheme=scheme)
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        non_matching = RecordFactory.create_batch(5, scheme=scheme)
 
-        response = client.get(url, {"q": "Stratigraphy", "page": 2})
+        response = client.get(vocabulary_page(scheme), {"q": "Stratigraphy", "page": 2})
 
         assert response.status_code == 200
-        listed = {c.pk for c in response.context["object_list"]}
-        matching_pks = {c.pk for c in matching}
-        non_matching_pks = {c.pk for c in non_matching}
-        assert listed <= matching_pks
-        assert listed.isdisjoint(non_matching_pks)
+        listed = set(listed_pks(response))
+        assert listed <= {c.pk for c in matching}
+        assert listed.isdisjoint(c.pk for c in non_matching)
         assert response.context["paginator"].count == 30
 
-
-class TestVocabularyDetailConceptSearchAddressAndCase:
-    # The letter-case limit outside ASCII is disclosed in
-    # docs/adr/0014-database-collation-differences-are-disclosed-not-repaired.md.
-
-    @pytest.mark.django_db
     def test_a_narrowed_lists_address_opened_fresh_returns_the_same_concepts(
         self, client
     ):
         scheme = ConceptSchemeFactory()
-        match = ConceptFactory(scheme=scheme, label="Stratigraphy Unit")
-        ConceptFactory(scheme=scheme, label="Soil Classification")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        match = RecordFactory(scheme=scheme, label="Stratigraphy Unit")
+        RecordFactory(scheme=scheme, label="Soil Classification")
+        url = vocabulary_page(scheme)
 
-        first = {
-            c.pk for c in client.get(url, {"q": "Stratigraphy"}).context["object_list"]
-        }
-        second = {
-            c.pk for c in client.get(url, {"q": "Stratigraphy"}).context["object_list"]
-        }
+        first = listed_pks(client.get(url, {"q": "Stratigraphy"}))
+        second = listed_pks(client.get(url, {"q": "Stratigraphy"}))
 
-        assert first == second == {match.pk}
+        assert first == second == [match.pk]
 
-    @pytest.mark.django_db
     def test_matching_ignores_ascii_case(self, client):
-        match = ConceptFactory(label="Granite")
-        ConceptFactory(scheme=match.scheme, label="Basalt")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail",
-            kwargs={"slug": match.scheme.slug},
-        )
+        match = RecordFactory(label="Granite")
+        RecordFactory(scheme=match.scheme, label="Basalt")
 
-        response = client.get(url, {"q": "granite"})
+        response = client.get(vocabulary_page(match.scheme), {"q": "granite"})
 
-        listed = {c.pk for c in response.context["object_list"]}
-        assert listed == {match.pk}
+        assert listed_pks(response) == [match.pk]
 
-    @pytest.mark.django_db
     @pytest.mark.parametrize("term", ["%", "_", "'"])
     def test_a_term_containing_a_like_wildcard_or_a_quote_is_looked_for_literally(
         self, client, term
     ):
-        # icontains escapes %, _ and the backslash, and no seeded label contains the literal
-        # character, so a correct implementation matches nothing.
         scheme = ConceptSchemeFactory()
-        ConceptFactory.create_batch(3, scheme=scheme)
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        RecordFactory.create_batch(3, scheme=scheme)
 
-        response = client.get(url, {"q": term})
+        assert listed_pks(client.get(vocabulary_page(scheme), {"q": term})) == []
 
-        assert list(response.context["object_list"]) == []
-
-    @pytest.mark.django_db
     @pytest.mark.skipif(
         connection.vendor != "sqlite", reason="the limitation under test is SQLite's"
     )
@@ -2181,125 +1682,70 @@ class TestVocabularyDetailConceptSearchAddressAndCase:
         self, client, label, term, matches
     ):
         # SQLite's LIKE folds ASCII letters only, so Ökologie is found by ÖKOLOGIE and not
-        # by ökologie; PostgreSQL matches either way (docs/adr/0014-...).
-        concept = ConceptFactory(label=label)
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail",
-            kwargs={"slug": concept.scheme.slug},
-        )
+        # by ökologie; PostgreSQL matches either way
+        # (docs/adr/0014-database-collation-differences-are-disclosed-not-repaired.md).
+        concept = RecordFactory(label=label)
 
-        response = client.get(url, {"q": term})
+        response = client.get(vocabulary_page(concept.scheme), {"q": term})
 
-        listed = {c.pk for c in response.context["object_list"]}
-        assert (listed == {concept.pk}) is matches
+        assert (listed_pks(response) == [concept.pk]) is matches
 
 
+@pytest.mark.django_db
 class TestVocabularyDetailConceptSearchEmptyState:
     # The term is read stripped, as django-mvp's mixin reads it, so the empty state and the
     # queryset agree on whether a search is in force.
 
-    @pytest.mark.django_db
     def test_a_search_matching_nothing_returns_200_and_echoes_the_term(self, client):
         scheme = ConceptSchemeFactory()
-        ConceptFactory(scheme=scheme, label="Granite")
-        url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        RecordFactory(scheme=scheme, label="Granite")
 
-        response = client.get(url, {"q": "Basalt"})
-        content = response.content.decode()
+        response = client.get(vocabulary_page(scheme), {"q": "Basalt"})
 
         assert response.status_code == 200
-        assert "Basalt" in content
+        assert "Basalt" in response.content.decode()
 
-    @pytest.mark.django_db
     def test_a_search_matching_nothing_offers_a_link_back_to_the_unsearched_vocabulary(
         self, client
     ):
-        # Unlike the vocabulary list, this page has its own template and renders the link
-        # itself, so it does not wait on django-mvp.
         scheme = ConceptSchemeFactory()
-        ConceptFactory(scheme=scheme, label="Granite")
-        detail_url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        RecordFactory(scheme=scheme, label="Granite")
 
-        response = client.get(detail_url, {"q": "Basalt"})
-        soup = BeautifulSoup(response.content, "html.parser")
+        response = client.get(vocabulary_page(scheme), {"q": "Basalt"})
 
-        hrefs = {a["href"] for a in soup.find_all("a", href=True)}
-        assert detail_url in hrefs
+        assert vocabulary_page(scheme) in hrefs(response)
 
-    @pytest.mark.django_db
     def test_a_vocabulary_holding_no_concepts_shows_no_link_back_to_the_unsearched_one(
         self, client
     ):
         scheme = ConceptSchemeFactory()
-        detail_url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
 
-        response = client.get(detail_url)
-        soup = BeautifulSoup(response.content, "html.parser")
+        assert vocabulary_page(scheme) not in hrefs(client.get(vocabulary_page(scheme)))
 
-        hrefs = {a["href"] for a in soup.find_all("a", href=True)}
-        assert detail_url not in hrefs
-
-    @pytest.mark.django_db
-    def test_the_no_match_and_no_concepts_headings_are_different_strings(self, client):
-        scheme = ConceptSchemeFactory()
-        detail_url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
-
-        no_concepts = BeautifulSoup(client.get(detail_url).content, "html.parser")
-        ConceptFactory(scheme=scheme, label="Granite")
-        no_match = BeautifulSoup(
-            client.get(detail_url, {"q": "Basalt"}).content, "html.parser"
-        )
-
-        assert (
-            no_concepts.select_one(".mvp-list-empty h2").get_text(strip=True)
-            != no_match.select_one(".mvp-list-empty h2").get_text(strip=True)
-        )
-
-    @pytest.mark.django_db
     def test_a_whitespace_only_search_is_not_a_search(self, client):
         # A raw, unstripped `?q=%20%20` must not half-search: the list stays unfiltered and
         # no link offers to undo a search that never happened.
         scheme = ConceptSchemeFactory()
-        ConceptFactory.create_batch(2, scheme=scheme)
-        detail_url = reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": scheme.slug}
-        )
+        RecordFactory.create_batch(2, scheme=scheme)
 
-        response = client.get(detail_url, {"q": "   "})
-        soup = BeautifulSoup(response.content, "html.parser")
+        response = client.get(vocabulary_page(scheme), {"q": "   "})
 
         assert len(response.context["object_list"]) == 2
-        hrefs = {a["href"] for a in soup.find_all("a", href=True)}
-        assert detail_url not in hrefs
+        assert vocabulary_page(scheme) not in hrefs(response)
 
 
+@pytest.mark.django_db
 class TestVocabularyDetailCollections:
-    @pytest.mark.django_db
     def test_each_collection_is_named(self, client):
         scheme = ConceptSchemeFactory()
         igneous, _ = collection_with_members(scheme=scheme, labels=("Granite",))
         sedimentary, _ = collection_with_members(scheme=scheme, labels=("Sandstone",))
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        content = response.content.decode()
+        content = client.get(vocabulary_page(scheme)).content.decode()
 
-        assert igneous.name in content
-        assert sedimentary.name in content
+        assert igneous.pref_label in content
+        assert sedimentary.pref_label in content
 
-    @pytest.mark.django_db
     def test_an_ordered_collection_is_distinguishable_from_an_unordered_one(
         self, client
     ):
@@ -2311,79 +1757,51 @@ class TestVocabularyDetailCollections:
             scheme=scheme, labels=("Basalt",), ordered=True
         )
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        panel = BeautifulSoup(response.content, "html.parser").select_one(SIDE_PANEL)
-
-        rows = panel.find_all("li")
-        unordered_row = next(row for row in rows if unordered.name in row.get_text())
-        ordered_row = next(row for row in rows if ordered.name in row.get_text())
+        panel = soup_of(client.get(vocabulary_page(scheme))).select_one(SIDE_PANEL)
+        rows = panel("li")
+        unordered_row = next(r for r in rows if unordered.pref_label in r.get_text())
+        ordered_row = next(r for r in rows if ordered.pref_label in r.get_text())
 
         # Both hold one member, so whatever else differs between the two rows is the marking.
         unordered_marking = unordered_row.get_text(strip=True).replace(
-            unordered.name, ""
+            unordered.pref_label, ""
         )
-        ordered_marking = ordered_row.get_text(strip=True).replace(ordered.name, "")
+        ordered_marking = ordered_row.get_text(strip=True).replace(
+            ordered.pref_label, ""
+        )
         assert ordered_marking != unordered_marking
 
-    @pytest.mark.django_db
     def test_each_collection_counts_its_members(self, client):
         scheme = ConceptSchemeFactory()
         pair, _ = collection_with_members(scheme=scheme, labels=("Granite", "Basalt"))
-        CollectionFactory(scheme=scheme)
+        RecordFactory(scheme=scheme, type=Record.Type.COLLECTION)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
+        response = client.get(vocabulary_page(scheme))
 
         counts = {c.pk: c.member_count for c in response.context["collections"]}
         assert counts[pair.pk] == 2
         assert sorted(counts.values()) == [0, 2]
 
-    @pytest.mark.django_db
-    def test_each_collection_links_to_its_page(self, client):
+    def test_each_collection_links_to_and_reaches_its_own_page(self, client):
         scheme = ConceptSchemeFactory()
-        collection, _ = collection_with_members(scheme=scheme, labels=("Granite",))
+        collection, _ = collection_with_members(scheme=scheme)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
-        panel = BeautifulSoup(response.content, "html.parser").select_one(SIDE_PANEL)
+        response = client.get(vocabulary_page(scheme))
+        panel = soup_of(response).select_one(SIDE_PANEL)
+        anchor = panel.find("a", href=collection_page(collection))
 
-        assert panel.find(
-            "a",
-            href=reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={"slug": scheme.slug, "collection_slug": collection.slug},
-            ),
-        )
+        assert anchor.get_text(strip=True) == collection.pref_label
+        follow = client.get(anchor["href"])
+        assert follow.status_code == 200
+        assert follow.context["object"] == collection
 
-    @pytest.mark.django_db
-    def test_a_vocabulary_holding_no_collections_shows_no_collections_section(
-        self, client
-    ):
+    def test_a_vocabulary_holding_no_collections_lists_none(self, client):
         scheme = ConceptSchemeFactory()
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
+        response = client.get(vocabulary_page(scheme))
 
         assert list(response.context["collections"]) == []
 
-    @pytest.mark.django_db
     def test_collections_are_separate_from_the_concept_list_not_mixed_into_it(
         self, client
     ):
@@ -2391,237 +1809,45 @@ class TestVocabularyDetailCollections:
         collection, members = collection_with_members(
             scheme=scheme, labels=("Granite", "Basalt")
         )
-        other_concept = ConceptFactory(scheme=scheme, label="Quartz")
+        other_concept = RecordFactory(scheme=scheme, label="Quartz")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
-        )
+        response = client.get(vocabulary_page(scheme))
 
         assert list(response.context["collections"]) == [collection]
         # Every concept appears once, whether or not it belongs to a collection.
-        listed = {c.pk for c in response.context["object_list"]}
-        assert listed == {members[0].pk, members[1].pk, other_concept.pk}
-
-    @pytest.mark.django_db
-    def test_each_collection_links_to_and_reaches_its_own_page(self, client):
-        scheme = ConceptSchemeFactory()
-        collection, _ = collection_with_members(scheme=scheme)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            )
+        assert sorted(listed_pks(response)) == sorted(
+            [members[0].pk, members[1].pk, other_concept.pk]
         )
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        expected_href = reverse(
-            "controlled_vocabularies_ui:collection-detail",
-            kwargs={"slug": scheme.slug, "collection_slug": collection.slug},
-        )
-        anchor = next(
-            a
-            for a in soup.find_all("a", href=True)
-            if a.get_text(strip=True) == collection.name
-        )
-        assert anchor["href"] == expected_href
-
-        follow = client.get(anchor["href"])
-
-        assert follow.status_code == 200
-        assert follow.context["object"] == collection
 
 
+@pytest.mark.django_db
 class TestTemplateCommentsDoNotReachThePage:
     # Django's {# #} does not match across a newline, so a multi-line one is served to the
     # reader as text.
 
-    @pytest.mark.django_db
     def test_the_list_of_vocabularies_serves_no_comment_text(self, client):
-        ConceptSchemeFactory(external=True, description="A description.")
+        published(description="A description.")
 
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-        content = response.content.decode()
+        content = client.get(LIST_URL).content.decode()
 
         assert "{#" not in content
         assert "#}" not in content
 
-    @pytest.mark.django_db
     def test_a_vocabulary_page_serves_no_comment_text(self, client):
-        scheme = ConceptSchemeFactory(external=True, description="A description.")
+        scheme = published(description="A description.")
         collection_with_members(scheme=scheme)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": scheme.slug},
-            ),
-            {"q": "nothing"},
-        )
-        content = response.content.decode()
+        content = client.get(vocabulary_page(scheme), {"q": "nothing"}).content.decode()
 
         assert "{#" not in content
         assert "#}" not in content
 
 
-class TestConceptPropertyRowsForABareConcept:
-    # Membership is a statement other records make about a concept, so it is not a row.
-
-    @pytest.mark.django_db
-    def test_a_bare_concept_yields_exactly_type_preferred_label_and_vocabulary(self):
-        concept = ConceptFactory(label="Granite")
-
-        rows = concept_property_rows(concept, "en")
-
-        assert [row["term"] for row in rows] == [
-            TYPE_CURIE,
-            LABEL_CURIES[ConceptLabel.Kind.PREFERRED],
-            IN_SCHEME_CURIE,
-        ]
-
-    @pytest.mark.django_db
-    def test_the_type_row_carries_the_concept_type_curie_as_a_plain_value(self):
-        concept = ConceptFactory()
-
-        rows = concept_property_rows(concept, "en")
-
-        type_row = rows[0]
-        assert type_row["term"] == TYPE_CURIE
-        assert type_row["value"] == CONCEPT_TYPE_CURIE
-        assert type_row["short_form"] is None
-
-
-class TestConceptPropertyRowsOrderForARichlyPopulatedConcept:
-    @pytest.mark.django_db
-    def test_every_section_appears_in_the_fixed_order(self):
-        concept = ConceptFactory(label="Granite")
-        concept.add_label(
-            language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="granitic rock"
-        )
-        for kind in ConceptNote.Kind:
-            ConceptNoteFactory(concept=concept, kind=kind, value=f"A {kind} note.")
-        parent = ConceptFactory(scheme=concept.scheme, label="Igneous Rock")
-        concept.add_broader(parent)
-        child = ConceptFactory(scheme=concept.scheme, label="Pink Granite")
-        child.add_broader(concept)
-        other = ConceptFactory(scheme=concept.scheme, label="Basalt")
-        concept.add_related(other)
-
-        rows = concept_property_rows(concept, "en")
-
-        assert [row["term"] for row in rows] == [
-            TYPE_CURIE,
-            LABEL_CURIES[ConceptLabel.Kind.PREFERRED],
-            LABEL_CURIES[ConceptLabel.Kind.ALTERNATIVE],
-            NOTE_CURIES[ConceptNote.Kind.DEFINITION],
-            NOTE_CURIES[ConceptNote.Kind.SCOPE],
-            NOTE_CURIES[ConceptNote.Kind.EXAMPLE],
-            NOTE_CURIES[ConceptNote.Kind.EDITORIAL],
-            NOTE_CURIES[ConceptNote.Kind.HISTORY],
-            NOTE_CURIES[ConceptNote.Kind.CHANGE],
-            NOTE_CURIES[ConceptNote.Kind.NOTE],
-            BROADER_CURIE,
-            NARROWER_CURIE,
-            RELATED_CURIE,
-            IN_SCHEME_CURIE,
-        ]
-
-
-class TestConceptPropertyRowsHiddenLabel:
-    @pytest.mark.django_db
-    def test_a_hidden_label_contributes_no_row_and_no_hidden_curie_appears(self):
-        concept = ConceptFactory(label="Granite")
-        concept.add_label(language="en", kind=ConceptLabel.Kind.HIDDEN, text="granate")
-
-        rows = concept_property_rows(concept, "en")
-
-        assert "granate" not in [row["value"] for row in rows]
-        assert not any(row["term"] == "skos:hiddenLabel" for row in rows)
-
-
-class TestConceptPropertyRowsRecordValuedRows:
-    @pytest.mark.django_db
-    def test_a_broader_row_carries_the_related_concepts_short_form_uri_and_link(self):
-        concept = ConceptFactory(label="Granite")
-        parent = ConceptFactory(scheme=concept.scheme, label="Igneous Rock")
-        concept.add_broader(parent)
-
-        rows = concept_property_rows(concept, "en")
-
-        broader_row = next(row for row in rows if row["term"] == BROADER_CURIE)
-        assert broader_row["value"] is None
-        assert broader_row["short_form"] == f"{parent.scheme.slug}:{parent.slug}"
-        assert broader_row["uri"] == parent.uri
-        assert broader_row["href"] == reverse(
-            "controlled_vocabularies_ui:concept-detail",
-            kwargs={"slug": parent.scheme.slug, "concept_slug": parent.slug},
-        )
-
-    @pytest.mark.django_db
-    def test_the_vocabulary_row_links_to_the_vocabularys_own_page(self):
-        concept = ConceptFactory(label="Granite")
-
-        rows = concept_property_rows(concept, "en")
-
-        vocabulary_row = next(row for row in rows if row["term"] == IN_SCHEME_CURIE)
-        assert vocabulary_row["value"] is None
-        # A vocabulary has no short prefix, so its row uses the display name.
-        assert vocabulary_row["short_form"] == concept.scheme.name
-        assert vocabulary_row["uri"] == concept.scheme.uri
-        assert vocabulary_row["href"] == reverse(
-            "controlled_vocabularies_ui:vocabulary-detail",
-            kwargs={"slug": concept.scheme.slug},
-        )
-
-
-class TestConceptPropertyRowsLanguageScoping:
-    # The function takes one reading language and does no fallback; the caller decides that.
-
-    @pytest.mark.django_db
-    def test_a_preferred_label_absent_in_the_given_language_contributes_no_row(self):
-        concept = ConceptFactory(label="Granite")  # only the English default label
-
-        rows = concept_property_rows(concept, "de")
-
-        assert LABEL_CURIES[ConceptLabel.Kind.PREFERRED] not in [
-            row["term"] for row in rows
-        ]
-
-    @pytest.mark.django_db
-    def test_a_preferred_label_present_in_the_given_language_does_appear(self):
-        concept = ConceptFactory(label="Granite")
-        concept.add_label(
-            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Kristallgestein"
-        )
-
-        rows = concept_property_rows(concept, "de")
-
-        preferred_row = next(
-            row
-            for row in rows
-            if row["term"] == LABEL_CURIES[ConceptLabel.Kind.PREFERRED]
-        )
-        assert preferred_row["value"] == "Kristallgestein"
-
-
+@pytest.mark.django_db
 class TestConceptDetail:
-    @pytest.mark.django_db
     def test_a_known_concept_serves_its_page_anonymously(self, client):
-        concept = ConceptFactory()
+        assert client.get(concept_page(RecordFactory())).status_code == 200
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-
-        assert response.status_code == 200
-
-    @pytest.mark.django_db
     def test_a_concept_slug_naming_nothing_in_a_real_vocabulary_returns_404(
         self, client
     ):
@@ -2636,7 +1862,21 @@ class TestConceptDetail:
 
         assert response.status_code == 404
 
-    @pytest.mark.django_db
+    def test_a_collections_slug_does_not_serve_a_concept_page(self, client):
+        collection = RecordFactory(type=Record.Type.COLLECTION)
+
+        response = client.get(
+            reverse(
+                "controlled_vocabularies_ui:concept-detail",
+                kwargs={
+                    "slug": collection.scheme.slug,
+                    "concept_slug": collection.slug,
+                },
+            )
+        )
+
+        assert response.status_code == 404
+
     def test_a_vocabulary_segment_naming_nothing_also_returns_404(self, client):
         response = client.get(
             reverse(
@@ -2647,441 +1887,317 @@ class TestConceptDetail:
 
         assert response.status_code == 404
 
-    @pytest.mark.django_db
     def test_a_concept_slug_shared_by_two_vocabularies_resolves_to_the_one_named_in_the_address(
         self, client
     ):
-        one = ConceptSchemeFactory()
-        two = ConceptSchemeFactory()
-        ConceptFactory(scheme=one, label="Granite")
-        concept_in_two = ConceptFactory(scheme=two, label="Granite")
+        RecordFactory(scheme=ConceptSchemeFactory(), label="Granite")
+        concept_in_two = RecordFactory(scheme=ConceptSchemeFactory(), label="Granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": two.slug, "concept_slug": concept_in_two.slug},
-            )
-        )
+        response = client.get(concept_page(concept_in_two))
 
         assert response.status_code == 200
         assert response.context["object"] == concept_in_two
 
-    @pytest.mark.django_db
-    def test_the_page_shows_no_editing_control(self, client):
-        concept = ConceptFactory()
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-
-        # Every show_<action>_action defaults to False upstream, so this catches that
-        # default flipping in a 0.x dependency.
-        assert response.context["directory"] == {}
-
-    @pytest.mark.django_db
     def test_the_context_carries_the_concepts_property_rows(self, client):
-        concept = ConceptFactory(label="Granite")
+        concept = RecordFactory(label="Granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
+        response = client.get(concept_page(concept))
 
-        assert response.context["rows"] == concept_property_rows(concept, "en")
+        assert response.context["rows"] == PropertyRows(concept, "en").build()
 
 
+@pytest.mark.django_db
 class TestConceptDetailBreadcrumbs:
-    @pytest.mark.django_db
     def test_the_trail_leads_home_then_to_the_vocabulary_then_the_concept(self, client):
-        concept = ConceptFactory(label="Granite")
+        concept = RecordFactory(label="Granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
+        response = client.get(concept_page(concept))
 
         trail = response.context["page"]["breadcrumbs"]
         assert [crumb.get("href") for crumb in trail] == [
             "/",
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": concept.scheme.slug},
-            ),
+            vocabulary_page(concept.scheme),
             None,
         ]
         assert [crumb["text"] for crumb in trail[1:]] == [
-            concept.scheme.name,
+            concept.scheme.display_label(),
             "Granite",
         ]
 
 
+@pytest.mark.django_db
 class TestConceptDetailShowsWhatIsRecorded:
-    @pytest.mark.django_db
     def test_a_preferred_label_a_definition_and_a_scope_note_each_show_on_their_own_row(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
-        ConceptNoteFactory(
-            concept=concept,
-            kind=ConceptNote.Kind.DEFINITION,
-            value="A coarse-grained igneous rock.",
-        )
-        ConceptNoteFactory(
-            concept=concept,
-            kind=ConceptNote.Kind.SCOPE,
-            value="Used for building stone.",
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__definition=[text("A coarse-grained igneous rock.", "en")],
+            skos__scopeNote=[text("Used for building stone.", "en")],
         )
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        pairs = [
-            (term_text(dt), dt.find_next_sibling("dd").get_text(strip=True))
-            for dt in soup.find_all("dt")
-        ]
+        pairs = pairs_of(client.get(concept_page(concept)))
 
-        assert (LABEL_CURIES[ConceptLabel.Kind.PREFERRED], "Granite") in pairs
-        assert (
-            NOTE_CURIES[ConceptNote.Kind.DEFINITION],
-            "A coarse-grained igneous rock.",
-        ) in pairs
-        assert (
-            NOTE_CURIES[ConceptNote.Kind.SCOPE],
-            "Used for building stone.",
-        ) in pairs
+        assert ("skos:prefLabel", "Granite") in pairs
+        assert ("skos:definition", "A coarse-grained igneous rock.") in pairs
+        assert ("skos:scopeNote", "Used for building stone.") in pairs
 
-    @pytest.mark.django_db
     def test_alternative_labels_appear_and_no_hidden_label_appears_anywhere(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
-        concept.add_label(
-            language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="granitic rock"
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__altLabel=[text("granitic rock", "en")],
+            skos__hiddenLabel=[text("granate", "en")],
         )
-        concept.add_label(language="en", kind=ConceptLabel.Kind.HIDDEN, text="granate")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
+        response = client.get(concept_page(concept))
+
+        assert ("skos:altLabel", "granitic rock") in pairs_of(response)
+        assert "granate" not in response.content.decode()
+
+    def test_a_predicate_the_pages_have_no_place_for_is_still_shown(self, client):
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            dcterms__source=[text("Field survey 1998")],
         )
-        content = response.content.decode()
-        soup = BeautifulSoup(response.content, "html.parser")
-        pairs = [
-            (term_text(dt), dt.find_next_sibling("dd").get_text(strip=True))
-            for dt in soup.find_all("dt")
-        ]
 
-        assert (LABEL_CURIES[ConceptLabel.Kind.ALTERNATIVE], "granitic rock") in pairs
-        assert "granate" not in content
+        assert ("dcterms:source", "Field survey 1998") in pairs_of(
+            client.get(concept_page(concept))
+        )
+
+    def test_a_notation_without_a_language_is_shown_in_any_reading_language(
+        self, client
+    ):
+        concept = concept_with(
+            ConceptSchemeFactory(), "Granite", skos__notation=[text("GR-01")]
+        )
+
+        with translation.override("de"):
+            response = client.get(concept_page(concept))
+
+        assert ("skos:notation", "GR-01") in pairs_of(response)
 
 
+@pytest.mark.django_db
 class TestConceptDetailValuesInTheReadingLanguage:
-    @staticmethod
-    def _dl_values(response):
-        """Read every ``<dd>`` value from a rendered page.
-
-        Args:
-            response: The response to parse.
-
-        Returns:
-            The stripped text of each ``<dd>``, in page order.
-        """
-        soup = BeautifulSoup(response.content, "html.parser")
-        return [dd.get_text(strip=True) for dd in soup.find_all("dd")]
-
-    @pytest.mark.django_db
     def test_values_present_in_both_languages_show_the_reading_languages_ones(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
-        concept.add_label(
-            language="de", kind=ConceptLabel.Kind.PREFERRED, text="Kristallgestein"
-        )
-        concept.add_label(
-            language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="granite stone"
-        )
-        concept.add_label(
-            language="de", kind=ConceptLabel.Kind.ALTERNATIVE, text="Granitstein"
-        )
-        ConceptNoteFactory(
-            concept=concept,
-            language="en",
-            kind=ConceptNote.Kind.DEFINITION,
-            value="An igneous rock.",
-        )
-        ConceptNoteFactory(
-            concept=concept,
-            language="de",
-            kind=ConceptNote.Kind.DEFINITION,
-            value="Ein Eruptivgestein.",
-        )
-        url = reverse(
-            "controlled_vocabularies_ui:concept-detail",
-            kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
+        concept = RecordFactory(
+            data={
+                "skos:prefLabel": [
+                    text("Granite", "en"),
+                    text("Kristallgestein", "de"),
+                ],
+                "skos:altLabel": [
+                    text("granite stone", "en"),
+                    text("Granitstein", "de"),
+                ],
+                "skos:definition": [
+                    text("An igneous rock.", "en"),
+                    text("Ein Eruptivgestein.", "de"),
+                ],
+            }
         )
 
         with translation.override("de"):
-            response = client.get(url)
+            response = client.get(concept_page(concept))
 
-        values = self._dl_values(response)
+        values = [value for _term, value in pairs_of(response)]
         assert "Kristallgestein" in values
         assert "Granitstein" in values
         assert "Ein Eruptivgestein." in values
-        assert concept.label not in values
+        assert "Granite" not in values
         assert "granite stone" not in values
         assert "An igneous rock." not in values
 
-    @pytest.mark.django_db
     def test_a_concept_with_no_value_in_the_reading_language_falls_back_to_the_vocabularys_default(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
-        concept.add_label(
-            language="en", kind=ConceptLabel.Kind.ALTERNATIVE, text="granite stone"
-        )
-        ConceptNoteFactory(
-            concept=concept,
-            language="en",
-            kind=ConceptNote.Kind.DEFINITION,
-            value="An igneous rock.",
-        )
-        url = reverse(
-            "controlled_vocabularies_ui:concept-detail",
-            kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__altLabel=[text("granite stone", "en")],
+            skos__definition=[text("An igneous rock.", "en")],
         )
 
         with translation.override("de"):
-            response = client.get(url)
+            response = client.get(concept_page(concept))
 
-        values = self._dl_values(response)
-        assert concept.label in values
+        values = [value for _term, value in pairs_of(response)]
+        assert "Granite" in values
         assert "granite stone" in values
         assert "An igneous rock." in values
 
 
+@pytest.mark.django_db
 class TestConceptDetailTypeAndIdentifier:
-    @pytest.mark.django_db
-    def test_the_type_row_is_keyed_by_the_literal_rdf_type_not_a_skos_curie(
-        self, client
-    ):
-        concept = ConceptFactory(label="Granite")
+    def test_the_type_row_names_the_concept_class(self, client):
+        concept = RecordFactory(label="Granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        pairs = [
-            (term_text(dt), dt.find_next_sibling("dd").get_text(strip=True))
-            for dt in soup.find_all("dt")
-        ]
+        pairs = pairs_of(client.get(concept_page(concept)))
 
-        assert TYPE_CURIE == "rdf:type"
-        assert (TYPE_CURIE, CONCEPT_TYPE_CURIE) in pairs
+        assert ("rdf:type", Record.Type.CONCEPT) in pairs
 
-    @pytest.mark.django_db
     def test_the_identifier_appears_as_an_anchor_to_the_records_own_uri(self, client):
-        concept = ConceptFactory(label="Granite")
+        concept = RecordFactory(label="Granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(concept_page(concept)))
         identifier_link = soup.find("a", href=concept.uri)
 
-        assert identifier_link is not None
         assert concept.uri in identifier_link.get_text(strip=True)
 
-    @pytest.mark.django_db
-    def test_an_imported_concept_shows_its_publishers_identifier(self, client):
-        concept = ConceptFactory(label="Granite", external=True)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        identifier_link = soup.find("a", href=concept.static_uri)
-
-        assert concept.static_uri.startswith("http://publisher.example.org/")
-        assert identifier_link is not None
-        assert concept.static_uri in identifier_link.get_text(strip=True)
-
-
-class TestConceptDetailUnfilledPropertiesProduceNoRow:
-    @pytest.mark.django_db
-    def test_a_bare_concepts_page_names_exactly_type_label_identifier_and_vocabulary(
+    def test_an_identifier_in_a_scheme_a_browser_would_hand_off_is_not_linked(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
+        concept = RecordFactory(label="Granite", uri="search-ms:query=granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
+        soup = soup_of(client.get(concept_page(concept)))
+
+        assert soup.find("a", href=concept.uri) is None
+        assert concept.uri in soup.get_text()
+
+    def test_an_imported_concept_shows_its_publishers_identifier(self, client):
+        concept = RecordFactory(
+            label="Granite", uri="http://publisher.example.org/concept/granite"
         )
-        soup = BeautifulSoup(response.content, "html.parser")
-        terms = [term_text(dt) for dt in soup.find_all("dt")]
 
-        assert terms == [
-            TYPE_CURIE,
-            LABEL_CURIES[ConceptLabel.Kind.PREFERRED],
-            IN_SCHEME_CURIE,
-        ]
-        assert soup.find("a", href=concept.uri) is not None
+        soup = soup_of(client.get(concept_page(concept)))
+        identifier_link = soup.find("a", href=concept.uri)
+
+        assert concept.uri in identifier_link.get_text(strip=True)
 
 
+@pytest.mark.django_db
+class TestConceptDetailUnfilledPropertiesProduceNoRow:
+    def test_a_bare_concepts_page_names_exactly_type_label_and_vocabulary(self, client):
+        concept = RecordFactory(label="Granite")
+
+        response = client.get(concept_page(concept))
+
+        assert terms_of(response) == ["rdf:type", "skos:prefLabel", "skos:inScheme"]
+        assert soup_of(response).find("a", href=concept.uri) is not None
+
+
+@pytest.mark.django_db
 class TestConceptDetailQueryCount:
-    @pytest.mark.django_db
-    def test_query_count_is_flat_as_labels_notes_and_relations_grow(
+    def test_query_count_is_flat_as_statements_and_relations_grow(
         self, client, django_assert_num_queries
     ):
         scheme = ConceptSchemeFactory()
-        concept = ConceptFactory(scheme=scheme, label="Granite")
-        concept.add_label(
-            language="de", kind=ConceptLabel.Kind.ALTERNATIVE, text="Granitstein"
-        )
-        ConceptNoteFactory(
-            concept=concept, kind=ConceptNote.Kind.DEFINITION, value="An igneous rock."
-        )
-        ConceptRelationFactory(
-            source=concept,
-            target=ConceptFactory(scheme=scheme),
-            kind=ConceptRelation.Kind.BROADER,
-        )
-        ConceptRelationFactory(
-            source=ConceptFactory(scheme=scheme),
-            target=concept,
-            kind=ConceptRelation.Kind.BROADER,
-        )
-        ConceptRelationFactory(
-            source=concept,
-            target=ConceptFactory(scheme=scheme),
-            kind=ConceptRelation.Kind.RELATED,
-        )
-        url = reverse(
-            "controlled_vocabularies_ui:concept-detail",
-            kwargs={"slug": scheme.slug, "concept_slug": concept.slug},
-        )
+        concept = concept_with(scheme, "Granite")
+        url = concept_page(concept)
 
-        with CaptureQueriesContext(connection) as captured:
-            client.get(url)
-        baseline = len(captured.captured_queries)
+        def grow(count):
+            """Give the concept ``count`` more of every kind of statement.
 
-        # select_related and prefetch_related on the queryset collapse a query per call
-        # site (alternative labels, each note kind, the scheme) into three. A ceiling as well
-        # as flatness, because the number of note kinds is fixed and would be flat anyway.
-        assert baseline <= 8
+            Args:
+                count: How many of each to add.
+            """
+            for number in range(count):
+                broader = RecordFactory(scheme=scheme)
+                related = RecordFactory(scheme=scheme)
+                concept.data.setdefault("skos:altLabel", []).append(
+                    text(f"Label {next(serial)}-{number}", "fr")
+                )
+                concept.data.setdefault("skos:definition", []).append(
+                    text(f"Definition {number}", "en")
+                )
+                concept.data.setdefault("skos:broader", []).append(link(broader.uri))
+                concept.data.setdefault("skos:related", []).append(link(related.uri))
+                concept_with(
+                    scheme, f"Child {next(serial)}", skos__broader=[link(concept.uri)]
+                )
+                collection = RecordFactory(scheme=scheme, type=Record.Type.COLLECTION)
+                gather(collection, concept)
+            concept.save()
 
-        for i in range(5):
-            concept.add_label(
-                language="fr", kind=ConceptLabel.Kind.ALTERNATIVE, text=f"Label {i}"
-            )
-            ConceptNoteFactory(
-                concept=concept, kind=ConceptNote.Kind.SCOPE, value=f"Note {i}"
-            )
-            ConceptRelationFactory(
-                source=concept,
-                target=ConceptFactory(scheme=scheme),
-                kind=ConceptRelation.Kind.RELATED,
-            )
-            # collections() costs one query whatever its length, so a per-collection read
-            # added later breaks the equality below.
-            CollectionFactory(scheme=scheme, name=f"Collection {i}").add(concept)
+        grow(1)
+        baseline = query_count(client, url)
+        grow(5)
 
         with django_assert_num_queries(baseline):
             client.get(url)
 
 
+@pytest.mark.django_db
 class TestConceptDetailCollectionMembership:
-    @pytest.mark.django_db
     def test_a_concept_gathered_by_two_collections_links_to_each_collections_page(
         self, client
     ):
         scheme = ConceptSchemeFactory()
-        concept = ConceptFactory(scheme=scheme, label="Granite")
-        igneous = CollectionFactory(scheme=scheme, name="Igneous rocks")
-        hardness = CollectionFactory(scheme=scheme, name="Hardness scale")
-        igneous.add(concept)
-        hardness.add(concept)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": scheme.slug, "concept_slug": concept.slug},
-            )
+        concept = RecordFactory(scheme=scheme, label="Granite")
+        igneous = RecordFactory(
+            scheme=scheme,
+            type=Record.Type.COLLECTION,
+            data=labelled(
+                "Igneous rocks", statements={"skos:member": [link(concept.uri)]}
+            ),
         )
-        soup = BeautifulSoup(response.content, "html.parser")
+        hardness = RecordFactory(
+            scheme=scheme,
+            type=Record.Type.ORDERED_COLLECTION,
+            data=labelled(
+                "Hardness scale", statements={"skos:memberList": [link(concept.uri)]}
+            ),
+        )
+
+        soup = soup_of(client.get(concept_page(concept)))
 
         for collection in (igneous, hardness):
-            expected_href = reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={"slug": scheme.slug, "collection_slug": collection.slug},
+            anchor = soup.find("div", class_="concept-collections").find(
+                "a", href=collection_page(collection)
             )
-            anchor = next(
-                a
-                for a in soup.find_all("a", href=True)
-                if a.get_text(strip=True) == collection.name
-            )
-            assert anchor["href"] == expected_href
-
+            assert anchor.get_text(strip=True) == collection.pref_label
             follow = client.get(anchor["href"])
             assert follow.status_code == 200
             assert follow.context["object"] == collection
 
-    @pytest.mark.django_db
     def test_a_concept_no_collection_gathers_lists_no_collections(self, client):
-        concept = ConceptFactory(label="Granite")
+        concept = RecordFactory(label="Granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
+        response = client.get(concept_page(concept))
 
         assert list(response.context["concept_collections"]) == []
 
-
-class TestCollectionDetail:
-    @pytest.mark.django_db
-    def test_a_known_collection_serves_its_page_anonymously(self, client):
-        collection = CollectionFactory()
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
+    def test_a_collection_that_merely_mentions_the_concept_does_not_gather_it(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        concept = RecordFactory(scheme=scheme, label="Granite")
+        RecordFactory(
+            scheme=scheme,
+            type=Record.Type.COLLECTION,
+            data=labelled("Notes", statements={"skos:note": [text(concept.uri)]}),
         )
 
-        assert response.status_code == 200
+        response = client.get(concept_page(concept))
 
-    @pytest.mark.django_db
+        assert list(response.context["concept_collections"]) == []
+
+    def test_membership_is_never_a_property_row(self, client):
+        scheme = ConceptSchemeFactory()
+        collection, (member,) = collection_with_members(
+            scheme=scheme, labels=("Granite",)
+        )
+
+        response = client.get(concept_page(member))
+
+        assert terms_of(response) == ["rdf:type", "skos:prefLabel", "skos:inScheme"]
+        assert list(response.context["concept_collections"]) == [collection]
+
+
+@pytest.mark.django_db
+class TestCollectionDetail:
+    def test_a_known_collection_serves_its_page_anonymously(self, client):
+        collection = RecordFactory(type=Record.Type.COLLECTION)
+
+        assert client.get(collection_page(collection)).status_code == 200
+
     def test_a_collection_slug_naming_nothing_in_a_real_vocabulary_returns_404(
         self, client
     ):
@@ -3096,7 +2212,21 @@ class TestCollectionDetail:
 
         assert response.status_code == 404
 
-    @pytest.mark.django_db
+    def test_a_concepts_slug_does_not_serve_a_collection_page(self, client):
+        concept = RecordFactory()
+
+        response = client.get(
+            reverse(
+                "controlled_vocabularies_ui:collection-detail",
+                kwargs={
+                    "slug": concept.scheme.slug,
+                    "collection_slug": concept.slug,
+                },
+            )
+        )
+
+        assert response.status_code == 404
+
     def test_a_vocabulary_segment_naming_nothing_also_returns_404(self, client):
         response = client.get(
             reverse(
@@ -3107,117 +2237,37 @@ class TestCollectionDetail:
 
         assert response.status_code == 404
 
-    @pytest.mark.django_db
-    def test_a_concept_and_a_collection_sharing_one_slug_are_both_reachable(
-        self, client
-    ):
-        scheme = ConceptSchemeFactory()
-        concept = ConceptFactory(scheme=scheme, label="Granite")
-        collection = CollectionFactory(
-            scheme=scheme, name=concept.label, slug_is_manual=True, slug=concept.slug
-        )
-
-        concept_response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        collection_response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={"slug": scheme.slug, "collection_slug": collection.slug},
-            )
-        )
-
-        assert concept_response.status_code == 200
-        assert collection_response.status_code == 200
-        assert concept_response.context["object"] == concept
-        assert collection_response.context["object"] == collection
-
-    @pytest.mark.django_db
-    def test_the_page_shows_no_editing_control(self, client):
-        collection = CollectionFactory()
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-
-        assert response.context["directory"] == {}
-
-    @pytest.mark.django_db
     def test_the_context_carries_the_collections_property_rows(self, client):
-        collection = CollectionFactory(name="Rock Types")
+        collection = RecordFactory(label="Rock Types", type=Record.Type.COLLECTION)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
+        response = client.get(collection_page(collection))
 
-        assert response.context["rows"] == collection_property_rows(collection)
+        assert response.context["rows"] == PropertyRows(collection, "en").build()
 
 
+@pytest.mark.django_db
 class TestCollectionDetailBreadcrumbs:
-    @pytest.mark.django_db
     def test_the_trail_leads_home_then_to_the_vocabulary_then_the_collection(
         self, client
     ):
-        collection = CollectionFactory(name="Rock Types")
+        collection = RecordFactory(label="Rock Types", type=Record.Type.COLLECTION)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
+        response = client.get(collection_page(collection))
 
         trail = response.context["page"]["breadcrumbs"]
         assert [crumb.get("href") for crumb in trail] == [
             "/",
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-detail",
-                kwargs={"slug": collection.scheme.slug},
-            ),
+            vocabulary_page(collection.scheme),
             None,
         ]
         assert [crumb["text"] for crumb in trail[1:]] == [
-            collection.scheme.name,
+            collection.scheme.display_label(),
             "Rock Types",
         ]
 
 
+@pytest.mark.django_db
 class TestCollectionDetailNameTypeAndMembers:
-    @staticmethod
-    def _dt_dd_pairs(response):
-        """Pair each ``<dt>`` term with the text of its ``<dd>``.
-
-        Args:
-            response: The response to parse.
-
-        Returns:
-            ``(term, value)`` tuples in page order.
-        """
-        soup = BeautifulSoup(response.content, "html.parser")
-        return [
-            (term_text(dt), dt.find_next_sibling("dd").get_text(strip=True))
-            for dt in soup.find_all("dt")
-        ]
-
-    @pytest.mark.django_db
     def test_an_unordered_collection_shows_its_name_type_and_one_row_carrying_every_member(
         self, client
     ):
@@ -3226,32 +2276,21 @@ class TestCollectionDetailNameTypeAndMembers:
             labels=("Granite", "Basalt", "Gabbro"), ordered=False
         )
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        pairs = self._dt_dd_pairs(response)
+        response = client.get(collection_page(collection))
+        soup = soup_of(response)
+        pairs = pairs_of(response)
 
-        assert (LABEL_CURIES[ConceptLabel.Kind.PREFERRED], collection.name) in pairs
-        assert (TYPE_CURIE, COLLECTION_TYPE_CURIE) in pairs
-        member_dts = [dt for dt in soup.find_all("dt") if term_text(dt) == MEMBER_CURIE]
-        assert len(member_dts) == 1
-        assert not any(term == MEMBER_LIST_CURIE for term, _value in pairs)
-        member_short_forms = {
-            a.get_text(strip=True)
-            for a in member_dts[0].find_next_sibling("dd").find_all("a")
+        assert ("skos:prefLabel", collection.pref_label) in pairs
+        assert ("rdf:type", Record.Type.COLLECTION) in pairs
+        assert terms_of(response).count("skos:member") == 1
+        assert "skos:memberList" not in terms_of(response)
+        short_forms = {
+            a.get_text(strip=True) for a in dd_after(soup, "skos:member")("a")
         }
-        assert member_short_forms == {
+        assert short_forms == {
             f"{collection.scheme.slug}:{member.slug}" for member in members
         }
 
-    @pytest.mark.django_db
     def test_an_ordered_collections_type_differs_and_its_one_member_row_is_in_position_order(
         self, client
     ):
@@ -3260,165 +2299,67 @@ class TestCollectionDetailNameTypeAndMembers:
             labels=("Granite", "Basalt", "Gabbro"), ordered=True
         )
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        pairs = [
-            (term_text(dt), dt.find_next_sibling("dd").get_text(strip=True))
-            for dt in soup.find_all("dt")
-        ]
-        member_dts = [
-            dt for dt in soup.find_all("dt") if term_text(dt) == MEMBER_LIST_CURIE
-        ]
-        assert len(member_dts) == 1
-        # The anchors inside the one <dd> isolate each member's short form.
-        member_short_forms = [
-            a.get_text(strip=True)
-            for a in member_dts[0].find_next_sibling("dd").find_all("a")
-        ]
+        response = client.get(collection_page(collection))
+        soup = soup_of(response)
 
-        assert (TYPE_CURIE, ORDERED_COLLECTION_TYPE_CURIE) in pairs
-        assert not any(term == MEMBER_CURIE for term, _value in pairs)
-        assert member_short_forms == [
-            f"{collection.scheme.slug}:{member.slug}" for member in members
-        ]
+        assert ("rdf:type", Record.Type.ORDERED_COLLECTION) in pairs_of(response)
+        assert "skos:member" not in terms_of(response)
+        assert terms_of(response).count("skos:memberList") == 1
+        assert [
+            a.get_text(strip=True) for a in dd_after(soup, "skos:memberList")("a")
+        ] == [f"{collection.scheme.slug}:{member.slug}" for member in members]
 
-    @pytest.mark.django_db
     def test_the_identifier_appears_as_an_anchor_to_the_records_own_uri(self, client):
-        collection = CollectionFactory(name="Rock Types")
+        collection = RecordFactory(label="Rock Types", type=Record.Type.COLLECTION)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(collection_page(collection)))
         identifier_link = soup.find("a", href=collection.uri)
 
-        assert identifier_link is not None
         assert collection.uri in identifier_link.get_text(strip=True)
 
-
-class TestCollectionDetailMemberIdentifierDisclosedOnHover:
-    @pytest.mark.django_db
-    def test_each_members_identifier_is_disclosed_by_a_wrapping_tooltip_not_title(
-        self, client
-    ):
+    def test_each_members_identifier_is_disclosed_by_a_wrapping_tooltip(self, client):
         collection, members = collection_with_members()
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        member_dt = next(
-            dt for dt in soup.find_all("dt") if term_text(dt) == MEMBER_CURIE
-        )
-        dd = member_dt.find_next_sibling("dd")
-        anchors = dd.find_all("a")
+        soup = soup_of(client.get(collection_page(collection)))
+        dd = dd_after(soup, "skos:member")
+        anchors = dd("a")
 
         assert len(anchors) == len(members)
         seen_hidden_ids = set()
         for anchor, member in zip(anchors, members, strict=True):
-            assert "tooltip" not in anchor.get("class", [])
-            assert anchor.get("title") is None
-
             wrapper = anchor.find_parent("span", class_="tooltip")
-            assert wrapper is not None
             assert wrapper.get("data-tip") == member.uri
-
             hidden_id = anchor.get("aria-describedby")
-            assert hidden_id
             assert hidden_id not in seen_hidden_ids
             seen_hidden_ids.add(hidden_id)
-
-            hidden_span = wrapper.find("span", id=hidden_id)
-            assert hidden_span is not None
-            assert "sr-only" in hidden_span.get("class", [])
-            assert hidden_span.get_text() == member.uri
-
-        dd_text = visible_text(dd)
-        assert all(member.uri not in dd_text for member in members)
+            assert wrapper.find("span", id=hidden_id).get_text() == member.uri
+        assert all(member.uri not in visible_text(dd) for member in members)
 
 
+@pytest.mark.django_db
 class TestCollectionDetailEmptyState:
-    @pytest.mark.django_db
-    def test_an_unordered_collection_with_no_members_has_no_membership_row(
-        self, client
-    ):
-        collection = CollectionFactory(name="Rock Types", ordered=False)
+    @pytest.mark.parametrize(
+        "kind", [Record.Type.COLLECTION, Record.Type.ORDERED_COLLECTION]
+    )
+    def test_a_collection_with_no_members_has_no_membership_row(self, client, kind):
+        collection = RecordFactory(label="Rock Types", type=kind)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        terms = [term_text(dt) for dt in soup.find_all("dt")]
+        response = client.get(collection_page(collection))
 
-        assert MEMBER_CURIE not in terms
-        assert MEMBER_LIST_CURIE not in terms
+        assert "skos:member" not in terms_of(response)
+        assert "skos:memberList" not in terms_of(response)
         assert response.context["collection_has_members"] is False
 
-    @pytest.mark.django_db
-    def test_an_ordered_collection_with_no_members_has_no_membership_row(self, client):
-        collection = CollectionFactory(name="Rock Types", ordered=True)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        terms = [term_text(dt) for dt in soup.find_all("dt")]
-
-        assert MEMBER_CURIE not in terms
-        assert MEMBER_LIST_CURIE not in terms
-        assert response.context["collection_has_members"] is False
-
-    @pytest.mark.django_db
     def test_a_collection_with_members_is_flagged_as_having_them(self, client):
-        collection, _members = collection_with_members(labels=("Granite",))
+        collection, members = collection_with_members(labels=("Granite",))
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
+        response = client.get(collection_page(collection))
 
         assert response.context["collection_has_members"] is True
 
 
+@pytest.mark.django_db
 class TestCollectionDetailQueryCount:
-    @pytest.mark.django_db
     def test_query_count_is_flat_as_members_grow(
         self, client, django_assert_num_queries
     ):
@@ -3426,137 +2367,75 @@ class TestCollectionDetailQueryCount:
         collection, members = collection_with_members(
             scheme=scheme, labels=("Granite", "Basalt")
         )
-        url = reverse(
-            "controlled_vocabularies_ui:collection-detail",
-            kwargs={"slug": scheme.slug, "collection_slug": collection.slug},
-        )
+        url = collection_page(collection)
+        baseline = query_count(client, url)
 
-        with CaptureQueriesContext(connection) as captured:
-            client.get(url)
-        baseline = len(captured.captured_queries)
-
-        # A ceiling as well as flatness: the vocabulary lookup, the select_related object
-        # fetch and one memberships query.
-        assert baseline <= 3
-
-        for i in range(5):
-            collection.add(ConceptFactory(scheme=scheme, label=f"Member {i}"))
+        gather(collection, *RecordFactory.create_batch(5, scheme=scheme))
 
         with django_assert_num_queries(baseline):
             client.get(url)
 
 
+@pytest.mark.django_db
 class TestConceptDetailRelatedRecordIdentifiers:
-    @staticmethod
-    def _dd_for(soup, term):
-        """Find the ``<dd>`` following a term's ``<dt>``.
-
-        Args:
-            soup: The parsed page.
-            term: The term as a sighted reader sees it.
-
-        Returns:
-            The ``<dd>`` element paired with the term.
-        """
-        dt = next(dt for dt in soup.find_all("dt") if term_text(dt) == term)
-        return dt.find_next_sibling("dd")
-
-    @pytest.mark.django_db
-    def test_a_related_records_identifier_is_disclosed_by_a_wrapping_tooltip_not_title(
+    def test_a_related_records_identifier_is_disclosed_by_a_wrapping_tooltip(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
-        parent = ConceptFactory(scheme=concept.scheme, label="Igneous Rock")
-        concept.add_broader(parent)
+        scheme = ConceptSchemeFactory()
+        parent = RecordFactory(scheme=scheme, label="Igneous Rock")
+        concept = concept_with(scheme, "Granite", skos__broader=[link(parent.uri)])
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        broader_dd = self._dd_for(soup, BROADER_CURIE)
-        link = broader_dd.find("a")
+        soup = soup_of(client.get(concept_page(concept)))
+        broader_dd = dd_after(soup, "skos:broader")
+        anchor = broader_dd.find("a")
+        wrapper = anchor.find_parent("span", class_="tooltip")
 
-        assert "tooltip" not in link.get("class", [])
-        assert link.get("title") is None
-
-        wrapper = link.find_parent("span", class_="tooltip")
-        assert wrapper is not None
         assert wrapper.get("data-tip") == parent.uri
-
-        hidden_span = wrapper.find("span", id=link.get("aria-describedby"))
-        assert hidden_span is not None
+        hidden_span = wrapper.find("span", id=anchor.get("aria-describedby"))
         assert "sr-only" in hidden_span.get("class", [])
         assert hidden_span.get_text() == parent.uri
         assert parent.uri not in visible_text(broader_dd)
-        assert link["href"] == reverse(
-            "controlled_vocabularies_ui:concept-detail",
-            kwargs={"slug": parent.scheme.slug, "concept_slug": parent.slug},
-        )
+        assert anchor["href"] == concept_page(parent)
 
-    @pytest.mark.django_db
     def test_an_imported_related_concept_shows_the_publishers_identifier_and_links_here(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
-        parent = ConceptFactory(
-            scheme=concept.scheme, label="Igneous Rock", external=True
+        scheme = ConceptSchemeFactory()
+        parent = RecordFactory(
+            scheme=scheme,
+            label="Igneous Rock",
+            uri="http://publisher.example.org/concept/igneous-rock",
         )
-        concept.add_broader(parent)
+        concept = concept_with(scheme, "Granite", skos__broader=[link(parent.uri)])
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        broader_dd = self._dd_for(soup, BROADER_CURIE)
-        link = broader_dd.find("a")
-        wrapper = link.find_parent("span", class_="tooltip")
+        soup = soup_of(client.get(concept_page(concept)))
+        broader_dd = dd_after(soup, "skos:broader")
+        anchor = broader_dd.find("a")
+        wrapper = anchor.find_parent("span", class_="tooltip")
 
-        assert parent.static_uri.startswith("http://publisher.example.org/")
-        assert link.get("title") is None
-        assert wrapper.get("data-tip") == parent.static_uri
-        hidden_span = wrapper.find("span", id=link.get("aria-describedby"))
-        assert hidden_span.get_text() == parent.static_uri
-        assert parent.static_uri not in visible_text(broader_dd)
-        assert link["href"] == reverse(
-            "controlled_vocabularies_ui:concept-detail",
-            kwargs={"slug": parent.scheme.slug, "concept_slug": parent.slug},
-        )
-
-        follow = client.get(link["href"])
-
+        assert wrapper.get("data-tip") == parent.uri
+        assert parent.uri not in visible_text(broader_dd)
+        assert anchor["href"] == concept_page(parent)
+        follow = client.get(anchor["href"])
         assert follow.status_code == 200
         assert follow.context["object"] == parent
 
-    @pytest.mark.django_db
     def test_two_related_records_hidden_identifier_spans_have_distinct_ids(
         self, client
     ):
-        # An id derived from the short form alone could collide across rows; two related
-        # records on one page expose that.
-        concept = ConceptFactory(label="Granite")
-        broader = ConceptFactory(scheme=concept.scheme, label="Igneous Rock")
-        related = ConceptFactory(scheme=concept.scheme, label="Basalt")
-        concept.add_broader(broader)
-        concept.add_related(related)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
+        scheme = ConceptSchemeFactory()
+        broader = RecordFactory(scheme=scheme, label="Igneous Rock")
+        related = RecordFactory(scheme=scheme, label="Basalt")
+        concept = concept_with(
+            scheme,
+            "Granite",
+            skos__broader=[link(broader.uri)],
+            skos__related=[link(related.uri)],
         )
-        soup = BeautifulSoup(response.content, "html.parser")
-        broader_link = self._dd_for(soup, BROADER_CURIE).find("a")
-        related_link = self._dd_for(soup, RELATED_CURIE).find("a")
 
-        broader_id = broader_link.get("aria-describedby")
-        related_id = related_link.get("aria-describedby")
+        soup = soup_of(client.get(concept_page(concept)))
+        broader_id = dd_after(soup, "skos:broader").find("a").get("aria-describedby")
+        related_id = dd_after(soup, "skos:related").find("a").get("aria-describedby")
 
         assert broader_id and related_id
         assert broader_id != related_id
@@ -3564,172 +2443,150 @@ class TestConceptDetailRelatedRecordIdentifiers:
         assert soup.find(id=related_id).get_text() == related.uri
 
 
+@pytest.mark.django_db
 class TestConceptDetailBroaderNarrowerAndRelated:
     @staticmethod
-    def _links_for(soup, term):
-        """Find the anchor in each ``<dd>`` following a term's ``<dt>``.
+    def links_for(soup, term):
+        """Find the anchors in the ``<dd>`` following a term's ``<dt>``.
 
         Args:
             soup: The parsed page.
             term: The term as a sighted reader sees it.
 
         Returns:
-            One anchor per matching row.
+            The anchors of the row.
         """
-        return [
-            dt.find_next_sibling("dd").find("a")
-            for dt in soup.find_all("dt")
-            if term_text(dt) == term
-        ]
+        return dd_after(soup, term)("a")
 
-    @pytest.mark.django_db
     def test_a_broader_concept_appears_and_following_it_opens_its_page(self, client):
-        concept = ConceptFactory(label="Granite")
-        parent = ConceptFactory(scheme=concept.scheme, label="Igneous Rock")
-        concept.add_broader(parent)
+        scheme = ConceptSchemeFactory()
+        parent = RecordFactory(scheme=scheme, label="Igneous Rock")
+        concept = concept_with(scheme, "Granite", skos__broader=[link(parent.uri)])
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        (link,) = self._links_for(soup, BROADER_CURIE)
+        soup = soup_of(client.get(concept_page(concept)))
+        (anchor,) = self.links_for(soup, "skos:broader")
 
-        assert link.get_text(strip=True) == f"{parent.scheme.slug}:{parent.slug}"
-
-        follow = client.get(link["href"])
-
+        assert anchor.get_text(strip=True) == f"{scheme.slug}:{parent.slug}"
+        follow = client.get(anchor["href"])
         assert follow.status_code == 200
         assert follow.context["object"] == parent
 
-    @pytest.mark.django_db
     def test_a_concept_broader_of_two_others_shows_both_as_narrower_though_only_broader_is_stored(
         self, client
     ):
-        parent = ConceptFactory(label="Igneous Rock")
-        child_one = ConceptFactory(scheme=parent.scheme, label="Granite")
-        child_two = ConceptFactory(scheme=parent.scheme, label="Basalt")
-        # Only the narrower-to-broader direction is stored (FS-003); parent.narrower() reads
-        # it back from each child's own broader row.
-        child_one.add_broader(parent)
-        child_two.add_broader(parent)
+        scheme = ConceptSchemeFactory()
+        parent = RecordFactory(scheme=scheme, label="Igneous Rock")
+        child_one = concept_with(scheme, "Granite", skos__broader=[link(parent.uri)])
+        child_two = concept_with(scheme, "Basalt", skos__broader=[link(parent.uri)])
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": parent.scheme.slug, "concept_slug": parent.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        narrower_links = self._links_for(soup, NARROWER_CURIE)
-        narrower_short_forms = {link.get_text(strip=True) for link in narrower_links}
+        soup = soup_of(client.get(concept_page(parent)))
+        anchors = self.links_for(soup, "skos:narrower")
 
-        assert narrower_short_forms == {
-            f"{child_one.scheme.slug}:{child_one.slug}",
-            f"{child_two.scheme.slug}:{child_two.slug}",
+        assert {a.get_text(strip=True) for a in anchors} == {
+            f"{scheme.slug}:{child_one.slug}",
+            f"{scheme.slug}:{child_two.slug}",
         }
-
-        follow = client.get(narrower_links[0]["href"])
-
+        follow = client.get(anchors[0]["href"])
         assert follow.status_code == 200
         assert follow.context["object"] in (child_one, child_two)
 
-    @pytest.mark.django_db
+    def test_a_concept_narrower_of_another_shows_as_broader_when_only_narrower_stored(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        child = RecordFactory(scheme=scheme, label="Granite")
+        parent = concept_with(scheme, "Igneous Rock", skos__narrower=[link(child.uri)])
+
+        soup = soup_of(client.get(concept_page(child)))
+        (anchor,) = self.links_for(soup, "skos:broader")
+
+        assert anchor["href"] == concept_page(parent)
+
     def test_a_related_concept_appears_and_following_it_opens_its_page(self, client):
-        concept = ConceptFactory(label="Granite")
-        other = ConceptFactory(scheme=concept.scheme, label="Basalt")
-        concept.add_related(other)
+        scheme = ConceptSchemeFactory()
+        other = RecordFactory(scheme=scheme, label="Basalt")
+        concept = concept_with(scheme, "Granite", skos__related=[link(other.uri)])
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        (link,) = self._links_for(soup, RELATED_CURIE)
+        soup = soup_of(client.get(concept_page(concept)))
+        (anchor,) = self.links_for(soup, "skos:related")
 
-        assert link.get_text(strip=True) == f"{other.scheme.slug}:{other.slug}"
-
-        follow = client.get(link["href"])
-
+        assert anchor.get_text(strip=True) == f"{scheme.slug}:{other.slug}"
+        follow = client.get(anchor["href"])
         assert follow.status_code == 200
         assert follow.context["object"] == other
 
+    def test_a_concept_another_calls_related_shows_it_as_related_too(self, client):
+        scheme = ConceptSchemeFactory()
+        other = RecordFactory(scheme=scheme, label="Basalt")
+        concept_with(scheme, "Granite", skos__related=[link(other.uri)])
 
+        soup = soup_of(client.get(concept_page(other)))
+
+        assert len(self.links_for(soup, "skos:related")) == 1
+
+    def test_a_link_to_a_concept_not_held_here_is_a_link_to_its_own_address(
+        self, client
+    ):
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__exactMatch=[link("https://other.example.org/granite")],
+        )
+
+        soup = soup_of(client.get(concept_page(concept)))
+        (anchor,) = self.links_for(soup, "skos:exactMatch")
+
+        assert anchor["href"] == "https://other.example.org/granite"
+
+
+@pytest.mark.django_db
 class TestConceptDetailVocabularyRowAndNoAncestorChain:
-    @pytest.mark.django_db
     def test_the_vocabulary_row_appears_and_following_it_opens_the_vocabularys_page(
         self, client
     ):
-        concept = ConceptFactory(label="Granite")
+        concept = RecordFactory(label="Granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        scheme_dt = next(
-            dt for dt in soup.find_all("dt") if term_text(dt) == IN_SCHEME_CURIE
-        )
-        link = scheme_dt.find_next_sibling("dd").find("a")
+        soup = soup_of(client.get(concept_page(concept)))
+        anchor = dd_after(soup, "skos:inScheme").find("a")
 
-        assert link.get_text(strip=True) == concept.scheme.name
-
-        follow = client.get(link["href"])
-
+        assert anchor.get_text(strip=True) == concept.scheme.display_label()
+        follow = client.get(anchor["href"])
         assert follow.status_code == 200
         assert follow.context["vocabulary"] == concept.scheme
 
-    @pytest.mark.django_db
     def test_a_five_level_chain_names_only_the_middle_concepts_immediate_neighbours(
         self, client
     ):
         # Five levels: the concept needs a neighbour beyond each of its own, or a page that
         # walked two steps would find nothing more to show and still pass.
-        great_grandparent = ConceptFactory(label="Material")
-        grandparent = ConceptFactory(scheme=great_grandparent.scheme, label="Rock")
-        parent = ConceptFactory(scheme=great_grandparent.scheme, label="Igneous Rock")
-        child = ConceptFactory(scheme=great_grandparent.scheme, label="Granite")
-        grandchild = ConceptFactory(
-            scheme=great_grandparent.scheme, label="Pink Granite"
+        scheme = ConceptSchemeFactory()
+        great_grandparent = RecordFactory(scheme=scheme, label="Material")
+        grandparent = concept_with(
+            scheme, "Rock", skos__broader=[link(great_grandparent.uri)]
         )
-        grandparent.add_broader(great_grandparent)
-        parent.add_broader(grandparent)
-        child.add_broader(parent)
-        grandchild.add_broader(child)
+        parent = concept_with(
+            scheme, "Igneous Rock", skos__broader=[link(grandparent.uri)]
+        )
+        child = concept_with(scheme, "Granite", skos__broader=[link(parent.uri)])
+        concept_with(scheme, "Pink Granite", skos__broader=[link(child.uri)])
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": parent.scheme.slug, "concept_slug": parent.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(concept_page(parent)))
         relation_pairs = [
             (term_text(dt), dt.find_next_sibling("dd").find("a").get_text(strip=True))
-            for dt in soup.find_all("dt")
-            if term_text(dt) in (BROADER_CURIE, NARROWER_CURIE)
+            for dt in soup("dt")
+            if term_text(dt) in ("skos:broader", "skos:narrower")
         ]
 
-        # The great-grandparent and grandchild exist and must be absent.
         assert relation_pairs == [
-            (BROADER_CURIE, f"{grandparent.scheme.slug}:{grandparent.slug}"),
-            (NARROWER_CURIE, f"{child.scheme.slug}:{child.slug}"),
+            ("skos:broader", f"{scheme.slug}:{grandparent.slug}"),
+            ("skos:narrower", f"{scheme.slug}:{child.slug}"),
         ]
 
 
-class TestPythonSideStringsThisFeatureIntroducedAreTranslatableAndCuriesAreNot:
-    # A CURIE is a SKOS identifier, not reader-visible prose, so it stays untranslated.
-    # Template text is covered by test_templates.py::TestEveryShippedTemplateWrapsReaderVisibleTextInATranslationTag.
-
-    @pytest.mark.django_db
+@pytest.mark.django_db
+class TestTranslatableStrings:
     @pytest.mark.parametrize(
-        "view_class,slug_kwarg",
+        ("view_class", "slug_kwarg"),
         [
             (ConceptDetailView, "concept_slug"),
             (CollectionDetailView, "collection_slug"),
@@ -3739,185 +2596,113 @@ class TestPythonSideStringsThisFeatureIntroducedAreTranslatableAndCuriesAreNot:
         self, rf, view_class, slug_kwarg
     ):
         view = view_class()
-        request = rf.get("/")
 
         with pytest.raises(Http404) as exc_info:
-            view.setup(request, slug="no-such-vocabulary", **{slug_kwarg: "whatever"})
-
-        assert isinstance(exc_info.value.args[0], Promise), (
-            "the 404 message this view raises is a plain string, not a lazy translation"
-        )
-
-    def test_every_curie_a_row_may_be_keyed_on_is_a_plain_string_not_a_translation(
-        self,
-    ):
-        curies = [
-            TYPE_CURIE,
-            CONCEPT_TYPE_CURIE,
-            COLLECTION_TYPE_CURIE,
-            ORDERED_COLLECTION_TYPE_CURIE,
-            BROADER_CURIE,
-            NARROWER_CURIE,
-            RELATED_CURIE,
-            IN_SCHEME_CURIE,
-            MEMBER_CURIE,
-            MEMBER_LIST_CURIE,
-            *LABEL_CURIES.values(),
-            *NOTE_CURIES.values(),
-        ]
-
-        assert curies, (
-            "nothing to prove — the CURIE tables this asserts against are empty"
-        )
-        for curie in curies:
-            assert isinstance(curie, str)
-            assert not isinstance(curie, Promise), (
-                f"{curie!r} is a lazily translated value, but a CURIE is a SKOS identifier and must stay untranslated"
+            view.setup(
+                rf.get("/"), slug="no-such-vocabulary", **{slug_kwarg: "whatever"}
             )
 
+        assert isinstance(exc_info.value.args[0], Promise)
 
-class TestConceptAndCollectionValuesReachTheReaderEscaped:
-    # Each test parses the response: a raw substring check passes for an unescaped payload
-    # too, since it is a substring of the escaped one.
+    def test_module_carries_no_bare_user_visible_literal(self):
+        source = Path(inspect.getfile(views_module)).read_text()
+        visitor = visit_fields_checks_source(source)
+
+        assert visitor.bare_literals == []
+        assert visitor.positional_placeholders == []
+
+
+@pytest.mark.django_db
+class TestRecordValuesReachTheReaderEscaped:
+    # Each test parses the response: a raw substring check passes for an unescaped
+    # payload too, since it is a substring of the escaped one.
 
     # Matches the injected payload only, never the shell's own theme-toggle script.
-    _INJECTED_SCRIPT = re.compile(r"alert\(1\)")
+    INJECTED_SCRIPT = re.compile(r"alert\(1\)")
+    PAYLOAD = "<script>alert(1)</script>"
 
-    @pytest.mark.django_db
     def test_a_preferred_label_containing_markup_is_escaped_on_the_concept_page(
         self, client
     ):
-        concept = ConceptFactory(label="<script>alert(1)</script>")
+        concept = RecordFactory(label=self.PAYLOAD)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(concept_page(concept)))
 
-        assert soup.find("script", string=self._INJECTED_SCRIPT) is None
-        assert "<script>alert(1)</script>" in soup.find("dl").get_text()
+        assert soup.find("script", string=self.INJECTED_SCRIPT) is None
+        assert self.PAYLOAD in soup.find("dl").get_text()
 
-    @pytest.mark.django_db
-    def test_a_note_containing_markup_is_escaped_on_the_concept_page(self, client):
-        concept = ConceptFactory(label="Granite")
-        ConceptNoteFactory(
-            concept=concept,
-            kind=ConceptNote.Kind.DEFINITION,
-            value="<script>alert(1)</script>",
+    def test_a_definition_containing_markup_is_escaped_on_the_concept_page(
+        self, client
+    ):
+        concept = concept_with(
+            ConceptSchemeFactory(),
+            "Granite",
+            skos__definition=[text(self.PAYLOAD, "en")],
         )
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(concept_page(concept)))
 
-        assert soup.find("script", string=self._INJECTED_SCRIPT) is None
-        assert "<script>alert(1)</script>" in soup.find("dl").get_text()
+        assert soup.find("script", string=self.INJECTED_SCRIPT) is None
+        assert self.PAYLOAD in soup.find("dl").get_text()
 
-    @pytest.mark.django_db
     def test_a_publisher_supplied_identifier_reaches_an_attribute_only_as_a_links_destination(
         self, client
     ):
         # A quote inside the identifier would break out of the href if auto-escaping stopped.
-        concept = ConceptFactory(label="Granite", external=True)
-        concept.static_uri = 'http://publisher.example.org/x"><script>alert(1)</script>'
-        concept.save()
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
+        concept = RecordFactory(
+            label="Granite",
+            uri='http://publisher.example.org/x"><script>alert(1)</script>',
         )
-        soup = BeautifulSoup(response.content, "html.parser")
 
-        assert soup.find("script", string=self._INJECTED_SCRIPT) is None
-        identifier_link = soup.find("a", href=concept.static_uri)
-        assert identifier_link is not None
-        assert concept.static_uri in identifier_link.get_text(strip=True)
+        soup = soup_of(client.get(concept_page(concept)))
 
-    @pytest.mark.django_db
+        assert soup.find("script", string=self.INJECTED_SCRIPT) is None
+        identifier_link = soup.find("a", href=concept.uri)
+        assert concept.uri in identifier_link.get_text(strip=True)
+
     def test_a_vocabularys_name_containing_markup_is_escaped_on_the_concept_page(
         self, client
     ):
-        # The name reaches <c-link>'s text attribute rather than a <dd>. A component
-        # attribute is escaped again on render, so the reachable defect is marking it safe
-        # in the view, which is what this pins.
-        scheme = ConceptSchemeFactory(name="<script>alert(1)</script>")
-        concept = ConceptFactory(scheme=scheme, label="Granite")
+        scheme = ConceptSchemeFactory(name=self.PAYLOAD)
+        concept = RecordFactory(scheme=scheme, label="Granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(concept_page(concept)))
 
-        assert soup.find("script", string=self._INJECTED_SCRIPT) is None
-        assert "<script>alert(1)</script>" in soup.find("dl").get_text()
+        assert soup.find("script", string=self.INJECTED_SCRIPT) is None
+        assert self.PAYLOAD in soup.find("dl").get_text()
 
-    @pytest.mark.django_db
     def test_a_related_records_publisher_supplied_identifier_is_escaped_in_its_tooltip_and_hidden_span(
         self, client
     ):
-        # The identifier reaches a data-tip attribute and a hidden span's text.
-        concept = ConceptFactory(label="Granite")
-        parent = ConceptFactory(
-            scheme=concept.scheme, label="Igneous Rock", external=True
+        scheme = ConceptSchemeFactory()
+        parent = RecordFactory(
+            scheme=scheme,
+            label="Igneous Rock",
+            uri='http://publisher.example.org/x"><script>alert(1)</script>',
         )
-        parent.static_uri = 'http://publisher.example.org/x"><script>alert(1)</script>'
-        parent.save()
-        concept.add_broader(parent)
+        concept = concept_with(scheme, "Granite", skos__broader=[link(parent.uri)])
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(concept_page(concept)))
 
-        assert soup.find("script", string=self._INJECTED_SCRIPT) is None
-        wrapper = soup.find("span", attrs={"data-tip": parent.static_uri})
-        assert wrapper is not None
-        link = wrapper.find("a")
-        hidden_span = wrapper.find("span", id=link.get("aria-describedby"))
-        assert hidden_span is not None
-        assert hidden_span.get_text() == parent.static_uri
+        assert soup.find("script", string=self.INJECTED_SCRIPT) is None
+        wrapper = soup.find("span", attrs={"data-tip": parent.uri})
+        hidden_span = wrapper.find("span", id=wrapper.find("a").get("aria-describedby"))
+        assert hidden_span.get_text() == parent.uri
 
-    @pytest.mark.django_db
     def test_a_collections_name_containing_markup_is_escaped_on_the_collection_page(
         self, client
     ):
-        collection = CollectionFactory(name="<script>alert(1)</script>")
+        collection = RecordFactory(label=self.PAYLOAD, type=Record.Type.COLLECTION)
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = soup_of(client.get(collection_page(collection)))
 
-        assert soup.find("script", string=self._INJECTED_SCRIPT) is None
-        assert "<script>alert(1)</script>" in soup.find("dl").get_text()
+        assert soup.find("script", string=self.INJECTED_SCRIPT) is None
+        assert self.PAYLOAD in soup.find("dl").get_text()
 
 
-class TestConceptDetailShowsNoCrossVocabularyLink:
-    # Nothing stores a concept's exact or close matches. Asserted on a concept imported from
-    # a file that offered both, so the test would fail if the importer ever kept them.
-
-    _MAPPING_TURTLE = """\
+@pytest.mark.django_db
+class TestConceptDetailOfAnImportedConcept:
+    MAPPING_TURTLE = """\
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 
 <http://example.org/rocks/> a skos:ConceptScheme ;
@@ -3930,36 +2715,28 @@ class TestConceptDetailShowsNoCrossVocabularyLink:
     skos:closeMatch <http://external.example.org/rocks/granitic-rock> .
 """
 
-    @pytest.mark.django_db
-    def test_a_concept_imported_with_exact_and_close_matches_shows_neither(
+    def test_a_concept_imported_with_exact_and_close_matches_links_to_each(
         self, client, tmp_path
     ):
         source = tmp_path / "rocks.ttl"
-        source.write_text(self._MAPPING_TURTLE)
+        source.write_text(self.MAPPING_TURTLE)
         import_skos(source)
-        concept = Concept.objects.get(static_uri="http://example.org/rocks/granite")
+        concept = Record.objects.get(uri="http://example.org/rocks/granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        content = response.content.decode()
+        soup = soup_of(client.get(concept_page(concept)))
 
-        assert "external.example.org" not in content
-        terms = [term_text(dt) for dt in soup.find_all("dt")]
-        assert terms == [
-            TYPE_CURIE,
-            LABEL_CURIES[ConceptLabel.Kind.PREFERRED],
-            IN_SCHEME_CURIE,
+        assert [a["href"] for a in dd_after(soup, "skos:exactMatch")("a")] == [
+            "http://external.example.org/rocks/granite"
+        ]
+        assert [a["href"] for a in dd_after(soup, "skos:closeMatch")("a")] == [
+            "http://external.example.org/rocks/granitic-rock"
         ]
 
 
+@pytest.mark.django_db
 class TestPropertyTermDisclosesItsOwnURI:
     @staticmethod
-    def _term_disclosures(soup):
+    def term_disclosures(soup):
         """Map each term to the tooltip span wrapping it.
 
         Args:
@@ -3968,708 +2745,33 @@ class TestPropertyTermDisclosesItsOwnURI:
         Returns:
             ``{term: span or None}`` for every ``<dt>``.
         """
-        return {
-            term_text(dt): dt.find("span", class_="tooltip")
-            for dt in soup.find_all("dt")
-        }
+        return {term_text(dt): dt.find("span", class_="tooltip") for dt in soup("dt")}
 
-    @pytest.mark.django_db
     def test_a_concept_pages_terms_each_disclose_the_uri_they_abbreviate(self, client):
-        concept = ConceptFactory(label="Granite")
+        concept = RecordFactory(label="Granite")
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        terms = self._term_disclosures(soup)
+        soup = soup_of(client.get(concept_page(concept)))
+        terms = self.term_disclosures(soup)
 
-        assert terms, "the page rendered no terms at all"
-        assert (
-            terms["rdf:type"].get("data-tip")
-            == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+        assert terms["rdf:type"].get("data-tip") == (
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
         )
-        assert (
-            terms["skos:prefLabel"].get("data-tip")
-            == "http://www.w3.org/2004/02/skos/core#prefLabel"
+        assert terms["skos:prefLabel"].get("data-tip") == (
+            "http://www.w3.org/2004/02/skos/core#prefLabel"
         )
         for curie, wrapper in terms.items():
             assert wrapper is not None, f"{curie} discloses nothing"
             hidden_span = wrapper.find_next_sibling("span", class_="sr-only")
-            assert hidden_span is not None, f"{curie}'s URI is not reachable as text"
-            assert hidden_span.get_text() == wrapper.get("data-tip"), (
-                f"{curie}'s two disclosures disagree"
-            )
-            assert wrapper["data-tip"] not in visible_text(soup.find("dl")), (
-                f"{curie}'s URI is printed, not hovered"
-            )
+            assert hidden_span.get_text() == wrapper.get("data-tip")
+            assert wrapper["data-tip"] not in visible_text(soup.find("dl"))
 
-    @pytest.mark.django_db
     def test_a_collection_pages_terms_do_too(self, client):
-        collection, _members = collection_with_members(labels=("Granite",))
+        collection, members = collection_with_members(labels=("Granite",))
 
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
+        soup = soup_of(client.get(collection_page(collection)))
+        terms = self.term_disclosures(soup)
+
+        assert terms["skos:member"].get("data-tip") == (
+            "http://www.w3.org/2004/02/skos/core#member"
         )
-        soup = BeautifulSoup(response.content, "html.parser")
-        terms = self._term_disclosures(soup)
-
-        assert (
-            terms[MEMBER_CURIE].get("data-tip")
-            == "http://www.w3.org/2004/02/skos/core#member"
-        )
-        for curie, wrapper in terms.items():
-            assert wrapper is not None, f"{curie} discloses nothing"
-
-
-class TestPropertyTermsCarryNoTitle:
-    # A title attribute would show the browser's tooltip on top of daisyUI's.
-
-    @pytest.mark.django_db
-    def test_no_element_in_a_concept_pages_definition_list_carries_a_title(
-        self, client
-    ):
-        concept = ConceptFactory(label="Granite")
-        parent = ConceptFactory(scheme=concept.scheme, label="Igneous Rock")
-        concept.add_broader(parent)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        assert soup.find("dl").find(attrs={"title": True}) is None
-
-    @pytest.mark.django_db
-    def test_no_element_in_a_collection_pages_definition_list_carries_a_title(
-        self, client
-    ):
-        collection, _members = collection_with_members(labels=("Granite", "Basalt"))
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        assert soup.find("dl").find(attrs={"title": True}) is None
-
-
-class TestEveryTooltipOpensToTheRight:
-    @pytest.mark.django_db
-    def test_every_tooltip_on_a_concept_page_opens_right(self, client):
-        concept = ConceptFactory(label="Granite")
-        parent = ConceptFactory(scheme=concept.scheme, label="Igneous Rock")
-        concept.add_broader(parent)
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:concept-detail",
-                kwargs={"slug": concept.scheme.slug, "concept_slug": concept.slug},
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        tooltips = soup.find_all(class_="tooltip")
-
-        assert tooltips, "the page rendered no tooltip at all"
-        for tooltip in tooltips:
-            assert "tooltip-right" in tooltip.get("class", [])
-
-    @pytest.mark.django_db
-    def test_every_tooltip_on_a_collection_page_opens_right(self, client):
-        collection, _members = collection_with_members(labels=("Granite", "Basalt"))
-
-        response = client.get(
-            reverse(
-                "controlled_vocabularies_ui:collection-detail",
-                kwargs={
-                    "slug": collection.scheme.slug,
-                    "collection_slug": collection.slug,
-                },
-            )
-        )
-        soup = BeautifulSoup(response.content, "html.parser")
-        tooltips = soup.find_all(class_="tooltip")
-
-        assert tooltips, "the page rendered no tooltip at all"
-        for tooltip in tooltips:
-            assert "tooltip-right" in tooltip.get("class", [])
-
-
-def message_levels(response):
-    """Return the levels of the messages a response's request queued.
-
-    Args:
-        response: The test client's response.
-
-    Returns:
-        The message levels, in order.
-    """
-    return [message.level for message in messages.get_messages(response.wsgi_request)]
-
-
-CREATE_URL = "controlled_vocabularies_ui:vocabulary-create"
-
-
-@pytest.mark.django_db
-@pytest.mark.usefixtures("with_sessions")
-class TestVocabularyCreate:
-    def test_a_curator_sees_the_form(self, client, curator):
-        client.force_login(curator)
-
-        response = client.get(reverse(CREATE_URL))
-
-        assert response.status_code == 200
-        assert "name" in response.context["form"].fields
-
-    def test_a_valid_post_creates_the_vocabulary_and_lands_on_its_page(
-        self, client, curator
-    ):
-        client.force_login(curator)
-
-        response = client.post(
-            reverse(CREATE_URL), {"name": "Rock Types", "description": "Rocks."}
-        )
-
-        vocabulary = ConceptScheme.objects.get(name="Rock Types")
-        assert vocabulary.description == "Rocks."
-        assert response.status_code == 302
-        assert response.url == reverse(
-            "controlled_vocabularies_ui:vocabulary-detail", args=["rock-types"]
-        )
-        assert message_levels(response) == [messages.SUCCESS]
-
-    def test_an_invalid_post_creates_nothing_and_shows_the_error(self, client, curator):
-        ConceptSchemeFactory(name="Rock Types")
-        client.force_login(curator)
-
-        response = client.post(reverse(CREATE_URL), {"name": "rock types"})
-
-        assert response.status_code == 200
-        assert response.context["form"].errors.as_data()["name"][0].code == "slug_taken"
-        assert ConceptScheme.objects.count() == 1
-
-    def test_an_anonymous_visitor_is_sent_to_sign_in(self, client):
-        url = reverse(CREATE_URL)
-
-        response = client.get(url)
-
-        assert response.status_code == 302
-        assert response.url == f"{django_settings.LOGIN_URL}?next={url}"
-
-    @pytest.mark.parametrize("method", ["get", "post"])
-    def test_a_user_without_the_permission_is_refused_and_nothing_is_created(
-        self, client, make_user, method
-    ):
-        client.force_login(make_user("change", "delete"))
-
-        response = getattr(client, method)(reverse(CREATE_URL), {"name": "Rock Types"})
-
-        assert response.status_code == 403
-        assert not ConceptScheme.objects.exists()
-
-
-class TestViewsI18nSweep:
-    def test_module_carries_no_bare_user_visible_literal(self):
-        source = Path(inspect.getfile(views_module)).read_text()
-        visitor = visit_fields_checks_source(source)
-
-        assert visitor.bare_literals == []
-        assert visitor.positional_placeholders == []
-
-
-def hrefs(response):
-    """Return every address a page links to.
-
-    Args:
-        response: The test client's response.
-
-    Returns:
-        The ``href`` of every anchor on the page.
-    """
-    soup = BeautifulSoup(response.content, "html.parser")
-    return {anchor["href"] for anchor in soup.find_all("a", href=True)}
-
-
-@pytest.mark.django_db
-@pytest.mark.usefixtures("with_sessions")
-class TestVocabularyListCreateAction:
-    def test_a_user_who_may_add_is_offered_creation(self, client, curator):
-        client.force_login(curator)
-
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-
-        assert reverse(CREATE_URL) in hrefs(response)
-
-    def test_an_anonymous_visitor_is_not(self, client):
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-
-        assert reverse(CREATE_URL) not in hrefs(response)
-
-    def test_a_user_without_the_permission_is_not(self, client, make_user):
-        client.force_login(make_user("change", "delete"))
-
-        response = client.get(reverse("controlled_vocabularies_ui:vocabulary-list"))
-
-        assert reverse(CREATE_URL) not in hrefs(response)
-
-
-def update_url(vocabulary):
-    """Return the address of a vocabulary's edit page.
-
-    Args:
-        vocabulary: The vocabulary.
-
-    Returns:
-        The address.
-    """
-    return reverse(
-        "controlled_vocabularies_ui:vocabulary-update", args=[vocabulary.slug]
-    )
-
-
-def detail_url(slug):
-    """Return the address of a vocabulary's own page.
-
-    Args:
-        slug: The vocabulary's slug.
-
-    Returns:
-        The address.
-    """
-    return reverse("controlled_vocabularies_ui:vocabulary-detail", args=[slug])
-
-
-@pytest.mark.django_db
-@pytest.mark.usefixtures("with_sessions")
-class TestVocabularyUpdate:
-    def test_a_curator_sees_the_form_with_the_current_values(self, client, curator):
-        vocabulary = ConceptSchemeFactory(name="Rock Types", description="Rocks.")
-        client.force_login(curator)
-
-        response = client.get(update_url(vocabulary))
-
-        assert response.status_code == 200
-        form = response.context["form"]
-        assert form["name"].value() == "Rock Types"
-        assert form["description"].value() == "Rocks."
-
-    def test_changing_the_description_saves_it_and_lands_on_the_page(
-        self, client, curator
-    ):
-        vocabulary = ConceptSchemeFactory(name="Rock Types")
-        client.force_login(curator)
-
-        response = client.post(
-            update_url(vocabulary), {"name": "Rock Types", "description": "Rocks."}
-        )
-
-        vocabulary.refresh_from_db()
-        assert vocabulary.description == "Rocks."
-        assert response.status_code == 302
-        assert response.url == detail_url("rock-types")
-        assert message_levels(response) == [messages.SUCCESS]
-
-    def test_renaming_moves_the_address_and_the_old_one_is_gone(self, client, curator):
-        vocabulary = ConceptSchemeFactory(name="Rock Types")
-        client.force_login(curator)
-
-        response = client.post(update_url(vocabulary), {"name": "Stone Kinds"})
-
-        assert response.status_code == 302
-        assert response.url == detail_url("stone-kinds")
-        assert client.get(detail_url("rock-types")).status_code == 404
-        assert client.get(detail_url("stone-kinds")).status_code == 200
-
-    def test_an_invalid_post_shows_the_form_again_with_cancel_at_the_stored_address(
-        self, client, curator
-    ):
-        vocabulary = ConceptSchemeFactory(name="Rock Types")
-        ConceptSchemeFactory(name="Stone Kinds")
-        client.force_login(curator)
-
-        response = client.post(update_url(vocabulary), {"name": "stone kinds"})
-
-        assert response.status_code == 200
-        assert response.context["form"].errors.as_data()["name"][0].code == "slug_taken"
-        assert response.context["cancel_url"] == detail_url("rock-types")
-        vocabulary.refresh_from_db()
-        assert vocabulary.name == "Rock Types"
-
-    def test_a_new_name_with_another_field_invalid_still_cancels_to_the_stored_address(
-        self, client, curator
-    ):
-        vocabulary = ConceptSchemeFactory(name="Rock Types")
-        client.force_login(curator)
-
-        response = client.post(
-            update_url(vocabulary), {"name": "Stone Kinds", "modified": "not-a-date"}
-        )
-
-        assert response.status_code == 200
-        assert response.context["cancel_url"] == detail_url("rock-types")
-        assert response.context["page"]["subtitle"] == "Rock Types"
-        vocabulary.refresh_from_db()
-        assert vocabulary.name == "Rock Types"
-
-    @pytest.mark.parametrize("method", ["get", "post"])
-    def test_an_imported_vocabulary_is_refused_to_everyone_and_left_alone(
-        self, client, django_user_model, method
-    ):
-        vocabulary = ConceptSchemeFactory(name="Rock Types", external=True)
-        superuser = django_user_model.objects.create_superuser("root")
-        client.force_login(superuser)
-
-        response = getattr(client, method)(
-            update_url(vocabulary), {"name": "Changed", "description": "Changed."}
-        )
-
-        assert response.status_code == 403
-        vocabulary.refresh_from_db()
-        assert vocabulary.name == "Rock Types"
-        assert vocabulary.description != "Changed."
-
-    def test_an_anonymous_visitor_is_sent_to_sign_in(self, client):
-        vocabulary = ConceptSchemeFactory()
-
-        response = client.get(update_url(vocabulary))
-
-        assert response.status_code == 302
-        assert response.url == f"{django_settings.LOGIN_URL}?next={update_url(vocabulary)}"
-
-    @pytest.mark.parametrize("method", ["get", "post"])
-    def test_a_user_without_the_permission_is_refused_and_nothing_changes(
-        self, client, make_user, method
-    ):
-        vocabulary = ConceptSchemeFactory(name="Rock Types")
-        client.force_login(make_user("add", "delete"))
-
-        response = getattr(client, method)(update_url(vocabulary), {"name": "Changed"})
-
-        assert response.status_code == 403
-        vocabulary.refresh_from_db()
-        assert vocabulary.name == "Rock Types"
-
-    def test_a_vocabulary_deleted_after_the_form_was_opened_is_not_found_and_not_recreated(
-        self, client, curator
-    ):
-        vocabulary = ConceptSchemeFactory(name="Rock Types")
-        url = update_url(vocabulary)
-        client.force_login(curator)
-        client.get(url)
-        vocabulary.delete()
-
-        response = client.post(url, {"name": "Rock Types"})
-
-        assert response.status_code == 404
-        assert not ConceptScheme.objects.exists()
-
-    def test_delete_is_offered_only_to_a_user_who_may_delete(
-        self, client, make_user, curator
-    ):
-        vocabulary = ConceptSchemeFactory()
-
-        client.force_login(make_user("change"))
-        without = client.get(update_url(vocabulary)).context["delete_url"]
-        client.force_login(curator)
-        with_permission = client.get(update_url(vocabulary)).context["delete_url"]
-
-        assert without == ""
-        assert with_permission.startswith(
-            reverse(
-                "controlled_vocabularies_ui:vocabulary-delete", args=[vocabulary.slug]
-            )
-        )
-
-
-def delete_url(vocabulary):
-    """Return the address of a vocabulary's delete page.
-
-    Args:
-        vocabulary: The vocabulary.
-
-    Returns:
-        The address.
-    """
-    return reverse(
-        "controlled_vocabularies_ui:vocabulary-delete", args=[vocabulary.slug]
-    )
-
-
-@pytest.mark.django_db
-@pytest.mark.usefixtures("with_sessions")
-class TestVocabularyPageCuratorActions:
-    def test_edit_is_offered_to_a_user_who_may_change_a_vocabulary_held_here(
-        self, client, make_user
-    ):
-        vocabulary = ConceptSchemeFactory()
-        client.force_login(make_user("change"))
-
-        links = hrefs(client.get(detail_url(vocabulary.slug)))
-
-        assert update_url(vocabulary) in links
-        assert delete_url(vocabulary) not in links
-
-    def test_edit_is_not_offered_for_an_imported_vocabulary(self, client, make_user):
-        vocabulary = ConceptSchemeFactory(external=True)
-        client.force_login(make_user("change"))
-
-        assert update_url(vocabulary) not in hrefs(
-            client.get(detail_url(vocabulary.slug))
-        )
-
-    def test_edit_is_not_offered_without_the_permission(self, client, make_user):
-        vocabulary = ConceptSchemeFactory()
-        client.force_login(make_user("add", "delete"))
-
-        assert update_url(vocabulary) not in hrefs(
-            client.get(detail_url(vocabulary.slug))
-        )
-
-    @pytest.mark.parametrize("imported", [False, True])
-    def test_delete_is_offered_for_either_kind_to_a_user_who_may_delete(
-        self, client, make_user, imported
-    ):
-        vocabulary = ConceptSchemeFactory(external=imported)
-        client.force_login(make_user("delete"))
-
-        links = hrefs(client.get(detail_url(vocabulary.slug)))
-
-        assert delete_url(vocabulary) in links
-        assert update_url(vocabulary) not in links
-
-    def test_delete_is_not_offered_without_the_permission(self, client, make_user):
-        vocabulary = ConceptSchemeFactory()
-        client.force_login(make_user("add", "change"))
-
-        assert delete_url(vocabulary) not in hrefs(
-            client.get(detail_url(vocabulary.slug))
-        )
-
-    def test_neither_is_offered_to_an_anonymous_visitor(self, client):
-        vocabulary = ConceptSchemeFactory()
-
-        links = hrefs(client.get(detail_url(vocabulary.slug)))
-
-        assert update_url(vocabulary) not in links
-        assert delete_url(vocabulary) not in links
-
-
-@pytest.mark.django_db
-@pytest.mark.usefixtures("with_sessions")
-class TestVocabularyDelete:
-    @pytest.fixture
-    def populated(self):
-        vocabulary = ConceptSchemeFactory(name="Rock Types")
-        ConceptFactory.create_batch(3, scheme=vocabulary)
-        CollectionFactory.create_batch(2, scheme=vocabulary)
-        return vocabulary
-
-    def test_the_confirmation_page_counts_what_goes_with_the_vocabulary(
-        self, client, make_user, populated
-    ):
-        client.force_login(make_user("delete"))
-
-        response = client.get(delete_url(populated))
-
-        assert response.status_code == 200
-        assert response.context["concept_count"] == 3
-        items = alert_items(response)
-        assert any("3" in item for item in items)
-        assert any("2" in item for item in items)
-        assert response.context["collection_count"] == 2
-        assert not response.context["is_protected"]
-
-    def test_a_post_deletes_the_vocabulary_with_its_concepts_and_collections(
-        self, client, make_user, populated
-    ):
-        other = ConceptFactory()
-        client.force_login(make_user("delete"))
-
-        response = client.post(delete_url(populated))
-
-        assert response.status_code == 302
-        assert response.url == reverse("controlled_vocabularies_ui:vocabulary-list")
-        assert message_levels(response) == [messages.SUCCESS]
-        assert not ConceptScheme.objects.filter(pk=populated.pk).exists()
-        assert not Concept.objects.filter(scheme_id=populated.pk).exists()
-        assert not Collection.objects.filter(scheme_id=populated.pk).exists()
-        assert Concept.objects.filter(pk=other.pk).exists()
-
-    def test_an_imported_vocabulary_can_be_deleted(self, client, make_user):
-        vocabulary = ConceptSchemeFactory(external=True)
-        client.force_login(make_user("delete"))
-
-        response = client.post(delete_url(vocabulary))
-
-        assert response.status_code == 302
-        assert not ConceptScheme.objects.exists()
-
-    def test_a_request_to_preview_the_in_use_page_changes_nothing(
-        self, client, make_user, populated
-    ):
-        client.force_login(make_user("delete"))
-
-        response = client.get(delete_url(populated), {"preview": "in-use"})
-
-        assert not response.context["is_protected"]
-        assert response.context["form"] is not None
-
-    def test_an_anonymous_visitor_is_sent_to_sign_in(self, client, populated):
-        response = client.post(delete_url(populated))
-
-        assert response.status_code == 302
-        assert response.url.startswith(f"{django_settings.LOGIN_URL}?next=")
-        assert ConceptScheme.objects.filter(pk=populated.pk).exists()
-
-    @pytest.mark.parametrize("method", ["get", "post"])
-    def test_a_user_without_the_permission_is_refused_and_nothing_is_deleted(
-        self, client, make_user, populated, method
-    ):
-        client.force_login(make_user("add", "change"))
-
-        response = getattr(client, method)(delete_url(populated))
-
-        assert response.status_code == 403
-        assert ConceptScheme.objects.filter(pk=populated.pk).exists()
-        assert Concept.objects.filter(scheme=populated).count() == 3
-
-    def test_back_goes_to_a_same_site_path(self, client, make_user, populated):
-        client.force_login(make_user("delete"))
-        edit = update_url(populated)
-
-        response = client.get(delete_url(populated), {"back": edit})
-
-        assert response.context["back_url"] == edit
-
-    @pytest.mark.parametrize(
-        "back",
-        ["//evil.example", "/\\evil.example", "https://evil.example/", "javascript:alert(1)"],
-    )
-    def test_back_falls_back_to_the_vocabularys_page_for_anything_off_site(
-        self, client, make_user, populated, back
-    ):
-        client.force_login(make_user("delete"))
-
-        response = client.get(delete_url(populated), {"back": back})
-
-        assert response.context["back_url"] == detail_url(populated.slug)
-
-    def test_back_without_a_parameter_goes_to_the_vocabularys_page(
-        self, client, make_user, populated
-    ):
-        client.force_login(make_user("delete"))
-
-        response = client.get(delete_url(populated))
-
-        assert response.context["back_url"] == detail_url(populated.slug)
-
-
-@pytest.mark.django_db
-@pytest.mark.usefixtures("with_sessions")
-class TestVocabularyDeleteInUse:
-    @pytest.fixture
-    def vocabulary(self):
-        # The test app's fields name the "rock-type" vocabulary.
-        return ConceptSchemeFactory(name="Rock Type")
-
-    def specimens(self, vocabulary, number):
-        for _ in range(number):
-            SpecimenFactory(rock_type=ConceptFactory(scheme=vocabulary))
-
-    def deposit(self, vocabulary, concepts):
-        deposit = DepositFactory()
-        deposit.rock_types.add(
-            *[ConceptFactory(scheme=vocabulary) for _ in range(concepts)]
-        )
-        return deposit
-
-    def test_a_concept_held_by_a_concept_field_blocks_the_delete(
-        self, client, make_user, vocabulary
-    ):
-        self.specimens(vocabulary, 2)
-        client.force_login(make_user("delete"))
-
-        response = client.get(delete_url(vocabulary))
-
-        assert response.status_code == 200
-        assert response.context["is_protected"]
-        assert response.context["form"] is None
-        assert response.context["protected_kinds"] == [("Specimens", 2)]
-        items = alert_items(response)
-        assert any("Specimens" in item and "2" in item for item in items)
-
-    def test_a_concept_held_by_a_concepts_field_blocks_the_delete(
-        self, client, make_user, vocabulary
-    ):
-        self.deposit(vocabulary, concepts=1)
-        client.force_login(make_user("delete"))
-
-        response = client.get(delete_url(vocabulary))
-
-        assert response.context["is_protected"]
-        assert response.context["protected_kinds"] == [("Deposits", 1)]
-
-    def test_two_rows_from_one_record_count_once(self, client, make_user, vocabulary):
-        self.deposit(vocabulary, concepts=2)
-        client.force_login(make_user("delete"))
-
-        response = client.get(delete_url(vocabulary))
-
-        assert response.context["protected_kinds"] == [("Deposits", 1)]
-
-    def test_each_consuming_model_is_named_with_its_own_count_in_label_order(
-        self, client, make_user, vocabulary
-    ):
-        self.specimens(vocabulary, 1)
-        self.deposit(vocabulary, concepts=2)
-        self.deposit(vocabulary, concepts=1)
-        client.force_login(make_user("delete"))
-
-        response = client.get(delete_url(vocabulary))
-
-        assert response.context["protected_kinds"] == [
-            ("Deposits", 2),
-            ("Specimens", 1),
-        ]
-
-    def test_a_forced_post_deletes_nothing_and_says_why(
-        self, client, make_user, vocabulary
-    ):
-        self.specimens(vocabulary, 1)
-        client.force_login(make_user("delete"))
-
-        response = client.post(delete_url(vocabulary))
-
-        assert response.status_code == 200
-        assert response.context["is_protected"]
-        assert ConceptScheme.objects.filter(pk=vocabulary.pk).exists()
-        assert Concept.objects.filter(scheme=vocabulary).exists()
-        assert message_levels(response) == []
-
-    def test_a_vocabulary_nothing_uses_is_not_protected(
-        self, client, make_user, vocabulary
-    ):
-        ConceptFactory(scheme=vocabulary)
-        client.force_login(make_user("delete"))
-
-        response = client.get(delete_url(vocabulary))
-
-        assert not response.context["is_protected"]
-        assert response.context["protected_kinds"] == []
+        assert all(wrapper is not None for wrapper in terms.values())

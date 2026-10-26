@@ -15,16 +15,28 @@ from django_tomselect.widgets import TomSelectModelMultipleWidget, TomSelectMode
 
 from .admin import related_field_widget_wrapper_class
 from .checks import AUTOCOMPLETE_URL_NAME
-from .models import Concept
+from .models import Record
 
-_MISSING_ROUTE_MESSAGE = _(
+__all__ = [
+    "ConceptChoiceField",
+    "ConceptWidget",
+    "ConceptWidgetDisplayMixin",
+    "ConceptWidgetReferenceMixin",
+    "ConceptWidgetRouteMixin",
+    "ConceptWidgetValidationMixin",
+    "ConceptsChoiceField",
+    "ConceptsWidget",
+    "DeclinesAdminRelatedWrapperMixin",
+]
+
+MISSING_ROUTE_MESSAGE = _(
     "controlled_vocabularies's URL configuration is not included in the project's "
     'URLconf. Add path("<prefix>/", include("controlled_vocabularies.urls")) to the '
     'project\'s root URLconf, and add "django_tomselect" to INSTALLED_APPS.'
 )
 
 
-def _config() -> TomSelectConfig:
+def tomselect_config() -> TomSelectConfig:
     """Return the TomSelect configuration both concept widgets render with.
 
     Returns:
@@ -50,8 +62,8 @@ class ConceptWidgetValidationMixin:
         # Built from the model field directly: the library's own version reads an ambient request,
         # whose GET carries no `field=` reference on a form POST, so every submission would fail.
         if self.model_field is None:
-            return Concept.objects.none()
-        return Concept.objects.complex_filter(self.model_field.get_limit_choices_to())
+            return Record.objects.none()
+        return Record.objects.complex_filter(self.model_field.get_limit_choices_to())
 
 
 class ConceptWidgetReferenceMixin:
@@ -79,7 +91,7 @@ class ConceptWidgetRouteMixin:
         try:
             return super().get_autocomplete_context()
         except NoReverseMatch as exc:
-            raise ImproperlyConfigured(_MISSING_ROUTE_MESSAGE) from exc
+            raise ImproperlyConfigured(MISSING_ROUTE_MESSAGE) from exc
 
 
 class ConceptWidgetDisplayMixin:
@@ -89,7 +101,7 @@ class ConceptWidgetDisplayMixin:
         """Resolve the selected options against every concept, not the restricted queryset."""
         # Otherwise a concept the field no longer admits drops out of the render and is lost on
         # the next save. The shadow lasts one call, so validation still sees the restriction.
-        self.get_queryset = lambda: Concept.objects.all()
+        self.get_queryset = lambda: Record.objects.all()
         try:
             return super()._get_selected_options(value, autocomplete_view)
         finally:
@@ -98,7 +110,7 @@ class ConceptWidgetDisplayMixin:
     def get_label_for_object(self, obj, autocomplete_view):
         """Label a concept with its ``display_label()``."""
         # display_label is a method, so the library's getattr would render the bound method.
-        if isinstance(obj, Concept):
+        if isinstance(obj, Record):
             return escape(obj.display_label())
         return super().get_label_for_object(obj, autocomplete_view)
 
@@ -166,7 +178,7 @@ class ConceptChoiceField(DeclinesAdminRelatedWrapperMixin, TomSelectModelChoiceF
     widget_class = ConceptWidget
 
     def __init__(self, *args, model_field=None, **kwargs):
-        kwargs.setdefault("config", _config())
+        kwargs.setdefault("config", tomselect_config())
         super().__init__(*args, **kwargs)
         self.widget.model_field = model_field
 
@@ -186,6 +198,6 @@ class ConceptsChoiceField(  # type: ignore[misc]
     widget_class = ConceptsWidget
 
     def __init__(self, *args, model_field=None, **kwargs):
-        kwargs.setdefault("config", _config())
+        kwargs.setdefault("config", tomselect_config())
         super().__init__(*args, **kwargs)
         self.widget.model_field = model_field

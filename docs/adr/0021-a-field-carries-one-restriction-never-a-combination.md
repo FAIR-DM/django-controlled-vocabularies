@@ -1,6 +1,6 @@
 # ADR 0021 — A field carries one restriction, never a combination
 
-**Status:** accepted
+**Status:** superseded by ADR 0024
 
 ## Decision
 

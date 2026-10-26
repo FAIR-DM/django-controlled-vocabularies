@@ -1,28 +1,27 @@
-"""Registers the vocabulary model with the demo's admin site."""
+"""Registers the vocabulary models with the demo's admin site."""
 
 from django.contrib import admin
 
-from controlled_vocabularies.models import ConceptScheme
+from controlled_vocabularies.models import ConceptScheme, Record
 
 
 # Registered here rather than in the package, which registers nothing so each project decides
-# for itself. Concept is left out: a hand-added vocabulary should show a count of zero.
+# for itself.
 @admin.register(ConceptScheme)
 class ConceptSchemeAdmin(admin.ModelAdmin):
-    """Admin for vocabularies, showing only the fields the vocabulary pages read."""
+    """Admin for vocabularies; the name is in the document, so it is searched there."""
 
-    # slug and slug_is_manual are left off the form: the slug is derived from the name on save, and a
-    # required slug field would demand a value the model is about to compute.
-    fields = (
-        "name",
-        "description",
-        "default_language",
-        "static_uri",
-        "publisher",
-        "creator",
-        "license",
-        "version",
-        "modified",
-    )
-    list_display = ("name", "slug", "static_uri")
-    search_fields = ("name", "description")
+    list_display = ("pref_label", "slug", "uri")
+    search_fields = ("pref_label", "uri")
+    readonly_fields = ("pref_label",)
+
+
+@admin.register(Record)
+class RecordAdmin(admin.ModelAdmin):
+    """Admin for concepts and collections, filtered by vocabulary and type."""
+
+    list_display = ("pref_label", "type", "scheme", "uri")
+    list_filter = ("scheme", "type")
+    list_select_related = ("scheme",)
+    search_fields = ("pref_label", "search_text", "uri")
+    readonly_fields = ("pref_label", "search_text")

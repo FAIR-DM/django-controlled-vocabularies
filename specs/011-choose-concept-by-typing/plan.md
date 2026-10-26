@@ -102,7 +102,9 @@ TomSelect widget" would pass while the page still grew.
 
 ```python
 app_name = "controlled_vocabularies"
-urlpatterns = [path("concepts/", ConceptAutocompleteView.as_view(), name="concept-autocomplete")]
+urlpatterns = [
+    path("concepts/", ConceptAutocompleteView.as_view(), name="concept-autocomplete")
+]
 ```
 
 The project writes `path("vocabularies/", include("controlled_vocabularies.urls"))` — prefix its

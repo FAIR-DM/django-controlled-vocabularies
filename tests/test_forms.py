@@ -17,25 +17,17 @@ from django_tomselect.middleware import TomSelectMiddleware
 from controlled_vocabularies import forms as forms_module
 from controlled_vocabularies.forms import ConceptChoiceField, ConceptsChoiceField
 from tests.factories import (
-    CollectionFactory,
-    ConceptFactory,
     ConceptSchemeFactory,
     OutcropFactory,
+    RecordFactory,
     SampleFactory,
     collection_with_members,
 )
 from tests.i18n_sweep import visit_fields_checks_source
-from tests.testapp.models import (
-    BranchSample,
-    ChipSample,
-    CoreSample,
-    Deposit,
-    Outcrop,
-    Sample,
-)
+from tests.testapp.models import CoreSample, Deposit, Outcrop, Sample
 
 
-def _rendered_under_an_ambient_request(build):
+def rendered_under_an_ambient_request(build):
     """Render ``build()`` under an ambient request, as ``TomSelectMiddleware`` does.
 
     ``tests/settings.py`` installs no middleware, and without an ambient request
@@ -50,6 +42,24 @@ def _rendered_under_an_ambient_request(build):
     request = RequestFactory().get("/")
     request.user = AnonymousUser()
     return TomSelectMiddleware(lambda r: build())(request)
+
+
+def bilingual(english, german):
+    """Return a document naming its subject in English and in German.
+
+    Args:
+        english: The English preferred label.
+        german: The German preferred label.
+
+    Returns:
+        The document.
+    """
+    return {
+        "skos:prefLabel": [
+            {"@value": english, "@language": "en"},
+            {"@value": german, "@language": "de"},
+        ]
+    }
 
 
 class SampleForm(forms.ModelForm):
@@ -76,18 +86,6 @@ class CoreSampleForm(forms.ModelForm):
         fields = ["name", "rock_type"]
 
 
-class ChipSampleForm(forms.ModelForm):
-    class Meta:
-        model = ChipSample
-        fields = ["name", "rock_type"]
-
-
-class BranchSampleForm(forms.ModelForm):
-    class Meta:
-        model = BranchSample
-        fields = ["name", "rock_type"]
-
-
 class TestConceptFieldRendersAsTheControl:
     def test_a_concept_field_binds_this_packages_form_field_and_widget(self):
         bound_field = SampleForm().fields["mineral"]
@@ -104,29 +102,27 @@ class TestConceptFieldRendersAsTheControl:
 class TestConceptFieldRenderingIsBoundedByVocabularySize:
     def test_rendered_length_and_absence_of_labels_hold_for_a_small_vocabulary(self):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [
-            ConceptFactory(scheme=scheme, label=f"Small vocab concept {i}")
-            for i in range(5)
-        ]
+        labels = [f"Small vocab concept {i}" for i in range(5)]
+        for label in labels:
+            RecordFactory(scheme=scheme, label=label)
 
         rendered = str(SampleForm())
 
-        assert not any(concept.label in rendered for concept in concepts)
+        assert not any(label in rendered for label in labels)
 
     def test_rendered_length_is_identical_for_a_large_vocabulary(self):
         scheme = ConceptSchemeFactory(name="Mineral")
         for i in range(5):
-            ConceptFactory(scheme=scheme, label=f"Small vocab concept {i}")
+            RecordFactory(scheme=scheme, label=f"Small vocab concept {i}")
         small_rendered = str(SampleForm())
 
-        large_concepts = [
-            ConceptFactory(scheme=scheme, label=f"Large vocab concept {i}")
-            for i in range(2000)
-        ]
+        large_labels = [f"Large vocab concept {i}" for i in range(500)]
+        for label in large_labels:
+            RecordFactory(scheme=scheme, label=label)
         large_rendered = str(SampleForm())
 
         assert len(large_rendered) == len(small_rendered)
-        assert not any(concept.label in large_rendered for concept in large_concepts)
+        assert not any(label in large_rendered for label in large_labels)
 
 
 # The widget's get_queryset() builds the validation queryset from the model field, not
@@ -134,8 +130,7 @@ class TestConceptFieldRenderingIsBoundedByVocabularySize:
 @pytest.mark.django_db
 class TestConceptFieldSubmissionSurvives:
     def test_a_legitimate_concept_is_valid_and_saves_for_a_concept_field(self):
-        mineral_scheme = ConceptSchemeFactory(name="Mineral")
-        concept = ConceptFactory(scheme=mineral_scheme)
+        concept = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
 
         form = SampleForm(data={"name": "Sample A", "mineral": concept.pk})
 
@@ -144,19 +139,27 @@ class TestConceptFieldSubmissionSurvives:
         assert instance.mineral_id == concept.pk
 
     def test_a_foreign_concept_is_still_refused_for_a_concept_field(self):
-        other_scheme = ConceptSchemeFactory(name="Rock Type")
-        foreign_concept = ConceptFactory(scheme=other_scheme)
+        foreign_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
 
         form = SampleForm(data={"name": "Sample B", "mineral": foreign_concept.pk})
 
         assert not form.is_valid()
-        assert "mineral" in form.errors
+        assert form.has_error("mineral")
+
+    def test_a_collection_is_refused_for_a_concept_field(self):
+        collection, members = collection_with_members(
+            scheme=ConceptSchemeFactory(name="Mineral")
+        )
+
+        form = SampleForm(data={"name": "Sample C", "mineral": collection.pk})
+
+        assert not form.is_valid()
+        assert form.has_error("mineral")
 
     def test_a_legitimate_concept_is_valid_and_saves_for_a_concepts_field(self):
-        # Outcrop (blank=True), not Deposit: editing a saved record whose required
+        # Outcrop (blank=True), not Deposit: editing a saved row whose required
         # relation is still empty is refused for an unrelated reason (#124).
-        mineral_scheme = ConceptSchemeFactory(name="Mineral")
-        concept = ConceptFactory(scheme=mineral_scheme)
+        concept = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
         outcrop = OutcropFactory()
 
         form = OutcropForm(
@@ -168,8 +171,7 @@ class TestConceptFieldSubmissionSurvives:
         assert list(instance.minerals.values_list("pk", flat=True)) == [concept.pk]
 
     def test_a_foreign_concept_is_still_refused_for_a_concepts_field(self):
-        other_scheme = ConceptSchemeFactory(name="Rock Type")
-        foreign_concept = ConceptFactory(scheme=other_scheme)
+        foreign_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
         outcrop = OutcropFactory()
 
         form = OutcropForm(
@@ -178,17 +180,17 @@ class TestConceptFieldSubmissionSurvives:
         )
 
         assert not form.is_valid()
-        assert "minerals" in form.errors
+        assert form.has_error("minerals")
 
 
 @pytest.mark.django_db
 class TestConceptFieldCollectionRestrictionFormChoices:
     def test_the_modelforms_own_queryset_is_exactly_the_members(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(
+        collection, members = collection_with_members(
             scheme=scheme, name="Core Samples", labels=("Granite", "Basalt")
         )
-        outsider = ConceptFactory(scheme=scheme, label="Marble")
+        outsider = RecordFactory(scheme=scheme, label="Marble")
 
         choices = list(CoreSampleForm().fields["rock_type"].queryset)
 
@@ -198,10 +200,10 @@ class TestConceptFieldCollectionRestrictionFormChoices:
 
     def test_the_widgets_own_queryset_is_exactly_the_members(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(
+        collection, members = collection_with_members(
             scheme=scheme, name="Core Samples", labels=("Granite", "Basalt")
         )
-        outsider = ConceptFactory(scheme=scheme, label="Marble")
+        outsider = RecordFactory(scheme=scheme, label="Marble")
 
         widget = CoreSampleForm().fields["rock_type"].widget
         choices = list(widget.get_queryset())
@@ -210,91 +212,19 @@ class TestConceptFieldCollectionRestrictionFormChoices:
         assert len(choices) == len(members)
         assert outsider not in choices
 
-    def test_a_member_of_a_second_collection_too_is_not_duplicated_on_either_path(self):
+    def test_a_member_added_to_the_collection_appears_on_the_next_read(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
-        _collection, members = collection_with_members(
+        collection, members = collection_with_members(
             scheme=scheme, name="Core Samples", labels=("Granite",)
         )
-        other_collection = CollectionFactory(scheme=scheme, name="Display Samples")
-        other_collection.add(members[0])
+        assert set(CoreSampleForm().fields["rock_type"].queryset) == set(members)
 
-        form = CoreSampleForm()
-        modelform_choices = list(form.fields["rock_type"].queryset)
-        widget_choices = list(form.fields["rock_type"].widget.get_queryset())
+        newcomer = RecordFactory(scheme=scheme, label="Basalt")
+        collection.data["skos:member"].append({"@id": newcomer.uri})
+        collection.save()
 
-        assert modelform_choices == [members[0]]
-        assert widget_choices == [members[0]]
-
-
-@pytest.mark.django_db
-class TestConceptFieldConceptsRestrictionFormChoices:
-    def test_the_modelforms_own_queryset_is_exactly_the_listed_concepts(self):
-        scheme = ConceptSchemeFactory(name="Rock Type")
-        granite = ConceptFactory(scheme=scheme, label="Granite")
-        basalt = ConceptFactory(scheme=scheme, label="Basalt")
-        outsider = ConceptFactory(scheme=scheme, label="Marble")
-
-        choices = list(ChipSampleForm().fields["rock_type"].queryset)
-
-        assert set(choices) == {granite, basalt}
-        assert len(choices) == 2
-        assert outsider not in choices
-
-    def test_the_widgets_own_queryset_is_exactly_the_listed_concepts(self):
-        scheme = ConceptSchemeFactory(name="Rock Type")
-        granite = ConceptFactory(scheme=scheme, label="Granite")
-        basalt = ConceptFactory(scheme=scheme, label="Basalt")
-        outsider = ConceptFactory(scheme=scheme, label="Marble")
-
-        widget = ChipSampleForm().fields["rock_type"].widget
-        choices = list(widget.get_queryset())
-
-        assert set(choices) == {granite, basalt}
-        assert len(choices) == 2
-        assert outsider not in choices
-
-
-@pytest.mark.django_db
-class TestConceptFieldBranchRestrictionFormChoices:
-    def test_the_modelforms_own_queryset_is_exactly_the_closure(self):
-        scheme = ConceptSchemeFactory(name="Rock Type")
-        root = ConceptFactory(scheme=scheme, label="Igneous")
-        child = ConceptFactory(scheme=scheme, label="Granite")
-        child.add_broader(root)
-        outsider = ConceptFactory(scheme=scheme, label="Marble")
-
-        choices = list(BranchSampleForm().fields["rock_type"].queryset)
-
-        assert set(choices) == {root, child}
-        assert len(choices) == 2
-        assert outsider not in choices
-
-    def test_the_widgets_own_queryset_is_exactly_the_closure(self):
-        scheme = ConceptSchemeFactory(name="Rock Type")
-        root = ConceptFactory(scheme=scheme, label="Igneous")
-        child = ConceptFactory(scheme=scheme, label="Granite")
-        child.add_broader(root)
-        outsider = ConceptFactory(scheme=scheme, label="Marble")
-
-        widget = BranchSampleForm().fields["rock_type"].widget
-        choices = list(widget.get_queryset())
-
-        assert set(choices) == {root, child}
-        assert len(choices) == 2
-        assert outsider not in choices
-
-    def test_a_concept_added_below_the_root_appears_on_the_next_read(self):
-        scheme = ConceptSchemeFactory(name="Rock Type")
-        root = ConceptFactory(scheme=scheme, label="Igneous")
-
-        form = BranchSampleForm()
-        assert set(form.fields["rock_type"].queryset) == {root}
-
-        newcomer = ConceptFactory(scheme=scheme, label="Granite")
-        newcomer.add_broader(root)
-
-        form_again = BranchSampleForm()
-        assert set(form_again.fields["rock_type"].queryset) == {root, newcomer}
+        choices = set(CoreSampleForm().fields["rock_type"].queryset)
+        assert choices == {*members, newcomer}
 
 
 class TestConceptFieldRenderingWithoutTheRouteIncluded:
@@ -306,20 +236,22 @@ class TestConceptFieldRenderingWithoutTheRouteIncluded:
 
 
 @pytest.mark.django_db
-class TestConceptFieldShowsWhatARecordAlreadyHolds:
+class TestConceptFieldShowsWhatARowAlreadyHolds:
     def test_a_concept_field_shows_the_attached_concept_under_its_active_language_label(
         self,
     ):
-        scheme = ConceptSchemeFactory(name="Mineral")
-        concept = ConceptFactory(scheme=scheme, multilingual=True, label="Quartz")
+        concept = RecordFactory(
+            scheme=ConceptSchemeFactory(name="Mineral"),
+            data=bilingual("Quartz", "Quarz"),
+        )
         sample = SampleFactory(mineral=concept)
 
         with translation.override("de"):
-            rendered = _rendered_under_an_ambient_request(
+            rendered = rendered_under_an_ambient_request(
                 lambda: str(SampleForm(instance=sample))
             )
 
-        assert concept.preferred_label("de") in rendered
+        assert "Quarz" in rendered
         assert "Quartz" not in rendered
 
     def test_a_concepts_field_shows_every_attached_concept_under_its_active_language_label(
@@ -327,27 +259,26 @@ class TestConceptFieldShowsWhatARecordAlreadyHolds:
     ):
         scheme = ConceptSchemeFactory(name="Mineral")
         concepts = [
-            ConceptFactory(scheme=scheme, multilingual=True, label=f"Concept {i}")
+            RecordFactory(scheme=scheme, data=bilingual(f"Concept {i}", f"Begriff {i}"))
             for i in range(3)
         ]
         outcrop = OutcropFactory()
         outcrop.minerals.add(*concepts)
 
         with translation.override("de"):
-            rendered = _rendered_under_an_ambient_request(
+            rendered = rendered_under_an_ambient_request(
                 lambda: str(OutcropForm(instance=outcrop))
             )
 
-        for concept in concepts:
-            assert concept.preferred_label("de") in rendered
+        for i in range(3):
+            assert f"Begriff {i}" in rendered
+            assert f"Concept {i}" not in rendered
 
     def test_submitting_the_concepts_field_form_untouched_leaves_all_three_attached(
         self,
     ):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [
-            ConceptFactory(scheme=scheme, label=f"Concept {i}") for i in range(3)
-        ]
+        concepts = [RecordFactory(scheme=scheme) for _ in range(3)]
         outcrop = OutcropFactory()
         outcrop.minerals.add(*concepts)
 
@@ -367,9 +298,7 @@ class TestConceptFieldShowsWhatARecordAlreadyHolds:
 
     def test_removing_one_attached_concept_and_saving_removes_exactly_that_one(self):
         scheme = ConceptSchemeFactory(name="Mineral")
-        concepts = [
-            ConceptFactory(scheme=scheme, label=f"Concept {i}") for i in range(3)
-        ]
+        concepts = [RecordFactory(scheme=scheme) for _ in range(3)]
         outcrop = OutcropFactory()
         outcrop.minerals.add(*concepts)
         kept = concepts[:2]
@@ -390,11 +319,12 @@ class TestConceptFieldShowsWhatARecordAlreadyHolds:
     ):
         # The stock widget drops it: _get_selected_options() resolves the value
         # through the same narrowed get_queryset() that validation uses.
-        outside_scheme = ConceptSchemeFactory(name="Rock Type")
-        outside_concept = ConceptFactory(scheme=outside_scheme, label="Basalt")
+        outside_concept = RecordFactory(
+            scheme=ConceptSchemeFactory(name="Rock Type"), label="Basalt"
+        )
         sample = SampleFactory(mineral=outside_concept)
 
-        rendered = _rendered_under_an_ambient_request(
+        rendered = rendered_under_an_ambient_request(
             lambda: str(SampleForm(instance=sample))
         )
 
@@ -405,16 +335,16 @@ class TestConceptFieldShowsWhatARecordAlreadyHolds:
     ):
         # Attaching a foreign concept is refused, so the state is reached the way an
         # editor recategorising a concept reaches it: reassign its scheme afterwards.
-        mineral_scheme = ConceptSchemeFactory(name="Mineral")
-        concept = ConceptFactory(scheme=mineral_scheme, label="Basalt")
+        concept = RecordFactory(
+            scheme=ConceptSchemeFactory(name="Mineral"), label="Basalt"
+        )
         outcrop = OutcropFactory()
         outcrop.minerals.add(concept)
 
-        other_scheme = ConceptSchemeFactory(name="Rock Type")
-        concept.scheme = other_scheme
+        concept.scheme = ConceptSchemeFactory(name="Rock Type")
         concept.save()
 
-        rendered = _rendered_under_an_ambient_request(
+        rendered = rendered_under_an_ambient_request(
             lambda: str(OutcropForm(instance=outcrop))
         )
 
@@ -428,7 +358,7 @@ class TestConceptFieldShowsWhatARecordAlreadyHolds:
 class TestTheControlIsActuallyInstantiated:
     @pytest.mark.parametrize("form_class", [SampleForm, DepositForm])
     def test_the_page_carries_the_instantiated_control(self, form_class):
-        rendered = _rendered_under_an_ambient_request(lambda: str(form_class()))
+        rendered = rendered_under_an_ambient_request(lambda: str(form_class()))
 
         assert "new TomSelect" in rendered
 
@@ -453,9 +383,8 @@ class TestDisplayingAnAttachedConceptLeavesValidationNarrow:
     def test_the_widget_queryset_is_narrow_again_after_a_render(
         self, form_class, field_name, instance_factory
     ):
-        mineral_scheme = ConceptSchemeFactory(name="Mineral")
-        attached = ConceptFactory(scheme=mineral_scheme)
-        foreign = ConceptFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
+        attached = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
+        foreign = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
         instance = instance_factory()
         if field_name == "mineral":
             instance.mineral = attached
@@ -465,7 +394,7 @@ class TestDisplayingAnAttachedConceptLeavesValidationNarrow:
 
         form = form_class(instance=instance)
         widget = form.fields[field_name].widget
-        _rendered_under_an_ambient_request(lambda: str(form))
+        rendered_under_an_ambient_request(lambda: str(form))
 
         assert "get_queryset" not in widget.__dict__
         assert not widget.get_queryset().filter(pk=foreign.pk).exists()
@@ -526,26 +455,26 @@ class TestConceptFieldDeclinesTheAdminWrapper:
 # The listener in concept-inline.js is browser behaviour, so these tests check only that
 # it ships.
 class TestConceptWidgetsShipTheInlineInitialisationScript:
-    _ASSET = "controlled_vocabularies/js/concept-inline.js"
+    ASSET = "controlled_vocabularies/js/concept-inline.js"
 
     def test_the_asset_is_discoverable_as_a_static_file(self):
         from django.contrib.staticfiles.finders import find
 
-        assert find(self._ASSET) is not None
+        assert find(self.ASSET) is not None
 
     def test_the_concept_widget_declares_the_asset_in_its_media(self):
         widget = ConceptChoiceField(
             model_field=Sample._meta.get_field("mineral"), required=False
         ).widget
 
-        assert self._ASSET in widget.media._js
+        assert self.ASSET in widget.media._js
 
     def test_the_concepts_widget_declares_the_asset_in_its_media(self):
         widget = ConceptsChoiceField(
             model_field=Outcrop._meta.get_field("minerals"), required=False
         ).widget
 
-        assert self._ASSET in widget.media._js
+        assert self.ASSET in widget.media._js
 
 
 class TestFormsI18nSweep:
@@ -563,6 +492,6 @@ class TestFormsI18nSweep:
 
 class TestMissingRouteMessage:
     def test_missing_route_message_is_a_lazy_translation(self):
-        assert isinstance(forms_module._MISSING_ROUTE_MESSAGE, Promise), (
-            "_MISSING_ROUTE_MESSAGE is not lazily translatable"
+        assert isinstance(forms_module.MISSING_ROUTE_MESSAGE, Promise), (
+            "MISSING_ROUTE_MESSAGE is not lazily translatable"
         )

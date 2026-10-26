@@ -1,53 +1,73 @@
 # Public ORM contract — Multilingual names and descriptions
 
 The programmatic surface a downstream developer uses. This is the contract acceptance tests exercise;
-exact signatures are the Implementer's, but the behaviour below is fixed by the spec. Builds on #15's
-contract (`ConceptScheme`, `Concept`, `Concept.objects.get_by_uri`), which is unchanged.
+the behaviour below is fixed by the spec. Builds on FS-001's contract (`ConceptScheme`, `Record`),
+which is unchanged.
 
 ## ConceptScheme
 
-- `default_language: str = ""` — an override; a language code from `settings.LANGUAGES`, or empty.
-- `effective_default_language -> str` — `default_language or settings.LANGUAGE_CODE`.
+- `default_language: str` — required; a language tag such as `en`. It decides which preferred label
+  is copied into each record's `pref_label`.
 
-## Concept
+## Record
 
-Identity anchor and slug behaviour:
+Names and descriptions live in `record.data`, a mapping of predicate to a list of entries:
 
-- `label: str` — required; the preferred label in the scheme's effective default language. Drives
-  the slug unless the slug is pinned.
-- `slug: str` — derived from `label` on save when auto; a pinned slug is preserved across `label`
-  changes. Unique within the scheme (from #15).
-- Setting an explicit slug: a caller passes the slug and marks it manual (via a manager helper such
-  as `Concept.objects.create(..., slug="x")` setting the manual flag, or `concept.set_slug("x")`).
-  Exact spelling is the Implementer's; the guarantee is FR-010.
+```python
+{
+    "skos:prefLabel": [
+        {"@value": "Heat flow", "@language": "en"},
+        {"@value": "Wärmefluss", "@language": "de"},
+    ],
+    "skos:altLabel": [{"@value": "Terrestrial heat flow", "@language": "en"}],
+    "skos:definition": [
+        {
+            "@value": "The rate of heat loss through the Earth's surface.",
+            "@language": "en",
+        }
+    ],
+}
+```
 
-Read API (language-filtered; `language=None` means the scheme's effective default):
+Identity and the copied columns:
 
-- `preferred_label(language=None) -> str | None`
-- `alt_labels(language) -> list[str]`
-- `hidden_labels(language) -> list[str]`
-- `definition(language) -> str | None`  *(first definition value for that language, or None)*
-- `notes(language, kind=None) -> list[str]`  *(all note values, optionally filtered to one kind)*
+- `pref_label: str` — a copy of the name in the vocabulary's `default_language`, else the first
+  `skos:prefLabel` value in any language. Refreshed on every save.
+- `search_text: str` — every `skos:prefLabel`, `skos:altLabel` and `skos:hiddenLabel` value, in every
+  language, one per line. Refreshed on every save.
+- `slug: str` — derived once, on the first save, from the published `uri` or else from `pref_label`.
+  A slug supplied when the record is created is kept as given. Unique within the scheme (from FS-001).
 
-Write API (one language at a time; other languages untouched):
+Read API (language-filtered):
 
-- `add_label(language, kind, text)` / equivalent — `kind ∈ {preferred, alternative, hidden}`; a
-  second `preferred` for a language that already has one raises `ValidationError`; a `preferred` in
-  the effective default language raises `ValidationError` (that lives on `label`).
-- `add_note(language, kind, value)` — `kind ∈ {definition, scope, example, editorial, history,
-  change, note}`; repeats allowed.
+- `values(curie) -> list[dict]` — every entry under a predicate, in every language. Empty when there
+  are none.
+- `label(language) -> str | None` — the first `skos:prefLabel` value whose `@language` equals
+  `language`, ignoring case, or `None`.
+- `display_label() -> str` — `label()` in the active language, else `pref_label`.
+- `first_value(curie) -> str` — the first value under a predicate as text, or an empty string.
 
-Errors (all translatable, named placeholders — Article XII):
+Alternative labels, hidden labels, definitions and notes are read with `values("skos:altLabel")`,
+`values("skos:hiddenLabel")`, `values("skos:definition")`, `values("skos:scopeNote")`,
+`values("skos:example")`, `values("skos:editorialNote")`, `values("skos:historyNote")`,
+`values("skos:changeNote")` and `values("skos:note")`, and filtered on each entry's `@language`.
 
-- Missing default-language `label` → `ValidationError`.
-- Duplicate preferred label in a language → `ValidationError`.
-- Language outside `settings.LANGUAGES` → `ValidationError`.
-- Slug collision within scheme (auto or manual) → `ValidationError` (from #15).
+Write API: a record is written by assigning its `data` and saving. One language's entries are added,
+changed or removed by editing the list under a predicate and leaving the rest of the document alone.
+
+Validation (`full_clean()`, translatable messages with named placeholders — Article XII):
+
+- A document that is not an object, or whose predicate does not hold a list of entries each shaped as
+  `{"@id": ...}` or `{"@value": ...}` with at most an `@language` or an `@type` → `ValidationError`.
+- A supplied slug another record of the scheme holds → `ValidationError` (from FS-001).
+
+Nothing about a language is validated: any language tag is accepted, and `settings.LANGUAGES` plays no
+part.
 
 ## Invariants the contract guarantees
 
-- **Identity stability (FR-004/SC-003)**: `concept.uri` and `concept.slug` are unchanged by any
-  `add/remove/change` of a label or note in a non-default language, and by any note change at all.
-- **One preferred per language (FR-001)**: across the `label` field (default language) and
-  `ConceptLabel` preferred rows (other languages), each language has at most one preferred label.
-- **Slug provenance (FR-010)**: an auto slug tracks `label`; a manual slug never moves on relabel.
+- **Identity stability (FR-004/SC-003)**: `record.uri` and `record.slug` are unchanged by any
+  addition, change or removal of a label or note, in any language, after the first save.
+- **Name copy (FR-002)**: `pref_label` is the vocabulary's default-language preferred label whenever
+  the record has one.
+- **Slug provenance (FR-010)**: a supplied slug never moves when the preferred label changes.

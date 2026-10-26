@@ -8,29 +8,49 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Added
 
-- A user holding the `add_conceptscheme`, `change_conceptscheme` or `delete_conceptscheme`
-  permission can create, edit or delete a vocabulary from the browsing pages, without the Django
-  admin. An imported vocabulary cannot be edited, a vocabulary's default language is fixed once it
-  holds concepts, and a vocabulary whose concepts are used by a `ConceptField` or `ConceptsField`
-  cannot be deleted. The list of vocabularies and a vocabulary's page offer each action only to a
-  user who may take it. The `ui` extra now requires `django-crispy-forms`, which the form uses; a
-  project that installs the extra picks it up on its next install. See
-  [Curating vocabularies](docs/curating.md).
 - Django 6.1 is supported, and tested on every change alongside 5.2 and 6.0.
 - An import keeps a vocabulary's publisher, creator, licence, version and last-modified date, from
   `dcterms:publisher`, `dcterms:creator`, `dcterms:license`, `owl:versionInfo` and
-  `dcterms:modified`, in new `ConceptScheme` fields of the same names (`modified` is a date). They
-  are no longer reported as predicates the models have no place for. A vocabulary's page shows
-  them, with a dash for any it does not have. The report gains `SetAsideReason.SURPLUS_VALUE`,
-  `SetAsideReason.NOT_A_DATE` and `NormalizedReason.DATE_FROM_DATE_TIME`. A project runs
-  `migrate` for the new fields (#205).
+  `dcterms:modified`. A vocabulary's page shows them, with a dash for any it does not have (#205).
 - The list of vocabularies can be narrowed by publisher, licence and language from a filter panel
-  beside it, each option showing how many vocabularies it would leave. A user with the
-  `change_conceptscheme` permission can also narrow it to imported vocabularies or those held
-  here. The list can be sorted by most concepts or most recently updated.
+  beside it, each option showing how many vocabularies it would leave. The list can be sorted by
+  most concepts or most recently updated.
 
 ### Changed
 
+- **Breaking:** a vocabulary is stored as two models, `ConceptScheme` and `Record`, in place of
+  seven. `ConceptScheme` holds a vocabulary's URI, slug, default language, preferred label and
+  `data`. `Record` holds a concept or collection of a vocabulary: its vocabulary, `type`, URI,
+  slug, preferred label, `search_text` and `data`. `data` is a JSON document of every statement
+  about the row as its publisher made it, in every language, and `pref_label` and `search_text` are
+  copies of it kept for sorting and searching. A record is read with `values()`, `label()`,
+  `display_label()`, `linked_uris()` and `first_value()`, and a collection's members with
+  `member_uris()`. See [Importing a published vocabulary](docs/importing.md) and
+  [ADR 0024](docs/adr/0024-a-vocabulary-is-stored-as-documents-of-its-published-statements.md).
+- **Breaking:** the migrations start again at a new `0001_initial`, and no data migration is
+  provided. A site on 0.1.0 imports its vocabularies again from their published files after
+  upgrading, and attaches concepts again to the rows of its own models that referenced them.
+- **Breaking:** `ConceptField` and `ConceptsField` point at `Record`, limited to concepts, in place
+  of `Concept`. `vocabulary=` and `collection=` are unchanged.
+- **Breaking:** an import keeps every statement it reads, in every language, including notations,
+  mappings to other vocabularies and statements outside SKOS. This closes the concern of #181:
+  notations and mappings are no longer discarded. A run is refused only for a subject with no usable
+  identifier (a blank node, or a `javascript:`, `data:` or `vbscript:` URI) or a file whose
+  vocabulary cannot be determined.
+- An import leaves alone a concept the file places in another vocabulary, and a record
+  another vocabulary holds unless the file places it in this one. Both are named in the report's new
+  `held_elsewhere` list.
+- A blank node a statement points at is stored embedded in the entry, holding its own statements,
+  so a skos-xl label or a creator given as a blank node is kept.
+- An identifier longer than the 500 characters the `uri` column holds refuses the run with
+  `FatalReason.IDENTIFIER_TOO_LONG`, before anything is written.
+- A vocabulary's page lists top concepts, and its rows name a broader concept, when the hierarchy is
+  stated with `skos:narrower` as well as with `skos:broader`.
+- An identifier is shown as a link on the browsing pages only when it is an `http` or `https`
+  address. A `urn:` or any other identifier is shown as text.
+- **Breaking:** `ImportReport` has `created`, `updated`, `absent_from_source`, `held_elsewhere` and
+  `fatal`. Its `set_aside` and `normalized` buckets, `SetAsideReason`, `NormalizedReason` and their
+  entries are gone, and the `import_skos` command no longer prints counts or reasons for them.
 - The package's stated scope is importing published vocabularies and referencing their concepts
   from your own models. Authoring vocabularies and publishing them as RDF are set aside until a
   project needs them. See [GOALS.md](GOALS.md) and [the roadmap](docs/ROADMAP.md).
@@ -43,8 +63,7 @@ All notable changes to this project are documented in this file. The format foll
   broader concept, its definition cut to 30 words, its identifier as a link, and the collections
   that hold it. What the page says about the vocabulary moves to a side panel beside the list:
   its identifier, default language, concept count, top concepts and collections with their
-  member counts. The description becomes the page's lead text. Whether a vocabulary was imported
-  is shown only to users with the `change_conceptscheme` permission. A project overriding
+  member counts. The description becomes the page's lead text. A project overriding
   `concept_list_item.html` or `conceptscheme_detail.html` should compare its copy with the new
   templates.
 - The demo project reloads an open page when a template, static file or Python module changes.
@@ -65,6 +84,24 @@ All notable changes to this project are documented in this file. The format foll
   and offers Clear all as the way back to the full list. This replaces the "Nothing matches"
   heading. The list of vocabularies now has a way back from a search that matches nothing, which
   until now only a vocabulary's page had.
+
+### Removed
+
+- **Breaking:** the `branch=` and `concepts=` arguments of `ConceptField` and `ConceptsField`. A
+  field can be narrowed to a collection with `collection=`, which needs one vocabulary.
+- **Breaking:** the helpers on the old models, among them `add_label`, `add_note`, `add_broader`,
+  `add_related`, `Collection.add`, `set_slug` and `get_by_uri`, and the `static_uri` and
+  `has_static_uri` attributes. A row has one `uri`: an imported row keeps its publisher's, and
+  one created without it is given a composed URI once.
+- **Breaking:** matching a published language against `LANGUAGES`. An import no longer drops,
+  substitutes or reports a language, so the site's `LANGUAGES` setting does not limit what it stores.
+- **Breaking:** the `CONTROLLED_VOCABULARIES_ALLOWED_URI_SCHEMES` setting. The three schemes that
+  can carry executable content (`javascript`, `data` and `vbscript`) are always refused as an
+  identifier, and any other scheme is accepted.
+- The modules `controlled_vocabularies.exchange.languages` and
+  `controlled_vocabularies.exchange.mapping`, and `concept_property_rows()` and
+  `collection_property_rows()` in `controlled_vocabularies.ui.views`. The rows of a concept's or
+  collection's page come from `PropertyRows` in `controlled_vocabularies.ui.rows`.
 
 ## [v0.1.0] - 2026-08-26
 

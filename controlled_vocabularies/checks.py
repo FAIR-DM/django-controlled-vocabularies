@@ -8,7 +8,7 @@ from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 
 from .fields import ConceptField, ConceptsField
-from .models import ConceptScheme
+from .models import ConceptScheme, Record
 
 CHECK_ID = "controlled_vocabularies.W001"
 CHECK_ID_MISSING_ROUTE = "controlled_vocabularies.W002"
@@ -23,19 +23,24 @@ CHECK_ID_MISSING_RESTRICTION_TARGET = "controlled_vocabularies.W005"
 TOMSELECT_MIDDLEWARE = "django_tomselect.middleware.TomSelectMiddleware"
 
 #: The name the control's widget reverses at render time (``forms.py``'s
-#: ``_config()``). Named once here so the check and the widget cannot drift
+#: ``tomselect_config()``). Named once here so the check and the widget cannot drift
 #: apart about which route is being asked for.
 AUTOCOMPLETE_URL_NAME = "controlled_vocabularies:concept-autocomplete"
 
 
-def check_concept_field_vocabularies(app_configs, **kwargs):
-    """Warn about every vocabulary a concept field names that is absent from the database."""
-    fields = [
+def concept_fields():
+    """Return every concept field declared on an installed model."""
+    return [
         field
         for model in apps.get_models()
         for field in model._meta.get_fields()
         if isinstance(field, (ConceptField, ConceptsField))
     ]
+
+
+def check_concept_field_vocabularies(app_configs, **kwargs):
+    """Warn about every vocabulary a concept field names that is not in the database."""
+    fields = concept_fields()
     slugs = {slug for field in fields for slug in field.vocabulary}
     if not slugs:
         return []
@@ -71,112 +76,47 @@ def check_concept_field_vocabularies(app_configs, **kwargs):
 
 
 def check_concept_field_restriction_targets(app_configs, **kwargs):
-    """Warn about every collection, concept or branch restriction naming a target absent from its vocabulary."""
-    fields = [
-        field
-        for model in apps.get_models()
-        for field in model._meta.get_fields()
-        if isinstance(field, (ConceptField, ConceptsField))
+    """Warn about every collection restriction naming a collection that is missing."""
+    targets = [
+        (field, field.vocabulary[0], field.collection)
+        for field in concept_fields()
+        if field.collection is not None
     ]
-
-    # Targets are (vocabulary, slug) pairs, never flat slugs: a collection or concept slug is unique
-    # only within its vocabulary, so a flat set would call a mistyped slug present whenever
-    # another vocabulary uses it.
-    collection_targets = []
-    concepts_targets = []
-    branch_targets = []
-    for field in fields:
-        if field.collection is not None:
-            (vocabulary,) = field.vocabulary
-            collection_targets.append((field, vocabulary, field.collection))
-        if field.concepts is not None:
-            (vocabulary,) = field.vocabulary
-            concepts_targets.extend(
-                (field, vocabulary, slug) for slug in field.concepts
-            )
-        if field.branch is not None:
-            (vocabulary,) = field.vocabulary
-            branch_targets.append((field, vocabulary, field.branch))
-
-    if not (collection_targets or concepts_targets or branch_targets):
+    if not targets:
         return []
 
-    from .models import Collection, Concept
-
-    def _existing_pairs(model, targets):
-        """Return the ``(vocabulary slug, slug)`` pairs of ``targets`` that exist.
-
-        Args:
-            model: ``Collection`` or ``Concept``.
-            targets: ``(field, vocabulary slug, target slug)`` tuples to look up.
-
-        Returns:
-            The pairs found in the database.
-        """
-        if not targets:
-            return set()
-        return set(
-            model.objects.filter(
+    # A collection slug is unique only within its vocabulary, so the pair is the key: a
+    # flat set of slugs would call a mistyped slug present whenever another vocabulary
+    # uses it. Same DatabaseError guard as check_concept_field_vocabularies.
+    try:
+        existing = set(
+            Record.objects.filter(
                 scheme__slug__in={vocabulary for _, vocabulary, _ in targets},
                 slug__in={slug for _, _, slug in targets},
+                type__in=Record.COLLECTION_TYPES,
             ).values_list("scheme__slug", "slug")
         )
-
-    # Same DatabaseError guard as check_concept_field_vocabularies.
-    try:
-        existing_collections = _existing_pairs(Collection, collection_targets)
-        existing_concepts = _existing_pairs(Concept, concepts_targets)
-        existing_branch_roots = _existing_pairs(Concept, branch_targets)
     except DatabaseError:
         return []
 
-    messages = {
-        "collection": (
+    return [
+        checks.Warning(
             _(
                 "%(model)s.%(field)s names collection '%(target)s', which does not exist in the '%(vocabulary)s' vocabulary."
-            ),
-            _("Create this collection, or correct the name."),
-        ),
-        "concepts": (
-            _(
-                "%(model)s.%(field)s names concept '%(target)s', which does not exist in the '%(vocabulary)s' vocabulary."
-            ),
-            _("Create this concept, or correct the name."),
-        ),
-        "branch": (
-            _(
-                "%(model)s.%(field)s names branch root '%(target)s', which does not exist in the "
-                "'%(vocabulary)s' vocabulary."
-            ),
-            _("Create this concept, or correct the name."),
-        ),
-    }
-
-    warnings = []
-    for kind, targets, existing in (
-        ("collection", collection_targets, existing_collections),
-        ("concepts", concepts_targets, existing_concepts),
-        ("branch", branch_targets, existing_branch_roots),
-    ):
-        message, hint = messages[kind]
-        for field, vocabulary, slug in targets:
-            if (vocabulary, slug) in existing:
-                continue
-            warnings.append(
-                checks.Warning(
-                    message
-                    % {
-                        "model": field.model._meta.label,
-                        "field": field.name,
-                        "target": slug,
-                        "vocabulary": vocabulary,
-                    },
-                    hint=hint,
-                    obj=field,
-                    id=CHECK_ID_MISSING_RESTRICTION_TARGET,
-                )
             )
-    return warnings
+            % {
+                "model": field.model._meta.label,
+                "field": field.name,
+                "target": slug,
+                "vocabulary": vocabulary,
+            },
+            hint=_("Create this collection, or correct the name."),
+            obj=field,
+            id=CHECK_ID_MISSING_RESTRICTION_TARGET,
+        )
+        for field, vocabulary, slug in targets
+        if (vocabulary, slug) not in existing
+    ]
 
 
 def check_concept_autocomplete_route_included(app_configs, **kwargs):
