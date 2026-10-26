@@ -13,6 +13,14 @@ from controlled_vocabularies.models import ConceptScheme, Record
 from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
 from controlled_vocabularies.ui.rows import PropertyRows, PublicationDetails
 
+__all__ = [
+    "CollectionDetailView",
+    "ConceptDetailView",
+    "VocabularyDetailView",
+    "VocabularyListView",
+    "vocabulary_url",
+]
+
 
 class StrippedSearchMixin:
     """Strip the search term in the request before the filterset reads it."""

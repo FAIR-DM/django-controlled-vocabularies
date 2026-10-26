@@ -45,7 +45,7 @@ MAX_TOTAL_SECONDS = 600  # 10 minutes
 # Built by hand, not with build_opener, which merges FTPHandler and other default handlers
 # back in. UnknownHandler and HTTPDefaultErrorHandler make an unhandled scheme or a non-2xx
 # status raise instead of open() returning None (docs/adr/0007-outbound-fetches-are-restricted-by-removing-handlers.md).
-opener = OpenerDirector()
+OPENER = OpenerDirector()
 for handler_class in (
     HTTPHandler,
     HTTPSHandler,
@@ -54,7 +54,7 @@ for handler_class in (
     UnknownHandler,
     HTTPDefaultErrorHandler,
 ):
-    opener.add_handler(handler_class())
+    OPENER.add_handler(handler_class())
 
 
 @dataclass
@@ -181,7 +181,7 @@ class SourceResolver:
                 ``CommandError`` built by :meth:`retrieval_error`.
         """
         try:
-            response = opener.open(self.source, timeout=TIMEOUT_SECONDS)
+            response = OPENER.open(self.source, timeout=TIMEOUT_SECONDS)
         except OSError as exc:
             raise self.retrieval_error(exc) from exc
         with response:

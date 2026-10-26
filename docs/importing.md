@@ -85,11 +85,13 @@ collection.member_uris()            # a collection's members, an ordered one in 
 ```
 
 `values()`, `label()`, `display_label()`, `linked_uris()` and `first_value()` are on both
-`ConceptScheme` and `Record`. `member_uris()` is on `Record`.
+`ConceptScheme` and `Record`, which share them through their abstract base, `Resource`.
+`member_uris()` is on `Record`.
 
 A record's `type` is one of `Record.Type.CONCEPT`, `Record.Type.COLLECTION` and
 `Record.Type.ORDERED_COLLECTION`. `Record.COLLECTION_TYPES` holds the last two, and
-`record.is_collection` says whether a record is either. `Record.objects.mentioning(uri)` narrows
+`record.is_collection` says whether a record is either. `Record.objects` is a `RecordQuerySet`,
+whose `mentioning(uri)` narrows
 records to those whose document may link to a URI, which is how a concept's page finds the links
 other concepts make to it. It matches on the stored text, so it can return a record that holds the
 URI as a plain literal, and callers check the links with `linked_uris()`.

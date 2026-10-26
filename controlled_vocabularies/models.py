@@ -17,28 +17,6 @@ PREF_LABEL_MAX_LENGTH = 255
 SLUG_BASE_LENGTH = 240
 
 
-def is_entry(entry: object) -> bool:
-    """Return whether ``entry`` is shaped as JSON-LD writes a value.
-
-    Args:
-        entry: One item of a predicate's list.
-
-    Returns:
-        True for a link (``@id``), or a literal (``@value``) with at most a language or a datatype.
-    """
-    if not isinstance(entry, dict):
-        return False
-    if "@id" in entry:
-        return set(entry) == {"@id"} and isinstance(entry["@id"], str)
-    qualifiers = set(entry) - {"@value"}
-    return (
-        isinstance(entry.get("@value"), str | int | float | bool)
-        and qualifiers <= {"@language", "@type"}
-        and len(qualifiers) < 2
-        and all(isinstance(entry[key], str) for key in qualifiers)
-    )
-
-
 def validate_document(value: object) -> None:
     """Check that a document maps each predicate to a list of JSON-LD style entries.
 
@@ -49,6 +27,28 @@ def validate_document(value: object) -> None:
         ValidationError: The document is not an object, or a predicate's value is not a list
             of ``{"@value": ...}`` / ``{"@id": ...}`` entries.
     """
+
+    def is_entry(entry: object) -> bool:
+        """Return whether ``entry`` is shaped as JSON-LD writes a value.
+
+        Args:
+            entry: One item of a predicate's list.
+
+        Returns:
+            True for a link (``@id``), or a literal (``@value``) with at most a language or a datatype.
+        """
+        if not isinstance(entry, dict):
+            return False
+        if "@id" in entry:
+            return set(entry) == {"@id"} and isinstance(entry["@id"], str)
+        qualifiers = set(entry) - {"@value"}
+        return (
+            isinstance(entry.get("@value"), str | int | float | bool)
+            and qualifiers <= {"@language", "@type"}
+            and len(qualifiers) < 2
+            and all(isinstance(entry[key], str) for key in qualifiers)
+        )
+
     if not isinstance(value, dict):
         raise ValidationError(
             _("A document must be an object that maps predicates to lists."),

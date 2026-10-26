@@ -15,6 +15,12 @@ from django.utils.translation import gettext_lazy as _
 if TYPE_CHECKING:
     from django_stubs_ext import StrOrPromise
 
+__all__ = [
+    "ConceptField",
+    "ConceptFieldMixin",
+    "ConceptsField",
+]
+
 
 class ConceptFieldMixin:
     """The ``vocabulary`` and ``collection`` contract shared by both concept fields.

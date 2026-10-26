@@ -17,6 +17,18 @@ from .admin import related_field_widget_wrapper_class
 from .checks import AUTOCOMPLETE_URL_NAME
 from .models import Record
 
+__all__ = [
+    "ConceptChoiceField",
+    "ConceptWidget",
+    "ConceptWidgetDisplayMixin",
+    "ConceptWidgetReferenceMixin",
+    "ConceptWidgetRouteMixin",
+    "ConceptWidgetValidationMixin",
+    "ConceptsChoiceField",
+    "ConceptsWidget",
+    "DeclinesAdminRelatedWrapperMixin",
+]
+
 MISSING_ROUTE_MESSAGE = _(
     "controlled_vocabularies's URL configuration is not included in the project's "
     'URLconf. Add path("<prefix>/", include("controlled_vocabularies.urls")) to the '

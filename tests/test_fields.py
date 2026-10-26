@@ -624,26 +624,27 @@ class TestConceptsFieldConsumingModels:
         assert concept in photograph.keywords.all()
 
 
-@pytest.mark.parametrize(
-    ("model", "field_name"),
-    [
-        (Deposit, "rock_types"),
-        (Survey, "primary_minerals"),
-        (Survey, "secondary_minerals"),
-        (Outcrop, "minerals"),
-        (RockSample, "associated_minerals"),
-        (FieldNote, "keywords"),
-        (Photograph, "keywords"),
-    ],
-)
-def test_every_concepts_field_has_translatable_help_text_and_a_verbose_name(
-    model, field_name
-):
-    field = model._meta.get_field(field_name)
+class TestConceptsFieldMetadata:
+    @pytest.mark.parametrize(
+        ("model", "field_name"),
+        [
+            (Deposit, "rock_types"),
+            (Survey, "primary_minerals"),
+            (Survey, "secondary_minerals"),
+            (Outcrop, "minerals"),
+            (RockSample, "associated_minerals"),
+            (FieldNote, "keywords"),
+            (Photograph, "keywords"),
+        ],
+    )
+    def test_every_concepts_field_has_translatable_help_text_and_a_verbose_name(
+        self, model, field_name
+    ):
+        field = model._meta.get_field(field_name)
 
-    assert isinstance(field.help_text, Promise)
-    assert str(field.help_text)
-    assert field.verbose_name
+        assert isinstance(field.help_text, Promise)
+        assert str(field.help_text)
+        assert field.verbose_name
 
 
 @pytest.mark.django_db
