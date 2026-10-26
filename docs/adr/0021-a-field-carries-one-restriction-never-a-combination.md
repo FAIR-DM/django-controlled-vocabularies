@@ -1,4 +1,4 @@
-# ADR 0017 — A field carries one restriction, never a combination
+# ADR 0021 — A field carries one restriction, never a combination
 
 **Status:** accepted
 
@@ -24,7 +24,7 @@ read ambiguously at the call site, which is where it is read most often, and the
 be silent — a field quietly wider or narrower than intended, with no error and no failing test.
 
 The exactly-one-vocabulary rule follows from how targets are named rather than from taste. A
-collection slug and a concept slug are unique only within their vocabulary (see ADR 0018), so with
+collection slug and a concept slug are unique only within their vocabulary (see ADR 0022), so with
 two vocabularies named there is no way to say which collection `collection="core"` means.
 
 Nothing is foreclosed. If a real need for an intersection appears it can be added later with an

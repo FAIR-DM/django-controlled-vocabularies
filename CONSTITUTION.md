@@ -102,8 +102,10 @@ data integrity inside any deployment:
 
 - A concept's **identity is its URI, never the database primary key.**
 - Import **upserts by URI** — it matches and updates existing concepts, never delete-and-recreate.
-- Referenced concepts are removed via **deprecation, not deletion** (`draft` → `published` →
-  `deprecated`, emitted as `owl:deprecated`); references use `on_delete=PROTECT`.
+- A concept a record references cannot be deleted: references use `on_delete=PROTECT`.
+- **Deprecation is what the publisher states.** A concept is deprecated when its vocabulary says
+  so (`owl:deprecated`), and an import carries that statement like any other. The package keeps no
+  lifecycle of its own on a concept.
 - Migrations preserve concept URIs and existing foreign-key references.
 
 These invariants carry first-class tests and never take a shortened review path. (The *external* promise that
@@ -115,20 +117,15 @@ regardless, to keep a single deployment's data self-consistent.)
   from `mvp-shared[dev,test]`; ruff owns lint **and** format (no black/isort/pyupgrade).
 - **Models are the source of truth; RDF is a projection** produced only at the import/export
   boundary. The app is not a triplestore and exposes no SPARQL endpoint.
-- **SKOS-only**. Non-SKOS predicates round-trip as escrow but are not modelled.
+- **SKOS-only**. Only SKOS is modelled. A statement in any other vocabulary is stored as it was
+  published, alongside the SKOS ones, and is never discarded for being unmodelled.
 
 ### Article XI — RDF fidelity
-- **Managed vocabularies round-trip losslessly:** for vocabularies authored and managed here, the
-  unknown predicate tail is preserved verbatim as escrow and re-emitted on export — nothing the
-  system holds is lost (within the app's configured languages).
-- **Imported external vocabularies are normalised, not mirrored:** an import keeps only what the app
-  supports (notably its configured languages, `PARLER_LANGUAGES`) and does not store languages or
-  constructs it cannot use. This normalisation is **surfaced to the user, never silent**.
-- **Re-import is additive:** re-importing an external vocabulary after the app's supported languages
-  are expanded populates the newly-supported languages from the source. Import is re-runnable and
-  upserts by URI (Article IX), never delete-and-recreate.
-- Export emits correct RDF types (`URIRef` vs `Literal` vs typed literal) via the predicate
-  registry — types are declared, never guessed from string shape.
+- **An import keeps every statement it reads, in every language.** Nothing is set aside for its
+  language, its predicate or its shape. The one exception is a subject with no usable identifier,
+  which cannot be stored under the identity Article IX requires, and that exclusion is **surfaced
+  to the user, never silent**.
+- **Re-import is re-runnable:** it upserts by URI (Article IX), never delete-and-recreate.
 - Schema normalisation (e.g. `dcterms:description` → the `definition` predicate) is surfaced to the
   user, never applied silently.
 
@@ -161,12 +158,12 @@ Read at plan and review; applies to every change.
 - Test coverage meets the floors in `docs/contributing/standards/testing.md` (the repo `codecov.yml` is the reference).
 - Every public API change updates README + CHANGELOG in the same PR.
 - Lint (`ruff`), type-check (`mypy`), and `deptry` pass.
-- **Data-safety invariants have tests:** URI-upsert-on-reimport and import→export round-trip
-  fidelity are covered and may not regress.
+- **Data-safety invariants have tests:** URI-upsert-on-reimport and an import keeping every
+  statement it reads are covered and may not regress.
 
 **Package bar:** the package builds and its metadata is valid; the README renders on the package
 index (absolute URLs); the public API honours the deprecation policy (Article VIII).
 
 ---
 
-**Version**: 2.1.0 | **Ratified**: 2026-07-22 | **Last Amended**: 2026-10-12
+**Version**: 2.2.0 | **Ratified**: 2026-07-22 | **Last Amended**: 2026-10-26

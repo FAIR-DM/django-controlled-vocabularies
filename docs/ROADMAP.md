@@ -25,11 +25,10 @@ minors, and one minor can move two goals. And once `1.0` ships, a breaking chang
 `1.x`; it waits for the next major, because a consumer pinned to `>=1,<2` is trusting that it will
 not break.
 
-`v0.1.0` was published on 2026-08-26. The per-item marks below have not been reconciled against
-what that release actually contains: R3's consumption field and R6's browsing pages have both
-shipped without being marked, while R4's RDF publishing and R5's management interface have not
-shipped at all — so the release went out ahead of the gate this table sets for it. Reconciling the
-two is its own piece of work.
+`v0.1.0` was published on 2026-08-26. Of the two Essential goals it delivers G2 through R3's
+consumption field, and G8 through R2's import, short of one deliverable: a site's declared
+vocabularies, loaded by one command. It also carries R6's browsing pages, which advance an Expected
+goal.
 
 ## Essential goals: v0.1.0
 
@@ -64,18 +63,17 @@ The Django admin moved to R5. All four features deferred every admin and editor 
 curator-facing interface is one coherent piece of work, and building a quarter of it against each
 model in turn produces something nobody would want to keep.
 
-The concept lifecycle moved to R4
-([#19](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/19), closed as
-deferred rather than rejected). A concept only becomes unsafe to remove once the vocabulary holding
-it has been published, and publication is a vocabulary-level release event that arrives with R4.
-Until something can reference a concept, a delete guard defends against a harm that cannot happen.
+The concept lifecycle was deferred
+([#19](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/19)) and has since been
+dropped. A concept is deprecated when its publisher says so, and a concept a record references
+cannot be deleted.
 
 Serves the foundation and G6. Out of scope: RDF import and export, the consumption field, the
 served URLs, and the editing interface.
 
 ### R2 — RDF import
 
-*delivered in [#49](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/49), [#50](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/50), [#51](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/51), [#52](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/52) · advances G4, and G8, G6.*
+*partly delivered in [#49](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/49), [#50](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/50), [#51](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/51), [#52](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/52) · advances G8, and G6.*
 
 Import is the only way to get real vocabularies into the system: the heat-flow vocabularies already
 published as Turtle, large external sets, and whatever a curator starts from. Until it existed,
@@ -96,14 +94,16 @@ nothing downstream could be tested against real data. It shipped as four feature
 - a re-runnable, safe import that upserts rather than delete-and-recreates;
 - external vocabularies normalised to the app's configured languages, with what was set aside
   reported to the user, and an additive re-import that fills in newly added languages;
-- both a management command and a programmatic entry point.
+- both a management command and a programmatic entry point;
+- not yet delivered: the vocabularies a site declares, loaded by one command
+  ([#221](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/221)).
 
-Serves G4, G8, and G6. Out of scope: export and serving, the consumption field, the editing
+Serves G8 and G6. Out of scope: export and serving, the consumption field, the editing
 interface.
 
 ### R3 — Concept consumption field
 
-*delivered in [#86](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/86), [#87](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/87), [#88](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/88), [#89](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/89), [#111](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/111), [#164](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/164) · advances G2.*
+*partly delivered in [#86](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/86), [#87](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/87), [#88](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/88), [#89](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/89), [#111](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/111), [#164](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/164) · advances G2.*
 
 This is what the whole package was built for: a Django project attaches controlled-vocabulary
 concepts to its own models as first-class data. It shipped as five features and one fix:
@@ -129,49 +129,12 @@ concepts to its own models as first-class data. It shipped as five features and 
 - referential integrity, so a referenced concept cannot silently disappear;
 - the concept's label and identity reachable from the consuming record.
 
+Two changes to the field are open: storing the concept's URI in the column the field adds
+([#220](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/220)), and renaming
+`ConceptsField` to `MultiConceptField`
+([#222](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/222)).
+
 Serves G2. Out of scope: import, export and serving, the editing interface.
-
-### R5 — Vocabulary management interface
-
-*Large, multi-feature · advances G1.*
-
-The graphical, code-free way for curators to create, edit, and delete vocabularies and concepts. It
-is the last Essential goal, so `0.1.0` cannot ship without it. It comes after the consume items
-because it needs the domain in place, and it comes before publishing: there is nothing to publish
-until a vocabulary can be authored here.
-
-**Deliverables:**
-
-- create and edit schemes, concepts, and collections through the UI;
-- edit labels and notes per language;
-- manage hierarchy and relationships between concepts.
-
-A fuller brief gets written when it reaches the front of the queue.
-
-### R4 — RDF publishing and stable URIs
-
-*Full feature · advances G3, and G4.*
-
-This follows the management interface: publishing a vocabulary, and freezing its concept URIs,
-means something only once a vocabulary can be authored here rather than only imported. It closes
-the consume loop and makes the stable-URI promise real: a published concept URI has to resolve to
-standards-compliant RDF. The details belong in this feature's own spec.
-
-It also absorbs the concept lifecycle deferred out of R1. Publishing a vocabulary and freezing its
-concept URIs are the same moment, so the rules that protect a published concept belong here rather
-than in the foundation. Until a vocabulary can be published, a curator simply deletes a concept
-instead.
-
-**Deliverables:**
-
-- vocabulary publication as a deliberate, one-way release, after which a concept is retired by
-  deprecation instead of deletion;
-- concept and scheme URLs that resolve to valid SKOS in Turtle and at least one other
-  serialization, chosen by content negotiation;
-- a human-readable response alongside the machine ones;
-- a vocabulary exported this way that re-imports cleanly.
-
-Serves G3 and G4. Out of scope: the editing interface, browsing external sources.
 
 ## Expected goals: v1.0.0
 
@@ -213,11 +176,44 @@ on its own.
 *Small to medium · advances G10.*
 
 Move the existing heat-flow vocabularies onto this app as the first production content, exercising
-the manage, consume, and publish loop on a real dataset.
+the import and consume loop on a real dataset.
 
 ## Aspirational goals: v2.0
 
 Bigger bets, taken on once the 1.x line is stable.
+
+### R5 — Vocabulary management interface
+
+*delivered in [#175](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/175) · advances G1.*
+
+A curator creates, edits and deletes a vocabulary from the browsing pages, without the Django
+admin ([Curating vocabularies](curating.md)). Managing what is inside a vocabulary through those
+pages (its concepts, their labels and notes, the hierarchy, and collections) was set aside with
+G1: [#176](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/176),
+[#177](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/177),
+[#178](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/178) and
+[#179](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/179) were closed as
+not planned. The package's job is importing and referencing published vocabularies, and
+authoring returns when a project needs it.
+
+### R4 — RDF publishing and stable URIs
+
+*Full feature · advances G3, and G4.*
+
+Serving a vocabulary held here as standards-compliant RDF at stable concept URIs, with content
+negotiation. It means something only once a project authors its own vocabularies, so it follows
+R5. A concept in a vocabulary published here is deprecated the same way as an imported one: the
+vocabulary states it.
+
+**Deliverables:**
+
+- vocabulary publication as a deliberate, one-way release that freezes its concept URIs;
+- concept and scheme URLs that resolve to valid SKOS in Turtle and at least one other
+  serialization, chosen by content negotiation;
+- a human-readable response alongside the machine ones;
+- a vocabulary exported this way that re-imports cleanly.
+
+Serves G3 and G4. Out of scope: the editing interface, browsing external sources.
 
 ### R10 — Collaborative curation
 
