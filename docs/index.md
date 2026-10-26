@@ -8,8 +8,8 @@ how to install it, and the shortest example that works. These pages are the manu
 
 ## Using the package
 
-- **[Configuration](configuration.md)** — the base address identifiers are composed from, and how a
-  row's URI and slug are made and kept.
+- **[Configuration](configuration.md)** — the vocabularies your site declares, the base address
+  identifiers are composed from, and how a row's URI and slug are made and kept.
 - **[Attaching concepts to your models](fields.md)** — `ConceptField` and `MultiConceptField`,
   restricting either to the vocabularies you name, and narrowing further to the members of a
   collection.
@@ -17,8 +17,9 @@ how to install it, and the shortest example that works. These pages are the manu
   Django admin pages, and the three wiring steps it needs.
 - **[Browsing vocabularies](browsing.md)** — the opt-in `ui` extra: the list of vocabularies, a
   page for each vocabulary, concept and collection, and the runnable demo project.
-- **[Importing a published vocabulary](importing.md)** — reading SKOS from a file or a URL, what an
-  import keeps, what the import report tells you, and the management command.
+- **[Importing a published vocabulary](importing.md)** — declaring your site's vocabularies and
+  loading them all with one command, reading SKOS from a file or a URL, what an import keeps, and
+  what the import report tells you.
 
 ## Contributing
 

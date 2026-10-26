@@ -52,7 +52,8 @@ This is a seed — it grows as the code does.
 | **Import** | Reading a published SKOS file into one vocabulary row and one record row per concept and collection, keeping every statement in every language. Re-running it upserts by URI, and the file is authoritative for each record it contains. | A record the file no longer mentions is left alone and named in the report. |
 | **Report** (`ImportReport`) | What a run did: `created`, `updated`, `absent_from_source`, and `fatal`. | A plain dataclass, never parsed text. |
 | **Fatal finding** | A reason a whole run is refused: a subject with no usable identifier (a blank node, or a `javascript:`, `data:` or `vbscript:` URI), or a file whose vocabulary cannot be determined. A refused run writes nothing. | The only reasons a run is refused. |
-| **Dry run** | A `--dry-run` run of the `import_skos` management command: performs the entire import, in a transaction that is always rolled back, and reports exactly what a live run would. | Not a lightweight validation that never touches the database — it does the same work a live run does and takes as long. |
+| **Declared vocabulary** | An entry in the `CONTROLLED_VOCABULARIES` setting: the slug a site's fields name a vocabulary by, and the source `sync_vocabularies` loads it from. The slug is the vocabulary's own once loaded. | Not a record of where a vocabulary was fetched from in the database — the settings are the only place a source is remembered. |
+| **Dry run** | A `--dry-run` run of the `import_skos` or `sync_vocabularies` management command: performs the entire import, in a transaction that is always rolled back, and reports exactly what a live run would. | Not a lightweight validation that never touches the database — it does the same work a live run does and takes as long. |
 
 ## Architectural decisions
 

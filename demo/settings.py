@@ -120,6 +120,16 @@ ROOT_URLCONF = "demo.urls"
 # identifier does not lead back to its page, which controlled_vocabularies.ui.W001 reports (FS-014).
 CONTROLLED_VOCABULARIES_BASE_URI = "http://localhost:8000/browse"
 
+# The demo's seed vocabularies, loaded by `manage.py sync_vocabularies` (seed_demo runs it).
+# research_methods.ttl declares no vocabulary of its own, so it loads into the one seed_demo
+# creates under this slug before the sync.
+CONTROLLED_VOCABULARIES = {
+    "dcmitype": {"source": BASE_DIR / "demo" / "seed" / "dcmi_types.ttl"},
+    "data-collection-methods": {
+        "source": BASE_DIR / "demo" / "seed" / "research_methods.ttl"
+    },
+}
+
 # mvp/base.html loads the packaged stylesheet with {% static %} unconditionally, so having
 # django.contrib.staticfiles installed is not enough on its own (README.md).
 STATIC_URL = "static/"

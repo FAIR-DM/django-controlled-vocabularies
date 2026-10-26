@@ -7,6 +7,7 @@ from django.db import DatabaseError
 from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 
+from . import conf
 from .fields import ConceptField, MultiConceptField
 from .models import ConceptScheme, Record
 
@@ -17,6 +18,8 @@ CHECK_ID_MISSING_MIDDLEWARE = "controlled_vocabularies.W004"
 # Its own id rather than W001: projects silence checks by id, and silencing "vocabulary not
 # imported" says nothing about a mistyped collection slug (FS-016).
 CHECK_ID_MISSING_RESTRICTION_TARGET = "controlled_vocabularies.W005"
+# Its own id rather than W001: "declare it" and "load it" are different fixes.
+CHECK_ID_UNDECLARED_VOCABULARY = "controlled_vocabularies.W006"
 
 #: The middleware the control's widget needs on the page (``forms.py``). Named
 #: once here for the same reason as :data:`AUTOCOMPLETE_URL_NAME`.
@@ -39,7 +42,11 @@ def concept_fields():
 
 
 def check_concept_field_vocabularies(app_configs, **kwargs):
-    """Warn about every vocabulary a concept field names that is not in the database."""
+    """Warn about every vocabulary a concept field names that is not in the database.
+
+    One the site declares in ``CONTROLLED_VOCABULARIES`` is reported as not loaded yet, and
+    one it does not declare as undeclared, under its own id.
+    """
     fields = concept_fields()
     slugs = {slug for field in fields for slug in field.vocabulary}
     if not slugs:
@@ -53,26 +60,54 @@ def check_concept_field_vocabularies(app_configs, **kwargs):
     except DatabaseError:
         return []
 
+    declared = conf.get_declared_vocabularies()
     return [
-        checks.Warning(
-            _(
-                "%(model)s.%(field)s names vocabulary '%(vocabulary)s', which has no matching ConceptScheme yet."
-            )
-            % {
-                "model": field.model._meta.label,
-                "field": field.name,
-                "vocabulary": slug,
-            },
-            hint=_(
-                "Import this vocabulary, or silence this check with SILENCED_SYSTEM_CHECKS."
-            ),
-            obj=field,
-            id=CHECK_ID,
-        )
+        absent_vocabulary_warning(field, slug, declared=slug in declared)
         for field in fields
         for slug in field.vocabulary
         if slug not in existing
     ]
+
+
+def absent_vocabulary_warning(field, slug, *, declared):
+    """Build the warning for a field naming a vocabulary that is not in the database.
+
+    Args:
+        field: The concept field.
+        slug: The vocabulary it names.
+        declared: Whether ``CONTROLLED_VOCABULARIES`` declares it.
+
+    Returns:
+        The warning.
+    """
+    params = {
+        "model": field.model._meta.label,
+        "field": field.name,
+        "vocabulary": slug,
+    }
+    if declared:
+        return checks.Warning(
+            _(
+                "%(model)s.%(field)s names vocabulary '%(vocabulary)s', which is declared but has no matching ConceptScheme yet."
+            )
+            % params,
+            hint=_(
+                "Run manage.py sync_vocabularies, or silence this check with SILENCED_SYSTEM_CHECKS."
+            ),
+            obj=field,
+            id=CHECK_ID,
+        )
+    return checks.Warning(
+        _(
+            "%(model)s.%(field)s names vocabulary '%(vocabulary)s', which is neither declared in CONTROLLED_VOCABULARIES nor in the database."
+        )
+        % params,
+        hint=_(
+            "Declare it in CONTROLLED_VOCABULARIES and run manage.py sync_vocabularies, or silence this check with SILENCED_SYSTEM_CHECKS."
+        ),
+        obj=field,
+        id=CHECK_ID_UNDECLARED_VOCABULARY,
+    )
 
 
 def check_concept_field_restriction_targets(app_configs, **kwargs):

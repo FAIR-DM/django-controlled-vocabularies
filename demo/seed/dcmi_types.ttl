@@ -5,9 +5,9 @@
 
 # The DCMI Type Vocabulary, published by the Dublin Core Metadata Initiative at these stable
 # URIs — real, recognisable content rather than invented placeholder text (013-find-a-vocabulary
-# task brief, T016). Loaded by demo/management/commands/seed_demo.py with no named target, so
-# this file's own skos:ConceptScheme declaration is what the demo's vocabulary lands as: one
-# fixed by an external publisher, i.e. "Imported" on the vocabulary list.
+# task brief, T016). Declared in demo/settings.py and loaded by sync_vocabularies, so this
+# file's own skos:ConceptScheme declaration is what the demo's vocabulary lands as: one fixed
+# by an external publisher, i.e. "Imported" on the vocabulary list.
 
 <http://purl.org/dc/dcmitype/>
     a skos:ConceptScheme ;

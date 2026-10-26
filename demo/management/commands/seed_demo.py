@@ -1,20 +1,15 @@
 """Management command that reloads the demo's seed vocabularies and sign-in accounts."""
 
-from pathlib import Path
-
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
-from controlled_vocabularies.exchange import import_skos
 from controlled_vocabularies.models import ConceptScheme
 
-SEED_DIR = Path(__file__).resolve().parent.parent.parent / "seed"
-
-#: Declares its own skos:ConceptScheme with an externally published URI.
-IMPORTED_FILE = SEED_DIR / "dcmi_types.ttl"
-
-#: Declares no vocabulary of its own, so it is loaded into one created for it.
-AUTHORED_FILE = SEED_DIR / "research_methods.ttl"
+#: The slug ``CONTROLLED_VOCABULARIES`` declares the authored vocabulary under. Its file,
+#: ``seed/research_methods.ttl``, declares no vocabulary of its own, so the sync loads it
+#: into the one created here.
+AUTHORED_SLUG = "data-collection-methods"
 
 AUTHORED_NAME = "Data Collection Methods"
 AUTHORED_DESCRIPTION = (
@@ -35,10 +30,8 @@ class Command(BaseCommand):
         """Delete every vocabulary, then load the seed vocabularies and accounts."""
         ConceptScheme.objects.all().delete()
 
-        import_skos(IMPORTED_FILE)
-
-        authored_scheme = self.create_scheme(AUTHORED_NAME, AUTHORED_DESCRIPTION)
-        import_skos(AUTHORED_FILE, scheme=authored_scheme)
+        self.create_scheme(AUTHORED_SLUG, AUTHORED_NAME, AUTHORED_DESCRIPTION)
+        call_command("sync_vocabularies", stdout=self.stdout, stderr=self.stderr)
 
         seed_accounts()
 
@@ -49,10 +42,11 @@ class Command(BaseCommand):
         )
 
     @staticmethod
-    def create_scheme(name, description):
+    def create_scheme(slug, name, description):
         """Create a vocabulary for a seed file that declares none of its own.
 
         Args:
+            slug: The slug ``CONTROLLED_VOCABULARIES`` declares it under.
             name: The vocabulary's name, in English.
             description: What it covers, in English.
 
@@ -60,6 +54,7 @@ class Command(BaseCommand):
             The saved vocabulary.
         """
         return ConceptScheme.objects.create(
+            slug=slug,
             default_language="en",
             data={
                 "skos:prefLabel": [{"@value": name, "@language": "en"}],

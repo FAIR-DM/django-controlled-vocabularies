@@ -15,8 +15,21 @@ All notable changes to this project are documented in this file. The format foll
 - The list of vocabularies can be narrowed by publisher, licence and language from a filter panel
   beside it, each option showing how many vocabularies it would leave. The list can be sorted by
   most concepts or most recently updated.
+- A site declares the vocabularies it uses in a `CONTROLLED_VOCABULARIES` setting, keyed by the
+  slug its fields name each one by, with a local file or an http(s) address as its source.
+  `manage.py sync_vocabularies` loads or refreshes every declared vocabulary, each in its own
+  transaction with its own report. It never deletes, carries on past a vocabulary that fails and
+  exits non-zero if any did, and takes `--dry-run` and an optional list of slugs. The demo's seed
+  vocabularies are declared this way (#221).
+- `manage.py check` warns about a field naming a vocabulary that is neither declared nor loaded
+  (`controlled_vocabularies.W006`).
 
 ### Changed
+
+- `controlled_vocabularies.W001` now reports only a vocabulary that is declared in
+  `CONTROLLED_VOCABULARIES` and not loaded yet. A vocabulary that is neither declared nor loaded
+  is reported as `controlled_vocabularies.W006`. A project that silences `W001` adds `W006` to
+  `SILENCED_SYSTEM_CHECKS` until it declares its vocabularies (#221).
 
 - **Breaking:** a vocabulary is stored as two models, `ConceptScheme` and `Record`, in place of
   seven. `ConceptScheme` holds a vocabulary's URI, slug, default language, preferred label and

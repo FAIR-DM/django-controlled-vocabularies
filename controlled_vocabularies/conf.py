@@ -17,3 +17,15 @@ def get_base_uri() -> str:
     """
     base = getattr(settings, "CONTROLLED_VOCABULARIES_BASE_URI", DEFAULT_BASE_URI)
     return base.rstrip("/")
+
+
+def get_declared_vocabularies() -> dict[str, dict]:
+    """Return the vocabularies the site declares, keyed by the slug fields name them by.
+
+    Reads ``settings.CONTROLLED_VOCABULARIES``. Each value holds a ``source``, a local path
+    or an http(s) URL, and optionally the ``format`` it is serialized in.
+
+    Returns:
+        The declarations, or an empty dict when the setting is absent.
+    """
+    return getattr(settings, "CONTROLLED_VOCABULARIES", {})

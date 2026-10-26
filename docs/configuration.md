@@ -1,5 +1,25 @@
 # Configuration
 
+## The vocabularies your site uses
+
+Declare every vocabulary your site uses in your Django settings, keyed by the slug your fields
+name it by, and load them all with `python manage.py sync_vocabularies`:
+
+```python
+CONTROLLED_VOCABULARIES = {
+    "rock-type": {"source": BASE_DIR / "vocabularies" / "rock-type.ttl"},
+    "sample-status": {"source": "https://vocab.example.org/sample-status.ttl"},
+}
+```
+
+Each `source` is a local path or an `http://`/`https://` address, with an optional `format` for a
+source whose name does not carry its serialization. Prefer a file shipped with the project: a
+deploy then never depends on a remote server being up. The setting is optional, and a site that
+loads its vocabularies with `import_skos` alone can leave it out.
+[Importing a published vocabulary](importing.md) covers the command and what each run does.
+
+## Identifiers
+
 Every vocabulary, concept and collection has a URI, which is its identity. A vocabulary imported
 from a publisher keeps the URI its publisher gave it, held exactly as given and never rewritten. A
 vocabulary or record created without a URI, in your own code, is given one once, when it is first
@@ -32,7 +52,7 @@ keeping it still is a matter of not editing it, rather than of the model refusin
 path. Treat a value that differs between two imports of the same vocabulary as a problem with the
 source file.
 
-## Where the base address matters
+### Where the base address matters
 
 The base address only decides the URI of a row created without one. An imported row keeps its
 publisher's URI whatever this setting says. The address a row is viewed at on your own site comes
