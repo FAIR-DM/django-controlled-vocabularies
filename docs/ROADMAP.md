@@ -52,7 +52,7 @@ this goes first. It shipped as four features:
 
 **Deliverables:**
 
-- models for concept schemes, concepts, collections, labels, and concept relationships;
+- models for vocabularies and the records they hold, with every statement kept in a JSON document;
 - creation and querying through the ORM;
 - stable identity for concepts;
 - tests covering the identity and safety behaviour.
@@ -83,7 +83,7 @@ nothing downstream could be tested against real data. It shipped as four feature
   ([#49](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/49));
 - importing a published SKOS vocabulary from a file, in any of Turtle, RDF/XML, or JSON-LD
   ([#50](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/50));
-- keeping the languages the site supports and reporting the rest
+- keeping every statement a file makes, in every language
   ([#51](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/51));
 - running an import from the command line
   ([#52](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/52)).
@@ -92,8 +92,10 @@ nothing downstream could be tested against real data. It shipped as four feature
 
 - reading vocabularies from Turtle, RDF/XML, and JSON-LD into the models;
 - a re-runnable, safe import that upserts rather than delete-and-recreates;
-- external vocabularies normalised to the app's configured languages, with what was set aside
-  reported to the user, and an additive re-import that fills in newly added languages;
+- every statement a published file makes kept as published, in every language, including notations,
+  mappings to other vocabularies and statements outside SKOS, stored as one JSON document per
+  vocabulary and per record
+  ([#219](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/219));
 - both a management command and a programmatic entry point;
 - not yet delivered: the vocabularies a site declares, loaded by one command
   ([#221](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/221)).
@@ -186,10 +188,12 @@ Bigger bets, taken on once the 1.x line is stable.
 
 *delivered in [#175](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/175) · advances G1.*
 
-A curator creates, edits and deletes a vocabulary from the browsing pages, without the Django
-admin ([Curating vocabularies](curating.md)). Managing what is inside a vocabulary through those
-pages (its concepts, their labels and notes, the hierarchy, and collections) was set aside with
-G1: [#176](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/176),
+A curator creates, edits and deletes a vocabulary, and the concepts, labels, notes, hierarchy and
+collections inside it, without the Django admin. This is set aside with G1. The package has no
+pages that create, edit or delete a vocabulary
+([#175](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/175), removed in
+[#219](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/219)), and
+[#176](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/176),
 [#177](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/177),
 [#178](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/178) and
 [#179](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/179) were closed as

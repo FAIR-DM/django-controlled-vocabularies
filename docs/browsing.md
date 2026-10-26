@@ -1,7 +1,7 @@
 # Browsing vocabularies
 
 The `ui` extra adds an opt-in, reader-facing front end: a list of every vocabulary the site holds,
-and a page of its own for each vocabulary, concept and collection.
+and a page of its own for each vocabulary, concept and collection. Every page is read-only.
 
 ```bash
 pip install django-controlled-vocabularies[ui]
@@ -18,12 +18,12 @@ and carries:
 - its description, cut to 30 words
 - how many concepts it holds, how many collections when it has any, and when it was last updated
   when it gives a date
-- its identifier (`ConceptScheme.uri`), as a link: the publisher's own for an imported vocabulary
+- its identifier (`ConceptScheme.uri`), as a link
 
 A site holding no vocabularies says so rather than showing an empty list.
 
-A search box narrows that list by a vocabulary's name and description — not by the concepts it
-holds; finding a concept without already knowing which vocabulary holds it is not something this
+A search box narrows that list by a vocabulary's name and description, not by the concepts it
+holds. Finding a concept without already knowing which vocabulary holds it is not something this
 page does. The term travels in the page's address (`?q=`), so a narrowed list can be linked to or
 bookmarked and returned to. A second word **widens** the results rather than narrowing them:
 matching is OR across every word and both fields, not AND, which is the opposite of what a search
@@ -35,7 +35,8 @@ updated, with vocabularies giving no date last. That choice travels in the addre
 next to any search term, so a searched and sorted list is still one link you can share. Only the
 orderings the view declares are honoured. Anything else in `?o=` is ignored rather than passed to
 the database, and the page comes back in its default order. Two vocabularies with the same name
-keep the same order across pages.
+keep the same order across pages. Names sort by the vocabulary's name in its own default language,
+which is the copy stored in `pref_label`.
 
 Searching, sorting and moving between pages update the list in place, and the address bar follows,
 so the back button and a copied link behave as they would after a full page load.
@@ -43,23 +44,18 @@ so the back button and a copied link behave as they would after a full page load
 ### Narrowing by publisher, licence and language
 
 Beside the list, a filter panel narrows it by a vocabulary's publication details (see "The
-vocabulary's own details" in `docs/importing.md`):
+vocabulary's own details" in [importing](importing.md#the-vocabularys-own-details)):
 
-- **Publisher**, from `ConceptScheme.publisher`
-- **Licence**, from `ConceptScheme.license`. A Creative Commons licence given by its address is
+- **Publisher**, from the vocabulary's `dcterms:publisher`
+- **Licence**, from its `dcterms:license`. A Creative Commons licence given by its address is
   named by its short name, such as *CC BY 4.0*. Any other licence is shown as given.
-- **Language**, the vocabulary's default language. A vocabulary that gives none is found under the
-  site's `LANGUAGE_CODE`, the language its concepts are read in.
+- **Language**, the vocabulary's default language.
 
 Ticking several options of one facet keeps the vocabularies carrying any of them. Facets combine
 with each other and with the search. Each option says how many vocabularies it would leave, counted
 among those the search and the other facets leave, so the counts of a facet do not change when one
 of its own options is ticked. A facet is offered only when at least two of the site's vocabularies
 differ on it, so a site holding vocabularies from one publisher shows no publisher facet.
-
-A user with the `controlled_vocabularies.change_conceptscheme` permission is offered a fourth facet,
-**Source**: imported from a publisher, or held here. For anyone else it is not offered and has no
-effect even when the address carries it, as on the vocabulary's own page.
 
 The choices travel in the address beside the search and the sort (`?publisher=…&license=…`), and
 each applied one is shown above the list with a way to remove it. The panel is django-mvp's filter
@@ -74,8 +70,7 @@ It matters for any site whose vocabularies are named in German, French, Greek or
 
 The page carries **no permission rule of its own**. Every vocabulary in the database is listed to
 anyone who reaches the URL, exactly as the concept search endpoint serves anyone who reaches
-it, and for the same reason: a package cannot guess a project's access policy. A vocabulary has no
-draft state, so one still being authored is listed from the moment it exists. A site that needs the
+it, and for the same reason: a package cannot guess a project's access policy. A site that needs the
 page restricted wraps the include where it mounts these routes.
 
 ## Wiring it up
@@ -158,22 +153,18 @@ in-site address whatever that setting says.
 
 The search, the sort and the facets are a django-filter filterset, `VocabularyFilter` in
 `controlled_vocabularies.ui.filters`: `q` is django-mvp's `SearchFilter`, `o` its `SortFilter`,
-and `publisher`, `license`, `language` and `source` are multiple-choice filters drawn as
-`CountedCheckboxes`, a checkbox widget that adds each option's count when it is drawn.
-`VocabularyFilter.count_facets()` sets those counts. `licence_name()` gives a licence its short
-name from `LICENCE_NAMES`, `language_name()` names a language code in the reader's language, and
-`language_expression()` is the database expression for a vocabulary's effective default language,
-which `VocabularyListView` annotates as `language`.
-Only the first hundred words of a search are used, far more than any real search, because the
-query grows with every word.
+and `publisher`, `license` and `language` are multiple-choice filters drawn as `CountedCheckboxes`,
+a checkbox widget that adds each option's count when it is drawn. `VocabularyFilter.count_facets()`
+sets those counts. `licence_name()` gives a licence its short name from `LICENCE_NAMES`, and
+`language_name()` names a language code in the reader's language. Each vocabulary's facet values
+are read once into a `Profile`, in the same module. Only the first hundred words of a search are
+used, far more than any real search, because the query grows with every word.
 
-Until django-mvp 0.19.2 the search box on this page could not be submitted at all: its input was
-tied to a form only the filter control created
-([django-mvp#282](https://github.com/django-mvp/django-mvp/issues/282), tracked here as
-[#147](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/147)). This package
-waited for the upstream fix rather than shipping a patched copy of django-mvp's page, and the
-version floor moved once the fix was released. An override in a package like this one outlives the
-release that makes it unnecessary, and nothing ever reports that it has
+An earlier django-mvp release could not submit the search box on this page at all, because its
+input was tied to a form only the filter control created. This package waited for the upstream fix
+rather than shipping a patched copy of django-mvp's page, and the version floor moved once the fix
+was released. An override in a package like this one outlives the release that makes it
+unnecessary, and nothing ever reports that it has
 ([ADR 0015](adr/0015-upstream-defects-are-waited-on-not-worked-around.md)).
 
 The page is served by `VocabularyListView`, in `controlled_vocabularies.ui.views`. A project that
@@ -191,28 +182,24 @@ class BrandedVocabularyListView(VocabularyListView):
 
 ## A vocabulary's own page
 
-Every vocabulary the site holds has its own address — the same one its identifier composes
-(`ConceptScheme.uri`) when the site is configured as this page describes. The page's title is
-the vocabulary's name, and its lead text is the vocabulary's description, truncated the same way
-and for the same reason as the list entry above. A vocabulary with no description has no lead text.
-
-A user who may curate sees **Edit** and **Delete** beside the title: Edit only for a vocabulary held
-here and only with `controlled_vocabularies.change_conceptscheme`, Delete for either kind and only
-with `controlled_vocabularies.delete_conceptscheme`. Everyone else sees neither. See
-[Curating vocabularies](curating.md).
+Every vocabulary the site holds has its own address, `{mount}/{slug}/`, under wherever the routes
+are mounted. The page's title is the vocabulary's name, and its lead text is the vocabulary's
+description, truncated the same way and for the same reason as the list entry above. A vocabulary
+with no description has no lead text.
 
 The main column is every concept the vocabulary holds, and only that vocabulary's, in one flat,
 alphabetical list: nothing several levels down a broader/narrower chain is nested under one above
-it. Alphabetical order follows the label actually shown, not necessarily the one stored: a concept
-carrying a preferred label in the reader's own language shows that one; a concept with none in that
-language falls back to its label in the vocabulary's own default language.
+it. Alphabetical order follows each concept's `pref_label`, its preferred label in the
+vocabulary's default language. A concept carrying a label in the reader's own language shows that
+one, and a concept with none in that language shows its default-language label, but the order is
+the same whichever language is read.
 
 Each row in the list carries:
 
 - the concept's broader concept, above its label, when it has one (the first, when it has several)
 - its label, linking to [the concept's own page](#a-concepts-own-page)
 - its definition, in the reader's language or the vocabulary's default language, cut to 30 words
-- its identifier (`Concept.uri`), as a link to that identifier itself rather than to the page here
+- its identifier (`Record.uri`), as a link to that identifier itself rather than to the page here
 - the collections that hold it, each linking to [the collection's own page](#a-collections-own-page)
 
 Anything a concept does not have is left out of its row. Alternative and hidden labels are never
@@ -221,17 +208,14 @@ state, and the rest of the page still renders.
 
 Beside the list, a side panel describes the vocabulary itself:
 
-- its identifier, as a link: to the publisher's site for an imported vocabulary, or back to the
-  page itself for one authored here
-- whether it was imported or is held here, shown only to a user with the
-  `controlled_vocabularies.change_conceptscheme` permission, since it decides whether the
-  vocabulary may be edited here and is no concern of a reader
+- its identifier, as a link
 - its default language
 - its publication details: its publisher, its creator, its licence, its version and when it last
-  changed (see "The vocabulary's own details" in `docs/importing.md`). A detail held as a web
-  address is a link to it, and a detail the vocabulary does not have is shown as a dash.
+  changed (see "The vocabulary's own details" in [importing](importing.md#the-vocabularys-own-details)).
+  A detail held as a web address is a link to it, and a detail the vocabulary does not have is shown
+  as a dash.
 - how many concepts it holds
-- its top concepts, the ones with no broader concept, each linking to its page; a vocabulary with
+- its top concepts, the ones with no broader concept, each linking to its page. A vocabulary with
   no broader/narrower relations at all lists none, since every concept would be listed twice
 - its collections (`skos:Collection` / `skos:OrderedCollection`), each linking to its page, with
   how many members it has and whether those members carry a deliberate order. A vocabulary
@@ -265,10 +249,9 @@ other. The term you typed is still repeated above the results, as on any search.
 
 A sort control offers the concepts by label, A-Z or Z-A. The choice travels in the address as
 `?o=`, next to any search term, exactly as it does on the list of vocabularies. It sorts by the
-label a reader actually sees rather than the stored one, so a German reader gets the concepts in
-German alphabetical order and not in the vocabulary's own default language. The search and the sort
-are `ConceptFilter`, in `controlled_vocabularies.ui.filters`, and only the first ten words of a
-search are used.
+preferred label in the vocabulary's default language, the copy kept in `pref_label`. The search and
+the sort are `ConceptFilter`, in `controlled_vocabularies.ui.filters`, and only the first ten words
+of a search are used.
 
 Reverse the page by name, passing the vocabulary's slug:
 
@@ -277,8 +260,9 @@ reverse("controlled_vocabularies_ui:vocabulary-detail", kwargs={"slug": vocabula
 ```
 
 **The browsing routes must be mounted at the same path `CONTROLLED_VOCABULARIES_BASE_URI`
-composes against**, or a vocabulary's identifier does not lead back to its own page. Mounting the
-routes at `browse/` means the setting's path has to be `/browse`, not the package's own default:
+composes against**, or the identifier of a vocabulary created here does not lead back to its own
+page. Mounting the routes at `browse/` means the setting's path has to be `/browse`, not the
+package's own default:
 
 ```python
 CONTROLLED_VOCABULARIES_BASE_URI = "https://example.org/browse"
@@ -290,37 +274,38 @@ disagree, naming the mismatched paths. It is silent once they agree, and silent 
 browsing routes are not mounted at all.
 
 The page is served by `VocabularyDetailView`, in `controlled_vocabularies.ui.views`, and is
-subclassed the same way as the list above.
+subclassed the same way as the list above. The publication details are read by
+`PublicationDetails.of(vocabulary)`, in `controlled_vocabularies.ui.rows`.
 
 ## A concept's own page
 
-Every concept has its own address — the same one `Concept.uri` composes when the site is
-configured as this page describes. The page is a definition list of everything the database
-records about the concept, other than its hidden labels, each row labelled by the SKOS property it
-was recorded under: its type (`rdf:type`), its preferred label (`skos:prefLabel`), its alternative
-labels (`skos:altLabel`), each note it carries under the property of its own kind (`skos:definition`,
-`skos:scopeNote`, and the rest of the six documentary notes SKOS defines), its broader concept, its
-narrower concepts and its related concepts (`skos:broader` / `skos:narrower` / `skos:related`), and
-the vocabulary it belongs to (`skos:inScheme`). Every record-valued row links to that record's own
-page here. A property the concept carries no value for contributes no row at all — never an empty
-one — so a concept carrying nothing beyond its label shows only its label, its type, its identifier
-and its vocabulary.
+Every concept has its own address, `{mount}/{vocabulary-slug}/{concept-slug}/`. The page is a
+definition list of everything the concept's document states, other than its hidden labels, each row
+labelled by the predicate it was stored under: its type (`rdf:type`), and then each predicate the
+document holds. The ones the package knows come first, in a fixed order: labels, notation,
+definition and notes, broader, narrower and related concepts, mappings to other vocabularies,
+membership, and the publication details. Any other predicate follows, in alphabetical order, so a
+statement in a namespace other than SKOS is shown too. Every record-valued row links to that
+record's own page here. A predicate the concept carries no value for contributes no row at all —
+never an empty one — so a concept carrying nothing beyond its label shows only its label, its type,
+its identifier and its vocabulary.
 
 The concept's own canonical identifier leads the page, directly beneath its title, so a reader
 citing the record does not have to scroll past everything it says about itself to find it. The
 breadcrumb trail above names the site's home, the vocabulary holding the concept, and the concept
 itself.
 
-Each row's own term — `skos:definition`, `skos:broader`, and the rest named above — is a CURIE
-derived from the SKOS predicate the value was recorded under, by `skos_curie()` in
-`controlled_vocabularies.exchange.mapping`; it refuses a predicate outside the SKOS namespace
-rather than mangling one into a nonsensical short form. A record-valued row's own displayed text is
-a different short form — `{vocabulary slug}:{record slug}`, `geology:granite` for a concept
-"granite" in a vocabulary slugged "geology".
+Each row's own term — `skos:definition`, `skos:broader`, and the rest — is the predicate as the
+document stores it: a CURIE for a known namespace, and the full URI for any other. A record-valued
+row's own displayed text is a different short form — `{vocabulary slug}:{record slug}`,
+`geology:granite` for a concept "granite" in a vocabulary slugged "geology". A link to a record
+this site does not hold is shown as its URI, and is a link to that address when it is a web
+address.
 
 A CURIE abbreviates a URI, and both kinds on the page disclose the URI they stand for on hover
-rather than printing it. A term's comes from `curie_uri()` in the same module, which expands a
-prefixed name against the namespaces the package declares and refuses one it does not. A
+rather than printing it. A term's comes from `Namespaces.expand()` in
+`controlled_vocabularies.predicates`, which expands a CURIE against the six prefixes the package
+fixes (`skos`, `dcterms`, `owl`, `rdf`, `rdfs` and `xsd`) and returns any other key unchanged. A
 record-valued row's is the record's own canonical identifier. Hovering is not the only way to reach
 either. A term is not interactive, so its URI sits beside it in a visually-hidden element a screen
 reader reads out in place. A record-valued row's short form is a link, so its URI lives in a
@@ -334,17 +319,20 @@ is plain language rather than a CURIE, and it names the direction, since a headi
 would read as collections belonging to the concept. Each entry links to that collection's own page.
 A concept no collection gathers shows no such section at all, never an empty one.
 
-Every value is shown in the language the site is being read in, exactly as the vocabulary page
-above shows a concept's label: where the concept has none in that language, it falls back to the
-vocabulary's own default language, one language at a time, never every language a value was
-recorded in.
+A file often states a hierarchy from one side only. A concept's page shows the broader, narrower and
+related concepts it states itself, and also the ones other concepts of the vocabulary state about
+it, turned around: a concept that names this one as its broader concept appears here as narrower,
+and `skos:related` is read from either end.
+
+Labels, definitions, notes, titles and descriptions are shown in the language the site is being
+read in. Where the concept has none in that language, they fall back to the vocabulary's own default
+language, one language at a time, never every language a value was recorded in, and then to values
+that carry no language. Every other predicate shows all its values.
 
 The concept's own identifier is shown as a link, the same treatment its vocabulary's own page gives
-a vocabulary's: an imported concept shows its publisher's identifier, one authored here shows this
-site's own composed address for it. Either way the page itself is **read-only** — it carries no
-editing or deletion control of its own, and no permission rule beyond what the project mounting
-these routes chooses to add. Concepts are added by [importing](importing.md); only a vocabulary's
-own record is curated by hand, as [Curating vocabularies](curating.md) describes.
+a vocabulary's: for an imported concept it is its publisher's identifier. The page is
+**read-only**, it carries no editing or deletion control, and it has no permission rule beyond what
+the project mounting these routes chooses to add. Concepts are added by [importing](importing.md).
 
 An address naming no concept is reported not found, and so is one whose vocabulary segment names no
 vocabulary — the two are not distinguished. A concept slug held by more than one vocabulary resolves
@@ -360,30 +348,27 @@ reverse(
 ```
 
 The page is served by `ConceptDetailView`, in `controlled_vocabularies.ui.views`, and is subclassed
-the same way as the pages above. The rows themselves come from
-`concept_property_rows(concept, language, default_language=None)`, in the same module — the seam a
-project reaches for to build its own page, or its own rendering of a report, over the same ordered
-rows this one renders. Passing no `default_language` asks for exactly what the concept carries in
-`language`, with no fallback to the vocabulary's own default.
+the same way as the pages above. The rows themselves come from `PropertyRows(record, language)`,
+in `controlled_vocabularies.ui.rows`, whose `build()` returns the ordered rows — the seam a project
+reaches for to build its own page, or its own rendering of a report, over the same rows this one
+renders. `PropertyRows.in_reading_language()` is the rule that picks which entries of a translated
+predicate to show.
 
 ## A collection's own page
 
-Every collection has its own address too, at a distinct segment from a concept's — the same one
-`Collection.uri` composes — so a concept and a collection in one vocabulary may share a slug and
-both stay reachable. The page is a definition list built the same way a concept's is: its name
-(`skos:prefLabel`), a type row distinguishing an ordered collection from an unordered one
-(`skos:Collection` or `skos:OrderedCollection`), and its members under the membership property
-matching its kind — `skos:member` for an unordered collection, `skos:memberList` for an ordered
-one, whose members appear in the sequence their positions record. Membership is one row however
-many members a collection holds — the property is stated once, with every member listed beside it,
-rather than repeated per member. A collection holding no members says so in plain language rather
-than showing an empty membership row.
+Every collection has its own address too, at a distinct segment from a concept's,
+`{mount}/{vocabulary-slug}/collection/{collection-slug}/`. The page is a definition list built the
+same way a concept's is: its name (`skos:prefLabel`), a type row distinguishing an ordered
+collection from an unordered one (`skos:Collection` or `skos:OrderedCollection`), and its members
+under the membership property matching its kind — `skos:member` for an unordered collection,
+`skos:memberList` for an ordered one, whose members appear in the sequence the file gave them.
+Membership is one row however many members a collection holds — the property is stated once, with
+every member listed beside it, rather than repeated per member. A collection holding no members says
+so in plain language rather than showing an empty membership row.
 
 Every record-valued row links to that record's own page here and discloses its canonical identifier
 the same way a concept's page does. The collection's own identifier leads the page beneath its
-title, its breadcrumb trail names the vocabulary holding it, and the page is equally **read-only**,
-carrying no editing or deletion control of its own (see [Curating vocabularies](curating.md) for
-what can be changed by hand).
+title, its breadcrumb trail names the vocabulary holding it, and the page is equally **read-only**.
 
 An address naming no collection is reported not found, and so is one whose vocabulary segment names
 no vocabulary — the two are not distinguished, exactly as for a concept's page.
@@ -398,9 +383,8 @@ reverse(
 ```
 
 The page is served by `CollectionDetailView`, in `controlled_vocabularies.ui.views`, and is
-subclassed the same way as the pages above. The rows themselves come from
-`collection_property_rows(collection)`, in the same module — the same seam
-`concept_property_rows` offers over a concept's own rows.
+subclassed the same way as the pages above. Its rows come from the same `PropertyRows` a concept's
+page uses.
 
 ## Try it: the demo project
 
@@ -419,18 +403,18 @@ The three commands run through `uv run` so they use the environment the install 
 whatever `python` on the shell's path happens to be — on many systems there is no `python` there
 at all.
 
-`migrate` builds the database, `seed_demo` loads three small vocabularies and a set of sign-in
-accounts into it, and `runserver` serves the site at `http://127.0.0.1:8000/`, which redirects straight to the populated,
-searchable vocabulary list at `http://127.0.0.1:8000/browse/`. An open page reloads itself when a
-template, static file or Python module changes, through `django-browser-reload` and
-`django-watchfiles` from the development dependencies. The seeded content shows both
-kinds of entry the list distinguishes: the DCMI Type Vocabulary, a real vocabulary published by
-the Dublin Core Metadata Initiative, imported from a SKOS file; Data Collection Methods, a
-short vocabulary authored here, with no publisher of its own; and Sample Types, a vocabulary held
-here that has no concepts yet. Data Collection Methods' own page
-also carries one of each kind of collection — "Primary data collection methods" (unordered) and
-"Typical project workflow" (ordered) — both loaded through the same SKOS file, so the side panel's
-collections are never empty on a fresh checkout.
+`migrate` builds the database, `seed_demo` loads two small vocabularies and a set of sign-in
+accounts into it, and `runserver` serves the site at `http://127.0.0.1:8000/`, which redirects
+straight to the populated, searchable vocabulary list at `http://127.0.0.1:8000/browse/`. An open
+page reloads itself when a template, static file or Python module changes, through
+`django-browser-reload` and `django-watchfiles` from the development dependencies. The seeded
+content is the DCMI Type Vocabulary, a real vocabulary published by the Dublin Core Metadata
+Initiative, imported from a SKOS file that declares its own vocabulary, and Data Collection
+Methods, a short vocabulary loaded from a file that declares none, so the command creates the
+vocabulary for it first and imports into that. Data Collection Methods' own page also carries one of
+each kind of collection — "Primary data collection methods" (unordered) and "Typical project
+workflow" (ordered) — both loaded through the same SKOS file, so the side panel's collections are
+never empty on a fresh checkout.
 
 Following "Fieldwork" from that page reaches a concept's own page: its definition, its narrower
 concept "Survey" (stored as "Survey" carrying `skos:broader` to "Fieldwork", shown here as the
@@ -447,20 +431,14 @@ definition, exactly as [a concept's own page](#a-concepts-own-page) above descri
 
 `seed_demo` is destructive and idempotent: it clears every vocabulary before loading, so running
 it again returns the demo to the same seeded state whatever was added or removed before —
-including anything entered through the browsing pages or the admin.
+including anything entered through the admin.
 
-To create a vocabulary and watch it appear on the list, sign in at
-`http://127.0.0.1:8000/accounts/login/` as `curator.user` (password `password`) and follow
-[Curating vocabularies](curating.md#creating-a-vocabulary). To use the demo's admin instead, give
-yourself an account first and sign in at `http://127.0.0.1:8000/admin/`:
-
-```bash
-uv run python manage.py createsuperuser
-```
-
-The admin form there belongs to the demo project, not to the package: `demo/admin.py` registers
-the vocabulary model with its own admin site. The package registers nothing, so installing it
-adds no admin of its own — a project decides for itself which of its models it curates that way.
+The seeded accounts are `regular.user`, `staff.user` and `super.user`, all with the password
+`password`. `super.user` can sign in at `http://127.0.0.1:8000/admin/` to look at the stored
+vocabularies and records. The admin there belongs to the demo project, not to the package:
+`demo/admin.py` registers `ConceptScheme` and `Record` with the demo's own admin site. The package
+registers nothing, so installing it adds no admin of its own — a project decides for itself which
+of its models it manages that way.
 
 The demo is not a production configuration: `DEBUG` is on, the database is a local SQLite file,
 and the secret key is a throwaway value committed in `demo/settings.py`. Do not deploy it as-is.

@@ -1,6 +1,6 @@
 # ADR 0001 — A record's URI is dynamic until it turns static, and its local address is a separate thing
 
-**Status:** accepted
+**Status:** superseded by ADR 0024
 
 ## Decision
 

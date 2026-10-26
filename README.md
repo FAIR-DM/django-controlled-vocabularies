@@ -42,11 +42,12 @@ This package **imports published vocabularies and lets your models reference the
 vocabulary belongs to whoever published it. The package's job is to hold it faithfully and make
 its concepts something a Django model can point at, not to author it.
 
-A vocabulary here lives **in the database, not in an RDF file or a triplestore**. Concepts are
-Django models, the database is the source of truth, and RDF is read only at the import boundary. That puts everything Django
-already does well — forms, permissions, indexed search, referential integrity — to work on
-referencing vocabularies, and lets a vocabulary of tens of thousands of concepts change as data
-rather than as a code release of every project that uses it.
+A vocabulary here lives **in the database, not in an RDF file or a triplestore**. Each vocabulary,
+and each concept and collection in it, is one row holding a JSON document of the statements its
+publisher made, the database is the source of truth, and RDF is read only at the import boundary.
+That puts everything Django already does well — forms, permissions, indexed search, referential
+integrity — to work on referencing vocabularies, and lets a vocabulary of tens of thousands of
+concepts change as data rather than as a code release of every project that uses it.
 
 **It deliberately is:**
 
@@ -57,21 +58,20 @@ rather than as a code release of every project that uses it.
   says.
 - A faithful keeper of what was published — an import keeps every statement it reads, in every
   language, including statements in vocabularies other than SKOS.
-- Multilingual — a concept holds labels and definitions in any number of languages, with one
-  preferred label per language.
+- Multilingual — a concept holds labels and definitions in any number of languages.
 - A graph, not a flat list — concepts link to one another through a broader/narrower hierarchy
-  (navigable both ways, and a concept may sit under several broader concepts) and a symmetric
-  related association, all within one vocabulary.
+  (shown from both ends, and a concept may sit under several broader concepts) and a symmetric
+  related association, and may point at concepts in other vocabularies through mappings.
 - Organised into collections where the publisher defines them — named groupings of a vocabulary's
   concepts, optionally in a deliberate order, separate from the hierarchy.
 
 **It deliberately is not:**
 
-- A vocabulary editor or publisher — a curator can create, edit and delete a vocabulary's own
-  details from the browsing pages, but authoring the concepts inside one and serving vocabularies
-  as RDF are set aside until a project needs them. Imported vocabularies are read-only references,
-  and extending one with your own terms is out of scope.
-- A general RDF/OWL toolkit — only SKOS is modelled.
+- A vocabulary editor or publisher — vocabularies arrive by import and are read-only references.
+  Authoring a vocabulary and serving vocabularies as RDF are set aside until a project needs them,
+  and extending an imported vocabulary with your own terms is out of scope.
+- A general RDF/OWL toolkit — SKOS is what the package understands. Statements in other
+  vocabularies are kept and shown, but not interpreted.
 - A triplestore or SPARQL endpoint — the relational database is the store.
 - A replacement for rdflib — rdflib is used only to parse at the boundary.
 - A reasoner — no OWL inference.
@@ -147,14 +147,15 @@ class Specimen(models.Model):
     rock_type = ConceptField(vocabulary="rock-type")
 ```
 
-The field is a `ForeignKey` to a concept, restricted to the vocabulary you name. A form built from
+The field is a `ForeignKey` to a `Record`, the model that holds each concept, restricted to the
+vocabulary you name. A form built from
 the model offers that vocabulary's concepts through a search box, a concept from anywhere else is
 refused, and a concept a record still points at cannot be deleted. Read it back by label or by
 address:
 
 ```python
-specimen.rock_type              # the attached Concept, or None
-specimen.get_rock_type_label()  # its preferred label in the active language
+specimen.rock_type              # the attached Record, or None
+specimen.get_rock_type_label()  # its name in the active language
 specimen.get_rock_type_uri()    # its URI
 ```
 

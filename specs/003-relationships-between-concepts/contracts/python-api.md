@@ -1,60 +1,55 @@
 # Public API contract — 003-relationships-between-concepts
 
-The ORM surface a downstream developer touches. This is the tested contract (Article IV). All reads
-return querysets of `Concept`; all writes validate and raise `django.core.exceptions.ValidationError`
-on an invalid edge.
+The ORM surface a downstream developer touches. This is the tested contract (Article IV). A link is an
+entry in a record's `data` document, so reading one never queries a second table.
 
-## `Concept` methods
+## `Record` methods
 
 ```python
-# --- reads (empty queryset when none) ---
-concept.broader()   -> QuerySet[Concept]   # concepts one step broader than `concept`
-concept.narrower()  -> QuerySet[Concept]   # concepts one step narrower (derived from broader)
-concept.related()   -> QuerySet[Concept]   # concepts related to `concept` (symmetric, both directions)
+# --- reads (empty list when none) ---
+record.linked_uris("skos:broader")   -> list[str]   # concepts the record states as one step broader
+record.linked_uris("skos:narrower")  -> list[str]   # concepts the record states as one step narrower
+record.linked_uris("skos:related")   -> list[str]   # concepts the record states as related
+record.values("skos:broader")        -> list[dict]  # the same statements as {"@id": ...} entries
 
-# --- writes ---
-concept.add_broader(other)    -> ConceptRelation   # `concept` skos:broader `other`  (concept is narrower)
-concept.add_related(other)    -> ConceptRelation   # symmetric; order-independent
-concept.remove_broader(other) -> None              # no-op if the edge is absent
-concept.remove_related(other) -> None              # no-op if the edge is absent
+# --- writes: assign the document and save ---
+record.data = {**record.data, "skos:broader": [{"@id": parent.uri}]}
+record.save()
 ```
 
 ### Guarantees
 
-- **Inverse pair.** After `a.add_broader(b)`: `b in a.broader()` and `a in b.narrower()`, from the one
-  call. No `narrower` is ever asserted directly. (FR-001, FR-002 · SC-001)
-- **Polyhierarchy.** `a.add_broader(b); a.add_broader(c)` → `a.broader()` contains both. (FR-001)
-- **Symmetric related.** After `a.add_related(b)`: `b in a.related()` and `a in b.related()`. `b.add_related(a)`
-  afterwards raises (duplicate) rather than storing a second row. (FR-003 · SC-002)
-- **Removal.** `remove_broader`/`remove_related` clear both directions of the edge; calling with an
-  absent edge does nothing. (FR-005)
+- **Inverse pair.** After `granite.data["skos:broader"] = [{"@id": igneous.uri}]` and a save, the
+  page of `igneous` lists `granite` as narrower and the page of `granite` lists `igneous` as broader,
+  from the one statement. A narrower link need not be stated. (FR-001, FR-002 · SC-001)
+- **Polyhierarchy.** A list of two `{"@id": ...}` entries under `skos:broader` is read back by
+  `linked_uris("skos:broader")` as two URIs. (FR-001)
+- **Symmetric related.** After `a` states `b` under `skos:related`, the page of `b` shows `a`. When `b`
+  states `a` as well, each page shows the other once. (FR-003 · SC-002)
+- **Removal.** Removing an entry from the list and saving clears it from both pages. (FR-005)
 
-### Refusals (raise `ValidationError`)
+### Nothing is refused
 
-| Attempt | Rule |
+| Statement | Result |
 |---|---|
-| `a.add_broader(a)` / `a.add_related(a)` | no self-relation (FR-006 · SC-003) |
-| the same `broader` edge twice, or `related` re-asserted in either order | no duplicate (FR-007 · SC-004) |
-| `add_related(b)` when `a`/`b` are already in a direct broader/narrower line (or the reverse) | broader/related disjointness, direct pairs (FR-008 · SC-005) |
-| a relation whose two concepts are in different `ConceptScheme`s | intra-vocabulary only (FR-009 · SC-006) |
+| a link from a record to its own URI | stored as stated (FR-006 · SC-003) |
+| the same link listed twice, or a broader and a related link between one pair | stored as stated (FR-007 · SC-003) |
+| a link to a record of another vocabulary, or to a URI no record holds | stored as stated and shown by its URI, linked when it is a record held here (FR-008 · SC-004) |
+| a cyclic `skos:broader` chain (`a→b→c→a`) | stored without error; no traversal is performed (FR-009 · SC-005) |
 
-### Explicitly permitted
+A document is checked only for its shape: each predicate holds a list of `{"@id": ...}` or
+`{"@value": ...}` entries (FS-001).
 
-- A cyclic `broader` chain (`a→b→c→a`) is accepted without error; no traversal is performed. Cycle
-  prevention is a recorded non-guarantee this slice. (FR-010 · SC-007)
-- A `related` link between concepts that are only *transitively* (not directly) hierarchical is
-  accepted — disjointness is checked at direct adjacency only.
+## Browsing
 
-## `ConceptRelation` model
-
-A public model (importable), but the `Concept` helpers are the intended surface. Fields: `source`,
-`target`, `kind` (`ConceptRelation.Kind.BROADER` / `.RELATED`). Direct construction is validated the
-same as the helper path (`save()` backstops `clean()`), so a raw `ConceptRelation.objects.create(...)`
-with an invalid edge also raises.
+`PropertyRows` (`controlled_vocabularies.ui.rows`) builds the rows of a concept's page. For a concept
+it adds, beside the links the concept states, the links other concepts of the same vocabulary state
+towards it, turned around: `skos:broader` is shown as `skos:narrower` and the reverse, and
+`skos:related` is shown as `skos:related`.
 
 ## Stability
 
 Pre-1.0 (Article VIII): this Python API may still change to correct mistakes, recorded in the
-CHANGELOG. Nothing here is a frozen data contract — the RDF projection of these relations
-(`skos:broader`/`skos:narrower`/`skos:related`) is a later feature (R2/R4) and is where the data
-contract will attach.
+CHANGELOG. Nothing here is a frozen data contract — the RDF projection of these links
+(`skos:broader`/`skos:narrower`/`skos:related`) is a later feature (R4) and is where the data contract
+will attach.

@@ -1,10 +1,9 @@
 # Importing a published vocabulary
 
 `import_skos()` reads a SKOS file — Turtle, RDF/XML, or JSON-LD — and creates or updates the
-vocabulary it declares, along with every concept it contains: identity, labels, documentary notes,
-broader/narrower and related relationships, and collection membership. Every record is matched by
-its static URI, never by name, so importing the same file twice updates the same rows rather than
-duplicating them.
+vocabulary it declares, along with every concept and collection it contains. It keeps every
+statement the file makes about them, in every language. Each row is matched by its URI, never by
+name, so importing the same file twice updates the same rows rather than duplicating them.
 
 ```python
 from controlled_vocabularies.exchange import import_skos
@@ -20,70 +19,106 @@ report = import_skos("rocks.ttl", scheme=my_scheme)
 ```
 
 Re-running an import upserts rather than deleting and recreating. For a record the file still
-contains, the file is authoritative for that record's own content — labels, notes, relationships,
-and collection membership end up matching the file exactly, including the removal of a value the
-file no longer carries. A record the file does not mention at all is left completely untouched and
-named in the report instead, never deleted.
+contains, the file is authoritative: the record's statements end up matching the file exactly,
+including the removal of a statement the file no longer carries. A record the file does not mention
+at all is left completely untouched and named in the report instead, never deleted.
+
+## What an import keeps
+
+A vocabulary is stored as one `ConceptScheme` row, and each concept and collection in it as one
+`Record` row. The statements a file makes about a subject are kept together in that row's `data`, a
+JSON document.
+
+Each key of the document is a predicate, written as a CURIE when its namespace has a known prefix
+and as the full URI otherwise. The known prefixes are fixed: `skos`, `dcterms`, `owl`, `rdf`, `rdfs`
+and `xsd`. Each value is a list of entries in the shape JSON-LD uses:
+
+```json
+{
+  "skos:prefLabel": [
+    {"@value": "Granite", "@language": "en"},
+    {"@value": "Granit", "@language": "de"}
+  ],
+  "skos:notation": [{"@value": "GR-01"}],
+  "skos:broader": [{"@id": "https://example.org/rocks/igneous"}],
+  "skos:exactMatch": [{"@id": "https://other.example/terms/granite"}],
+  "dcterms:modified": [{"@value": "2026-03-01", "@type": "xsd:date"}]
+}
+```
+
+- A literal is `{"@value": ...}`, with an `@language` when it has one, or an `@type` when it has a
+  datatype other than a plain string.
+- A link to another resource is `{"@id": ...}`.
+- A list under `skos:memberList` keeps its sequence. Every other list is stored in a fixed order,
+  so importing the same file again stores the same text.
+
+Nothing is looked up in a published file and discarded. Preferred, alternative and hidden labels,
+notes, notations, mappings to other vocabularies, links between concepts, and statements in
+namespaces other than SKOS are all kept, in every language the file offers. The site's `LANGUAGES`
+setting plays no part: a vocabulary published in sixty languages imports into all sixty.
+
+A subject becomes a record when the file types it as `skos:Concept`, `skos:Collection` or
+`skos:OrderedCollection`. A subject with no type that states `skos:inScheme` or `skos:topConceptOf`
+towards the vocabulary becomes a concept. Any other subject in the file is not a record, and the
+statements it makes are not kept.
+
+Two columns are copies, filled in from the document each time a row is saved:
+
+- `pref_label` holds the name in the vocabulary's default language. It is what lists sort by and
+  what a name falls back to.
+- `search_text` holds every preferred, alternative and hidden label of a record, one per line. It
+  is what a search matches.
+
+Sorting and searching use these copies, so they cost no lookup inside the document.
+
+### Reading a row
+
+A row is read with its methods rather than by indexing into `data`:
+
+```python
+record.values("skos:altLabel")      # the entries stored under a predicate, as dicts
+record.label("de")                  # the name in one language, or None
+record.display_label()              # the name in the active language, else pref_label
+record.linked_uris("skos:broader")  # the URIs a predicate links to
+record.first_value("skos:notation") # the first value as text, or an empty string
+collection.member_uris()            # a collection's members, an ordered one in sequence
+```
+
+`values()`, `label()`, `display_label()`, `linked_uris()` and `first_value()` are on both
+`ConceptScheme` and `Record`. `member_uris()` is on `Record`.
+
+A record's `type` is one of `Record.Type.CONCEPT`, `Record.Type.COLLECTION` and
+`Record.Type.ORDERED_COLLECTION`. `Record.COLLECTION_TYPES` holds the last two, and
+`record.is_collection` says whether a record is either. `Record.objects.mentioning(uri)` narrows
+records to those whose document may link to a URI, which is how a concept's page finds the links
+other concepts make to it. It matches on the stored text, so it can return a record that holds the
+URI as a plain literal, and callers check the links with `linked_uris()`.
+
+A document is validated by `validate_document` when a row is cleaned. It must be an object that
+maps each predicate to a list of entries, each a link or a literal as shown above.
+`controlled_vocabularies.predicates` holds the six fixed prefixes as `PREFIXES`, and
+`Namespaces.compact()` and `Namespaces.expand()` turn a full URI into a CURIE and back. The order the
+pages show predicates in is `PREDICATE_ORDER`, and the predicates they show in one language are
+`TRANSLATED_PREDICATES`.
 
 ## The vocabulary's own details
 
-Besides its concepts, a file usually describes the vocabulary itself. Its name comes from the
-scheme's `skos:prefLabel` and its description from `dcterms:description`. Five publication details
-are kept as well, each in a field on `ConceptScheme`:
+Besides its records, a file usually describes the vocabulary itself. Those statements are kept in
+the vocabulary's own document in the same way. Its name comes from `skos:prefLabel`, else
+`dcterms:title`, and its description from `dcterms:description`. The publisher, creator, licence,
+version and last-modified date are the entries under `dcterms:publisher`, `dcterms:creator`,
+`dcterms:license`, `owl:versionInfo` and `dcterms:modified`. The browsing pages read them from there.
 
-| Published as | Kept in |
-|---|---|
-| `dcterms:publisher` | `ConceptScheme.publisher` |
-| `dcterms:creator` | `ConceptScheme.creator` |
-| `dcterms:license` | `ConceptScheme.license` |
-| `owl:versionInfo` | `ConceptScheme.version` |
-| `dcterms:modified` | `ConceptScheme.modified` |
-
-A detail published as text keeps the text, and one published as an address keeps the address, so a
-licence given as `<https://creativecommons.org/licenses/by/4.0/>` is stored as that address. Each
-field holds one value. Where a file gives several, such as two creators, the first in alphabetical
-order is kept and each of the others is named in the report. `ConceptScheme.modified` is a date: a
-typed `xsd:date`, a typed `xsd:dateTime` or untyped ISO 8601 text is read, a date and time keeps
-only its date and says so in the report, and anything else is set aside.
-
-The file is authoritative for these as for the description: a detail a later file no longer gives
-is cleared.
-
-## Languages
-
-Labels and notes are matched by language, not only by predicate. A file's `en` value fills a site
-configured for `en-gb`, and a file's `en-gb` value fills a site configured for `en`. Matching runs
-on the base language, the first subtag of the tag, case-insensitively and in both directions, and
-an exact tag match always wins over a variant.
-
-Where a file offers several variants of one configured language, what happens next depends on how
-many values that kind of label or note can hold:
-
-- A preferred label holds one per language, so the variant the vocabulary predominantly publishes
-  in is the one kept, with ties broken by language code. Each variant that lost is named in the
-  report under its own published language.
-- Alternative labels, hidden labels, and notes have no such limit, so every variant the file offers
-  is stored.
-
-A value stored under a variant match is named in the report as a substitution rather than applied
-silently. That matters most where two variants differ by script. A site configured for `zh-Hans`
-importing a vocabulary published only as `zh-Hant` receives that content, in a script its readers
-may not be able to read. The report is what makes that visible, so a curator can decide what to do
-about it.
-
-The package stores content for every language code in `settings.LANGUAGES`. A project that declares
-none inherits Django's own default list of 99 languages, so a vocabulary published in sixty
-languages imports into all sixty. Narrowing `LANGUAGES` is how a site limits what an import stores.
+A vocabulary the run creates takes the most common language among its records' preferred labels as
+its default language, or the site's `LANGUAGE_CODE` when no label carries one. A vocabulary that
+already exists keeps its default language, and so does one passed in with `scheme=`.
 
 ## Slugs and addresses
 
-A vocabulary's slug and a concept's slug are both derived from their own published identifier —
-its fragment where it has one, otherwise the last segment of its path — assigned once, on first
-import, and never recomputed by a later one. Renaming a record, or a vocabulary's name arriving in
-a different language on a later import, never moves that record's local address; only the
-publisher reassigning the identifier itself does. A record authored on this site rather than
-imported has no published identifier to derive from, and keeps deriving its slug from its label,
-as it always has.
+A vocabulary's slug and a record's slug are both derived from their own published identifier — its
+fragment where it has one, otherwise the last segment of its path — assigned once, on first import,
+and never recomputed by a later one. A vocabulary's name arriving in a different language on a later
+import never moves its local address. Only the publisher reassigning the identifier itself does.
 
 That permanence has a cost worth naming: a vocabulary published under opaque codes gets an opaque
 local address — `/v-113/00123` rather than `/soil-types/clay`. It is accepted because the address
@@ -91,44 +126,43 @@ is correct and stays correct, which is what every consumer of a URL needs from i
 readable address that can move under data already pointing at it is worse than a stable one that
 cannot.
 
+A record whose URI is already held by another vocabulary moves into the vocabulary being imported,
+and takes a new slug there, because a URI is held once.
+
 ## The report
 
 The call returns an `ImportReport`, a plain dataclass rather than rendered text, so a caller can
 inspect what happened without parsing anything:
 
-- `created` / `updated` — the URIs of every vocabulary, concept, and collection the run wrote.
-- `set_aside` — a `SetAsideEntry` per value the run could not store, each carrying a closed,
-  translatable reason (an unconfigured language, a notation, a mapping to another vocabulary, a
-  predicate the models have no place for, a missing relationship or collection member, and so on)
-  and the data needed to render a message about it. Nothing a file contains is ever dropped in
-  silence — a value the app cannot store is always named here.
-
-  Published files are often not well-behaved, and the reasons cover that too. Where a pair of
-  concepts is stated as both broader and related, the hierarchical statement wins, because SKOS
-  declares the two disjoint, and the related one is set aside. A second preferred label in one
-  language is set aside rather than refused at the database. An identifier whose own segment
-  yields no usable slug is set aside naming the slug as the problem, not the identifier. A second
-  value of one of the vocabulary's publication details is set aside as `SURPLUS_VALUE`, and a
-  last-modified value that is not a date as `NOT_A_DATE`. None of these stops the rest of the
-  vocabulary from importing.
+- `created` / `updated` — the URIs of every vocabulary and record the run wrote.
 - `absent_from_source` — the URIs of records that exist here but that the file no longer mentions.
-- `normalized` — a `NormalizedEntry` per value the run stored, but under a different predicate than
-  the one the file asserted (a foreign `dcterms:description` read as a concept's definition, for
-  example), or in a different form (`DATE_FROM_DATE_TIME`, a last-modified date and time kept as
-  its date).
 - `fatal` — populated only on a failed run: a `FatalFinding` per reason the whole import was
-  refused (a missing or blank-node identity, or a vocabulary that could not be resolved). A failed
-  run raises `SkosImportFailed`, carrying this same report, and leaves the database exactly as it
-  was before the run started.
+  refused. A failed run raises `SkosImportFailed`, carrying this same report, and leaves the
+  database exactly as it was before the run started.
 
-A run either succeeds in full or changes nothing: every problem in a file is collected before any
-of it is written, and a fatal one rolls the whole run back. The `import_skos` management command
-wraps this for use from a terminal (see below). There is no web-facing entry point yet.
+A run is refused for one of these reasons, each a member of `FatalReason`:
 
-Reading a file never reassigns identity. A concept or collection whose URI is already held by a
-different vocabulary stays where it is. So does one whose URI is held by a record of another kind,
-such as a collection in one file and a concept in another. Both are set aside and reported. Moving
-a record between vocabularies is a curatorial decision, not a side effect of reading a file.
+- `MISSING_IDENTITY` — a concept, a collection or the vocabulary is a blank node, which cannot be
+  identified again on a re-import.
+- `REFUSED_IDENTITY` — a concept, a collection or the vocabulary has an identifier that starts with
+  `javascript:`, `data:` or `vbscript:`. A stored identifier is rendered as a link, and these can
+  carry executable content.
+- `VOCABULARY_UNDETERMINED` — the file declares no vocabulary of its own and none was named.
+- `VOCABULARY_TARGET_MISMATCH` — the file declares a vocabulary other than the one named.
+- `VOCABULARY_AMBIGUOUS` — the file declares more than one vocabulary and none was named.
+
+Nothing else refuses a run. A run either succeeds in full or changes nothing: every problem in a
+file is collected before any of it is written, and a fatal one rolls the whole run back. The
+`import_skos` management command wraps this for use from a terminal (see below). There is no
+web-facing entry point yet.
+
+## Upgrading from 0.1.0
+
+Version 0.2.0 stores a vocabulary in two tables, `ConceptScheme` and `Record`, in place of the seven
+earlier ones. The migrations start again at a new `0001_initial`, and no data migration is provided,
+because the package is before 1.0. A site on 0.1.0 imports its vocabularies again from their
+published files after upgrading. A concept attached to a row of your own models referred to a row of
+the earlier tables, so it is attached again once the vocabularies are back.
 
 ## Untrusted input
 
@@ -144,11 +178,10 @@ reference, imports normally.
 translatable message. `SkosImportError` covers every reason a file cannot be turned into usable SKOS
 at all: not found, not in a supported serialization, unparseable, or refused by the safety scan
 above. `SkosImportFailed` covers the case where the file parses but the run collects one or more
-fatal problems (a missing or blank-node identity, or a vocabulary that cannot be resolved), and
-carries the same `ImportReport` its `fatal` bucket names them in. `UnsafeRdfXmlError` and
-`UnsafeJsonLdError`, the two exceptions the safety scan itself raises, are exported
-`SkosImportError` subclasses, so code that only catches `(SkosImportError, SkosImportFailed)`
-already catches a file the safety scan refuses too.
+fatal problems, and carries the same `ImportReport` its `fatal` bucket names them in.
+`UnsafeRdfXmlError` and `UnsafeJsonLdError`, the two exceptions the safety scan itself raises, are
+exported `SkosImportError` subclasses, so code that only catches `(SkosImportError,
+SkosImportFailed)` already catches a file the safety scan refuses too.
 
 ## Importing from the command line
 
@@ -170,14 +203,10 @@ the first import created rather than making a second copy.
 - `--format` names the source's serialization (`turtle`, `xml`, or `json-ld`), for a source whose
   extension or `Content-Type` does not.
 - `--dry-run` performs the entire import and reports the outcome exactly as a live run would,
-  then leaves the database exactly as it was beforehand — useful for seeing what a file would set
-  aside before deciding whether to configure a language for it.
-- `--verbosity`, Django's own option, prints bucket counts by default — how many records were
-  created, updated, set aside, normalized, or absent from the source, plus the set-aside account
-  grouped by reason and by language. At `2` or above, every individual set-aside entry prints too.
-  At `0` nothing prints at all, as with any Django command.
+  then leaves the database exactly as it was beforehand — useful for seeing what a file would
+  create and update before running it for real.
+- `--verbosity`, Django's own option, prints how many records were created, updated, and absent
+  from the source, then names each absent record. A dry run adds a line saying nothing was kept. At
+  `0` nothing prints at all, as with any Django command.
 
-A refusal exits non-zero and prints every reason the run was refused. A run that sets values aside
-still exits zero: importing a vocabulary published in more languages than a site is configured for
-always sets some aside, so that outcome is treated as normal rather than as a failure a deployment
-script should stop on.
+A refusal exits non-zero and prints every reason the run was refused.

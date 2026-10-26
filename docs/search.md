@@ -39,9 +39,11 @@ A render that reaches the missing-route case despite the warning raises `Imprope
 naming both the route and the `INSTALLED_APPS` entry, rather than the underlying library's own
 `NoReverseMatch` against a URL pattern you never wrote.
 
-A search returns, per concept, its identifier, its preferred label in the active language, and the
-name of the vocabulary it belongs to — nothing else, no editorial notes or alternative labels. The
-results are restricted to whatever vocabularies the field declares, the same restriction that
+A search matches what a person types against every preferred, alternative and hidden label of a
+concept, in any language, using the `search_text` copy kept on each `Record`. It returns, per
+concept, its identifier, its name in the active language, and the name of the vocabulary it belongs
+to — nothing else, no notes or alternative labels. Only concepts are searched, so a collection is
+never offered. The results are restricted to whatever vocabularies the field declares, the same restriction that
 already governs which concepts a form accepts; a field naming no vocabulary searches every concept
 in the database. The endpoint carries **no permission rule by default** — it serves the same
 concept data the rest of this package publishes at stable URIs. A project holding vocabularies it
@@ -61,13 +63,13 @@ A concept is chosen on these pages, never created or edited there. Django ordina
 add, change, delete or view link beside a related field so a person filling in a form can manage
 the related record without leaving it. None of the four appears beside a concept field, whether or
 not this package's own models are registered in the admin, and whatever permissions the signed-in
-person holds. Authoring stays wherever concepts themselves are curated — a controlled vocabulary
-stops being controlled the moment a data-entry form can invent or edit one.
+person holds. Concepts arrive by [importing](importing.md) a published vocabulary — a controlled
+vocabulary stops being controlled the moment a data-entry form can invent or edit one.
 
 Where the admin presents the field read-only — listed in `readonly_fields`, or because the
-signed-in person may view the page but not change it — the concept is shown by its preferred label
+signed-in person may view the page but not change it — the concept is shown by its name
 and no control renders. This is Django's own read-only presentation, not this package's: with
-`Concept` registered, a single concept links to its own change page. Several concepts, on a
+`Record` registered, a single concept links to its own change page. Several concepts, on a
 `ConceptsField`, always render as plain text. The package neither adds to this nor suppresses it.
 
 A project can still ask for a different control the way it would for any other related field:

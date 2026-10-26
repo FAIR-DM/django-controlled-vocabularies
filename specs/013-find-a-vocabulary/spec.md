@@ -6,11 +6,11 @@
 
 **Status**: Draft
 
-**Input**: Issue [#140](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/140) — "Nothing on a site running this package tells a visitor which vocabularies it holds. A person who has not been handed a URL has no way in, and an administrator cannot check what was imported without opening a database shell. This gives the package a front door: a page listing every vocabulary held here, local and imported alike, that can be searched and filtered when the list grows past a screenful."
+**Input**: Issue [#140](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/140) — "Nothing on a site running this package tells a visitor which vocabularies it holds. A person who has not been handed a URL has no way in, and an administrator cannot check what was imported without opening a database shell. This gives the package a front door: a page listing every vocabulary held here, local and imported alike, that can be searched and filtered when the list grows past a screenful."
 
 **Serves**: G7 (vocabulary browsing) · **Roadmap**: R6 · **Issue**: #140
 
-> Scope note: this is the first of three slices of roadmap item R6, and the only one with no dependency of its own — [#141](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/141) (a vocabulary's own page) and [#142](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/142) (a page per record) follow it in that order. It owns **one page: a list of every vocabulary the site holds**, what each entry tells a reader, a search that narrows that list, and facets that narrow it by publisher, licence and language. **Out of scope:** opening a vocabulary and everything inside one, which is #141; a page for a concept, collection or ordered collection, which is #142; searching for a concept without knowing which vocabulary holds it, which no roadmap item currently covers; any access rule of the package's own; keeping the page fast at a scale the project has not yet met, which is R7; and publication, deprecation and the curator interface, which are R4 and R5.
+> Scope note: this is the first of three slices of roadmap item R6, and the only one with no dependency of its own — [#141](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/141) (a vocabulary's own page) and [#142](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/142) (a page per record) follow it in that order. It owns **one page: a list of every vocabulary the site holds**, what each entry tells a reader, a search that narrows that list, and facets that narrow it by publisher, licence and language. **Out of scope:** opening a vocabulary and everything inside one, which is #141; a page for a concept, collection or ordered collection, which is #142; searching for a concept without knowing which vocabulary holds it, which no roadmap item currently covers; any access rule of the package's own; keeping the page fast at a scale the project has not yet met, which is R7; and publication and deprecation, which are R4.
 
 ## Clarifications
 
@@ -19,9 +19,9 @@
 Four decisions were taken with the maintainer at intake, because each decides what the feature is rather than how it is built.
 
 - **Q: Does the search box search the list of vocabularies, or does it search concepts across them?** → A: The list of vocabularies only. A person who knows the term but not which vocabulary holds it is not served by this feature. That is a genuine gap against the goal this feature serves, which names searching concepts across vocabularies, and no roadmap item currently fills it — recorded here, and raised at the spec gate, rather than widened into this page. Integrated into FR-006 and User Story 2.
-- **Q: What can the list be filtered by?** → A: The publication details a vocabulary carries: its publisher, its licence and its language. Search stays the primary way in. The facets became worth having once vocabularies kept their publication details on import (#207), because a site holding several vocabularies from one publisher needs a way to see that set. Integrated into User Story 4 and FR-019 to FR-023.
-- **Q: What does an entry tell a reader?** → A: Its publisher where it names one, its name, its description, how many concepts and collections it holds, when it was last updated, and its identifier. An entry is laid out as a concept is on a vocabulary's page, with the publisher above the name where the broader concept sits. Whether a vocabulary was imported is not shown on the entry: it decides whether the vocabulary may be edited here, which is an editor's concern, and an editor narrows the list by it instead (FR-023). The languages a vocabulary carries were considered and deliberately left out: it is the most expensive thing to work out per entry and the least often needed. Integrated into FR-002 and FR-003.
-- **Q: Who can see the page?** → A: Anyone who reaches it. The package carries no access rule of its own here, exactly as its concept search endpoint carries none (ADR 0008), and a project that needs the page restricted restricts it where it mounts the package's routes. The consequence was named and accepted: a vocabulary has no draft state, so one that is still being authored is visible from the moment it exists. Access control for the browsing interface is a later question, not this feature's. Integrated into FR-005 and Assumptions.
+- **Q: What can the list be filtered by?** → A: The publication details a vocabulary carries: its publisher, its licence and its language. Search stays the primary way in. The facets became worth having once vocabularies kept their publication details on import (#207), because a site holding several vocabularies from one publisher needs a way to see that set. Integrated into User Story 4 and FR-019 to FR-022.
+- **Q: What does an entry tell a reader?** → A: Its publisher where it names one, its name, its description, how many concepts and collections it holds, when it was last updated, and its identifier. An entry is laid out as a concept is on a vocabulary's page, with the publisher above the name where the broader concept sits. Whether a vocabulary was imported is not shown on the entry. The languages a vocabulary carries were considered and deliberately left out: it is the most expensive thing to work out per entry and the least often needed. Integrated into FR-002 and FR-003.
+- **Q: Who can see the page?** → A: Anyone who reaches it. The package carries no access rule of its own here, exactly as its concept search endpoint carries none (ADR 0008), and a project that needs the page restricted restricts it where it mounts the package's routes. The consequence was named and accepted: a vocabulary has no draft state, so one is visible from the moment it exists. Access control for the browsing interface is a later question, not this feature's. Integrated into FR-005 and Assumptions.
 
 ### Session 2026-08-19 (coverage scan)
 
@@ -37,16 +37,16 @@ Five further ambiguities surfaced by the structured coverage scan over the draft
 
 ### User Story 1 - See every vocabulary the site holds (Priority: P1)
 
-A person arrives at the site without having been handed a URL for anything. One page names every vocabulary held here, whether it was authored on this site or imported from a publisher elsewhere, and tells them enough about each one — what it covers, how big it is, where it came from — to know which one they want. An administrator who has just run an import opens the same page to confirm what landed.
+A person arrives at the site without having been handed a URL for anything. One page names every vocabulary held here, and tells them enough about each one — what it covers, how big it is, who published it — to know which one they want. An administrator who has just run an import opens the same page to confirm what landed.
 
 **Why this priority**: This is the feature. Until this page exists, the only way to learn what a site holds is a database shell, and the package's entire browsing interface has nowhere to start from.
 
-**Independent Test**: Load the page on a site holding a mix of locally authored and imported vocabularies, and confirm every one of them appears exactly once, each showing its name, its description, how many concepts it holds, and its identifier.
+**Independent Test**: Load the page on a site holding several vocabularies, some naming a publisher and some not, and confirm every one of them appears exactly once, each showing its name, its description, how many concepts it holds, and its identifier.
 
 **Acceptance Scenarios**:
 
-1. **Given** a site holding several vocabularies, some authored here and some imported, **When** the page is requested, **Then** every vocabulary appears, and none appears twice.
-2. **Given** a vocabulary authored on this site, **When** its entry is read, **Then** its own identifier is shown.
+1. **Given** a site holding several vocabularies, **When** the page is requested, **Then** every vocabulary appears, and none appears twice.
+2. **Given** a vocabulary created on this site without an identifier, **When** its entry is read, **Then** the identifier composed for it is shown.
 3. **Given** an imported vocabulary, **When** its entry is read, **Then** the identifier its publisher assigned it is shown, and its publisher is named where the vocabulary gives one.
 4. **Given** any vocabulary, **When** its entry is read, **Then** it shows the vocabulary's name, its description, and how many concepts it holds.
 5. **Given** a vocabulary holding no concepts, **When** its entry is read, **Then** it still appears, and its count reads as none rather than being left blank.
@@ -78,16 +78,10 @@ A person looking at a site holding more vocabularies than fit on a screen types 
 
 ### User Story 3 - Run the page and look at it (Priority: P1)
 
-**Refined**: 2026-08-20 — added after the maintainer pointed out that nothing in the first two
-stories lets him confirm the page renders. A test asserting a page's markup and a person looking at
-that page are different evidence, and only the second closes the question the whole feature exists
-to answer.
-
 Someone with a fresh clone of the repository — the maintainer at a review, a contributor deciding
 whether the package suits them — installs it, runs three commands, and has a browser open on a
 populated vocabulary list. They did not write a settings module, wire up seven applications, or
-find their own SKOS file first. They can search it, page through it, and add a vocabulary by hand to
-see it appear.
+find their own SKOS file first. They can search it and page through it.
 
 **Why this priority**: P1 alongside the list itself. The page's own value is unverifiable without
 it, and every later slice of the browsing interface — a vocabulary's own page, a record's page —
@@ -103,8 +97,8 @@ cannot rot silently.
    order, **Then** a server is running and its documented address serves the vocabulary list with
    vocabularies on it.
 2. **Given** the seeded demo, **When** the list is read, **Then** it holds both a vocabulary
-   imported from a publisher and one authored locally, so the difference between the two entries is
-   visible rather than described.
+   imported from a publisher and one created by the seed command, so the difference between the
+   two entries is visible rather than described.
 3. **Given** a seeded demo in any state, **When** the seed command is run again, **Then** the demo
    returns to the same state, whatever was added or removed before.
 4. **Given** the demo, **When** its root address is opened, **Then** it leads to the list rather
@@ -117,9 +111,7 @@ cannot rot silently.
 
 ### User Story 4 - Narrow the list by publisher, licence or language (Priority: P3)
 
-**Refined**: 2026-10-22 — added once vocabularies kept their publication details on import (#207).
-
-A researcher on a site holding dozens of vocabularies wants the ones a particular publisher maintains, or only the ones they may reuse under an open licence, or only the ones written in their language. Beside the list they tick the publisher, licence or language they are after, and the list narrows to the vocabularies carrying it. Each option says how many vocabularies it would leave, so they can see before ticking it whether it is worth doing. An editor can also narrow the list to the vocabularies imported from a publisher, or to those held here.
+A researcher on a site holding dozens of vocabularies wants the ones a particular publisher maintains, or only the ones they may reuse under an open licence, or only the ones written in their language. Beside the list they tick the publisher, licence or language they are after, and the list narrows to the vocabularies carrying it. Each option says how many vocabularies it would leave, so they can see before ticking it whether it is worth doing.
 
 They can also put the largest vocabularies first, or the most recently updated.
 
@@ -131,13 +123,11 @@ They can also put the largest vocabularies first, or the most recently updated.
 
 1. **Given** vocabularies from several publishers, **When** one publisher is chosen, **Then** only its vocabularies remain.
 2. **Given** two publishers chosen, **When** the list is read, **Then** the vocabularies of either remain.
-3. **Given** a vocabulary that gives no language of its own, **When** the site's language is chosen, **Then** it remains, because it is read in the site's language.
+3. **Given** vocabularies with different default languages, **When** a language is chosen, **Then** only the vocabularies whose default language it is remain.
 4. **Given** a licence the package recognises, such as a Creative Commons licence given by its address, **When** its option is read, **Then** it is named by its short name.
 5. **Given** a search or another facet in force, **When** a facet's options are read, **Then** each counts the vocabularies it would leave among those the search and the other facets leave, and not counting the facet's own choice.
 6. **Given** every vocabulary sharing one publisher, or none naming one, **When** the page is read, **Then** no publisher facet is offered, because it could not narrow anything. The same holds for licence and language.
-7. **Given** a reader who cannot change vocabularies, **When** the page is read, **Then** no facet for whether a vocabulary was imported is offered, and choosing it by address changes nothing.
-8. **Given** an editor, **When** they choose imported or held here, **Then** only those vocabularies remain.
-9. **Given** the sort by most concepts, **When** the list is read, **Then** the largest vocabulary comes first. **Given** the sort by most recently updated, **Then** the newest comes first and vocabularies giving no date come last.
+7. **Given** the sort by most concepts, **When** the list is read, **Then** the largest vocabulary comes first. **Given** the sort by most recently updated, **Then** the newest comes first and vocabularies giving no date come last.
 
 ---
 
@@ -156,7 +146,7 @@ They can also put the largest vocabularies first, or the most recently updated.
 
 ### Functional Requirements
 
-- **FR-001**: The package MUST provide one page that lists every vocabulary the site holds, whether authored here or imported, with each appearing exactly once.
+- **FR-001**: The package MUST provide one page that lists every vocabulary the site holds, whether imported or created in code, with each appearing exactly once.
 - **FR-002**: Each entry MUST show the vocabulary's name, its description, and how many concepts it holds — counting concepts only, excluding none, and reading as none rather than blank when there are no concepts.
 - **FR-003**: Each entry MUST show the vocabulary's identifier, which is its publisher's for an imported one, and MUST name its publisher, show how many collections it holds and when it was last modified, each only where the vocabulary has one.
 - **FR-004**: The list MUST appear in a stable alphabetical order by name that does not depend on letter case.
@@ -171,19 +161,18 @@ They can also put the largest vocabularies first, or the most recently updated.
 - **FR-013**: Each entry MUST link to the vocabulary's own page.
 - **FR-014**: The repository MUST carry a runnable demonstration project that serves this page, configured the way the package's own documentation tells a project to configure it.
 - **FR-015**: The demonstration MUST be reachable in three documented commands from a fresh clone with dependencies installed — build the database, load content, serve it — and its root address MUST lead to the list rather than to a missing page.
-- **FR-016**: The demonstration's content MUST include both an imported vocabulary and a locally authored one, and loading it MUST be repeatable: running the command again returns the demonstration to the same state from any prior state.
+- **FR-016**: The demonstration's content MUST include both a vocabulary imported from a file that declares its own and one the seed command creates for a file that declares none, and loading it MUST be repeatable: running the command again returns the demonstration to the same state from any prior state.
 - **FR-017**: The demonstration MUST be checked without a person: an unattended run installs it, loads its content, serves it, and reads the list back, failing if any step does not work.
 - **FR-018**: The demonstration MUST be recognisable as one — a local database, an obviously throwaway secret, and documentation saying plainly that it is not a production configuration.
 
 - **FR-019**: A visitor MUST be able to narrow the list by publisher, by licence and by language, choosing several options of one facet to keep the vocabularies matching any of them, and combining facets with each other and with the search.
-- **FR-020**: A vocabulary that gives no language of its own MUST be found under the site's default language.
+- **FR-020**: A vocabulary's language MUST be its default language, which every vocabulary has.
 - **FR-021**: Each facet option MUST show how many vocabularies it would leave among those the search and the other facets leave. A facet with fewer than two options MUST NOT be offered.
 - **FR-022**: Facet choices MUST be carried in the page's address alongside the search and the sort, as FR-007 requires of the search.
-- **FR-023**: Only someone who can change vocabularies MUST be offered a facet for whether a vocabulary was imported or is held here. For anyone else the facet MUST have no effect, even when the address carries it.
 
 ### Key Entities
 
-- **ConceptScheme (vocabulary)**: the record being listed. Contributes its name, its description, its identifier and whether that was fixed by an external publisher, and its publisher, licence, language and last-modified date.
+- **ConceptScheme (vocabulary)**: the record being listed. Contributes its name, its description, its identifier, and its publisher, licence, default language and last-modified date, each read from its document.
 - **Concept**: not listed, and reached only as a count per vocabulary.
 
 ## Success Criteria *(mandatory)*
@@ -191,7 +180,7 @@ They can also put the largest vocabularies first, or the most recently updated.
 ### Measurable Outcomes
 
 - **SC-001**: A person given only the site's address can name every vocabulary it holds, from one page, without being handed a URL and without a database shell.
-- **SC-002**: An administrator can tell, from this page alone, which vocabularies came from a publisher and which were authored here, and how many concepts each holds.
+- **SC-002**: An administrator can tell, from this page alone, which vocabularies name a publisher, and how many concepts each holds.
 - **SC-003**: A person looking for a vocabulary by one word from its name or description reaches it in a single search, from any page of the list.
 - **SC-004**: The address of a narrowed list, opened fresh, produces the same vocabularies in the same order.
 - **SC-005**: The number of database queries the page runs does not grow with the number of vocabularies it shows.
@@ -202,5 +191,4 @@ They can also put the largest vocabularies first, or the most recently updated.
 
 - A site holds tens of vocabularies rather than thousands. Keeping the page fast at a scale beyond that is R7, not this feature.
 - A vocabulary being visible to everyone is acceptable at this stage. Access control across the browsing interface is a later decision, and this feature does not prejudge it.
-- Whether a vocabulary was imported is read from its identifier having been fixed by a publisher, which is the only signal the data carries. A vocabulary published from this site (R4) will also carry a fixed identifier, and distinguishing those two cases is R4's to settle when publication exists.
 - A visitor's browser may not run JavaScript. Nothing on this page depends on it.

@@ -6,148 +6,124 @@
 
 **Status**: Draft
 
-**Input**: Issue [#17](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/17) — "Concepts within a vocabulary need to link to one another: a broader/narrower hierarchy, and a looser 'related' association, so a vocabulary is a structured graph rather than a flat list, navigable in both directions."
+**Input**: Issue [#17](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/17) — "Concepts within a vocabulary need to link to one another: a broader/narrower hierarchy, and a looser 'related' association, so a vocabulary is a structured graph rather than a flat list, navigable in both directions."
 
-**Serves**: G4 (faithful round-trip of managed vocabularies — the graph structure is part of what must survive export) · **Roadmap**: R1 · **Issue**: #17
+**Serves**: G4 (faithful round-trip of a vocabulary — the graph structure is part of what must survive export) · **Roadmap**: R1 · **Issue**: #17
 
-> Scope note: this feature is one slice of roadmap item R1. It turns a vocabulary from a flat set of concepts (established in [#15](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/15), enriched with multilingual names in [#16](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/16)) into a structured graph: concepts link to one another through a broader/narrower hierarchy and a symmetric related association, navigable in both directions. Interaction is purely programmatic — through the ORM, no admin or editor UI (that is roadmap R5, matching the precedent set by #15 and #16). **Out of scope:** cross-vocabulary mappings (`exactMatch`, `closeMatch`, … — a different mechanism that lives in a concept's document, not the relation link), named collections ([#18](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/18)), the concept lifecycle and safe removal ([#19](https://github.com/SamuelJennings/django-controlled-vocabularies/issues/19)), and RDF import/export (R2/R4). Cycle prevention in the hierarchy is deliberately not guaranteed this slice (see Assumptions).
+> Scope note: this feature turns a vocabulary from a flat set of concepts (FS-001, FS-002) into a structured graph: concepts link to one another through a broader/narrower hierarchy and a symmetric related association, readable from both ends. A link is a statement in the concept's `data` document, an entry holding the target's URI under `skos:broader`, `skos:narrower` or `skos:related`, kept as the publisher stated it. Only the stated direction is stored, and the pages show the other end. Interaction is purely programmatic — no admin or editor UI. **Out of scope:** named collections (FS-004), and RDF export (R4). A link to a concept in another vocabulary is stored like any other statement and is shown by the pages, and the package does not model it as a separate mechanism.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Broader/narrower hierarchy, navigable both ways (Priority: P1)
+### User Story 1 - Broader/narrower hierarchy, readable both ways (Priority: P1)
 
-A curator building their own vocabulary arranges its concepts into a hierarchy: "Granite" is placed under "Igneous rock" by giving it a broader concept. Reading "Igneous rock" back, "Granite" appears among its narrower concepts without the curator ever having asserted the narrower direction separately — one assertion, both directions readable. A concept may be placed under more than one broader concept (polyhierarchy): "Granite" can be broader-linked to both "Igneous rock" and "Plutonic rock".
+A vocabulary arranges its concepts into a hierarchy: "Granite" is placed under "Igneous rock" by stating a broader concept. Reading "Igneous rock" back, "Granite" appears among its narrower concepts without the file ever stating the narrower direction separately — one statement, both directions readable. A concept may be placed under more than one broader concept (polyhierarchy): "Granite" can state both "Igneous rock" and "Plutonic rock" as broader.
 
-**Why this priority**: This is the core of the feature and the whole of what makes a vocabulary a graph rather than a list. The inverse-pair guarantee (assert `broader`, read `narrower` back) is the load-bearing behaviour every downstream navigation, publish, and export path depends on. Implemented alone, it is a viable, navigable concept hierarchy.
+**Why this priority**: This is the core of the feature and the whole of what makes a vocabulary a graph rather than a list. The inverse-pair guarantee (state `broader`, read `narrower` back) is the load-bearing behaviour every downstream navigation, publish and export path depends on. Implemented alone, it is a viable, navigable concept hierarchy.
 
-**Independent Test**: In a test, create a vocabulary with three concepts, give one two broader concepts, then read the narrower concepts back from each parent and assert the child appears in both, and that the child reports both parents — without any narrower assertion having been made.
+**Independent Test**: In a test, create a vocabulary with three concepts, give one two broader concepts in its document, then read the broader links from the child with `linked_uris("skos:broader")` and render each parent's page, and assert the child appears as narrower on both pages — without any narrower statement having been made.
 
 **Acceptance Scenarios**:
 
-1. **Given** a vocabulary with concepts "Igneous rock" and "Granite", **When** the curator gives "Granite" the broader concept "Igneous rock", **Then** "Granite" reports "Igneous rock" among its broader concepts, and "Igneous rock" reports "Granite" among its narrower concepts, with no separate narrower assertion made.
-2. **Given** that hierarchy, **When** the curator also gives "Granite" the broader concept "Plutonic rock", **Then** "Granite" reports both "Igneous rock" and "Plutonic rock" as broader (polyhierarchy is allowed).
-3. **Given** a broader link from "Granite" to "Igneous rock", **When** the link is removed, **Then** neither concept reports the other in either direction.
-4. **Given** any concept, **When** the curator attempts to give it itself as a broader (or narrower) concept, **Then** the system refuses it — a concept cannot be its own broader or narrower.
-5. **Given** "Granite" already broader-linked to "Igneous rock", **When** the same broader link is asserted again, **Then** the system refuses the duplicate — the pair is held once.
+1. **Given** a vocabulary with concepts "Igneous rock" and "Granite", **When** "Granite" states the broader concept "Igneous rock", **Then** `granite.linked_uris("skos:broader")` returns the URI of "Igneous rock", and the page of "Igneous rock" lists "Granite" among its narrower concepts, with no separate narrower statement made.
+2. **Given** that hierarchy, **When** "Granite" also states the broader concept "Plutonic rock", **Then** `granite.linked_uris("skos:broader")` returns both URIs (polyhierarchy is allowed), and both parents' pages list "Granite" as narrower.
+3. **Given** a broader link from "Granite" to "Igneous rock", **When** the link is removed from "Granite"'s document and it is saved, **Then** neither page shows the other in either direction.
+4. **Given** a concept that states a narrower link to another concept, **When** the pages are read, **Then** the stated narrower link is shown, and the other concept's page shows the concept as broader.
+5. **Given** a concept with no broader or narrower links, **When** `linked_uris()` is read for either predicate, **Then** the result is an empty list.
 
 ---
 
 ### User Story 2 - The related association, symmetric (Priority: P2)
 
-A curator records a sideways association between two concepts where neither is above the other: "Granite" is related to "Quartz" — they belong together, but neither is a kind of the other. The association reads the same from either concept: asking "Granite" for its related concepts returns "Quartz", and asking "Quartz" returns "Granite", from the single assertion the curator made.
+A vocabulary records a sideways association between two concepts where neither is above the other: "Granite" is related to "Quartz" — they belong together, but neither is a kind of the other. The association reads the same from either concept: the page of "Granite" shows "Quartz", and the page of "Quartz" shows "Granite", from the single statement.
 
 **Why this priority**: The related association is the second half of the graph the issue asks for and what captures the associations the strict hierarchy cannot. It reuses US-1's linking mechanism and is not needed for the hierarchy to be correct, so it follows it.
 
-**Independent Test**: In a test, relate two concepts from one side, read the related concepts back from the other side and assert the first appears, assert the association is stored once (not mirrored into two rows), and assert relating a concept to itself is refused.
+**Independent Test**: In a test, state a related link on one concept, read the pages of both concepts and assert each shows the other, and assert the link is stored once, in the concept that stated it.
 
 **Acceptance Scenarios**:
 
-1. **Given** concepts "Granite" and "Quartz", **When** the curator relates "Granite" to "Quartz", **Then** "Granite" reports "Quartz" as related and "Quartz" reports "Granite" as related, from the one assertion.
-2. **Given** "Granite" related to "Quartz", **When** the curator asserts the same association in the opposite order ("Quartz" related to "Granite"), **Then** the system treats it as the association that already exists — it is not stored a second time.
-3. **Given** any concept, **When** the curator attempts to relate it to itself, **Then** the system refuses it.
-4. **Given** "Granite" related to "Quartz", **When** the related link is removed, **Then** neither concept reports the other as related.
+1. **Given** concepts "Granite" and "Quartz", **When** "Granite" states "Quartz" as related, **Then** the page of "Granite" shows "Quartz" as related and the page of "Quartz" shows "Granite" as related, from the one statement.
+2. **Given** "Granite" related to "Quartz", **When** "Quartz" also states "Granite" as related, **Then** each page shows the other once, not twice.
+3. **Given** "Granite" related to "Quartz", **When** the related link is removed from "Granite"'s document and it is saved, **Then** neither page shows the other as related.
 
 ---
 
-### User Story 3 - The graph stays coherent (Priority: P2)
+### User Story 3 - Links are kept as published (Priority: P2)
 
-A curator cannot, whether by mistake or otherwise, put the vocabulary into a state SKOS treats as contradictory: two concepts already joined in a broader/narrower line cannot also be marked related, because related is meant for associations *outside* the hierarchy. Attempting it is refused, with a message that says why. The one incoherence this slice does not police is a cycle in the hierarchy — that is left to a later feature and is called out so its absence is deliberate.
+A vocabulary's links are stored exactly as its publisher stated them. The package does not police the graph: two concepts joined in a broader/narrower line may also be stated as related, a concept may state itself, a link may name a concept held in another vocabulary or nowhere on the site, and a broader chain may close into a loop. Each of these is stored and shown as stated, because a faithful copy of a published vocabulary is what the package is for, and the publisher is responsible for its own graph.
 
-**Why this priority**: Disjointness is what keeps the exported SKOS valid and the graph meaningful, and it is the integrity guarantee the curator most needs protecting from. It spans both relation types, so it can only be expressed once US-1 and US-2 exist, which puts it at P2 behind them.
+**Why this priority**: Refusing a published statement would mean discarding part of what was published, which is the failure this storage exists to avoid. Making the boundary explicit stops a later change from quietly adding an enforcement that drops data.
 
-**Independent Test**: In a test, give two concepts a broader/narrower link, attempt to also relate them, and assert refusal; do the reverse (relate first, then attempt a broader link) and assert refusal; and assert that a broader link and a related link between two *different* pairs both succeed.
+**Independent Test**: In a test, import a file whose concepts state a duplicate link, a self link, a related link between a broader/narrower pair, a link to an unknown URI, and a broader loop, and assert that every statement is stored and that no error is raised.
 
 **Acceptance Scenarios**:
 
-1. **Given** "Granite" broader-linked to "Igneous rock", **When** the curator attempts to relate "Granite" and "Igneous rock", **Then** the system refuses it — a directly hierarchical pair cannot also be related.
-2. **Given** "Granite" related to "Quartz", **When** the curator attempts to give one the other as a broader concept, **Then** the system refuses it.
-3. **Given** a vocabulary, **When** a broader link joins one pair and a related link joins a different pair, **Then** both succeed — disjointness constrains a pair, not the vocabulary.
-4. **Given** a broader chain "Granite" → "Igneous rock" → "Rock", **When** the curator gives "Rock" the broader concept "Granite" (closing a loop), **Then** the system accepts it — cycle prevention is not guaranteed this slice (recorded deferral), and no traversal is performed.
+1. **Given** "Granite" stating "Igneous rock" as broader, **When** "Granite" also states "Igneous rock" as related, **Then** both statements are stored and both are shown.
+2. **Given** a concept that states a link to its own URI, **When** it is saved, **Then** the statement is stored, and no refusal is raised.
+3. **Given** a concept that states a broader link to a URI no record of this site holds, **When** the page is read, **Then** the link is shown as the URI, as a link when it is a web address and as text otherwise.
+4. **Given** a concept that states a related link to a concept of another vocabulary held here, **When** the page is read, **Then** the link leads to that concept's page.
+5. **Given** a broader chain "Granite" → "Igneous rock" → "Rock", **When** "Rock" states the broader concept "Granite" (closing a loop), **Then** the statement is stored and no traversal of the hierarchy is performed.
 
 ---
 
 ### User Story 4 - Relation test scaffolding (Priority: P3)
 
-A contributor building a later feature — publishing, export, the editor — constructs a small graph of related concepts in a few lines using the test factories, instead of wiring up broader and related links by hand in every test.
+A contributor building a later feature — browsing, export — constructs a small graph of related concepts in a few lines using the test factories, instead of writing link statements by hand in every test.
 
-**Why this priority**: Every downstream feature that reads the graph (RDF export, the browsing UI, the consumption field's subtree-scoped autocomplete) needs graph-shaped test data. It is cheap to add alongside the models and paid back immediately, but nothing ships to a user because of it, so P3.
+**Why this priority**: Every downstream feature that reads the graph (RDF export, the browsing pages, the consumption field's collection restriction) needs graph-shaped test data. It is cheap to add and paid back immediately, but nothing ships to a user because of it, so P3.
 
-**Independent Test**: Write a test that asks the factory for a concept with broader and related links and asserts the graph is present and navigable in both directions.
-
-**Acceptance Scenarios**:
-
-1. **Given** the test suite, **When** a test requests a small concept hierarchy from the factory, **Then** it receives saved concepts linked broader/narrower and navigable both ways.
-2. **Given** the factories, **When** a test requests a related pair, **Then** it receives two concepts joined by a single related association.
-
----
-
-### User Story 5 - Translatable field metadata and deliberate indexing (Priority: P3)
-
-Every field this feature adds carries a human-readable, translatable label and help text, every user-facing validation message it introduces is translatable, and each new field's database indexing is a deliberate, recorded decision — because a consumer of a third-party package cannot add any of these themselves.
-
-**Why this priority**: A family-wide standard for every Django package this maintainer publishes (non-negotiable at review, constitution Articles XII and XIII), already carried by #15 and #16. It adds no new capability but gates the merge, so it travels with the feature at P3.
-
-**Independent Test**: The existing metadata test suite, which walks every concrete field on the models, automatically covers the new relation fields; extend it to the new through model. No UI needed.
+**Independent Test**: Write a test that asks the factory for a concept hierarchy and a related pair and asserts the graph is present and readable from both ends.
 
 **Acceptance Scenarios**:
 
-1. **Given** any field the relation model adds, **When** its metadata is inspected, **Then** it declares a non-empty help text and a human-readable label, both lazily translatable.
-2. **Given** a user-facing validation failure introduced here (a self-relation, a duplicate, a disjointness violation), **When** the error is raised, **Then** its message is translatable and uses named placeholders rather than baked-in values.
-3. **Given** the database definition of the relation model, **When** its indexes are inspected, **Then** the columns used to look a concept's relations up are indexed, and any queryable-but-unindexed field is a recorded decision, not an omission.
+1. **Given** the test suite, **When** a test requests a small concept hierarchy from the factory, **Then** it receives saved concepts linked broader/narrower, whose pages show both directions.
+2. **Given** the factories, **When** a test requests a related pair, **Then** it receives two concepts joined by a single related statement.
 
 ### Edge Cases
 
-- A concept given two broader concepts (polyhierarchy) reads both back; removing one leaves the other intact.
-- Relating a pair that is *transitively* but not *directly* hierarchical (A broader B, B broader C; relate A and C) is **accepted** this slice — disjointness is checked against directly-asserted broader/narrower pairs only, because transitive checking needs the hierarchy traversal this slice deliberately omits (see Assumptions). Recorded so the boundary is explicit.
-- A relation whose two concepts belong to *different* vocabularies is refused — broader/narrower/related are intra-vocabulary; a cross-vocabulary link is a mapping, which is out of scope.
-- Reading a concept's broader, narrower, or related concepts when it has none returns an empty result, not an error.
-- Removing a concept that participates in relations is governed by the lifecycle feature (#19); this slice adds relations to the existing concept model and does not change how a concept is removed.
+- A concept given two broader concepts (polyhierarchy) reads both back; removing one statement leaves the other intact.
+- A concept's page shows the inverse of a link only for concepts of its own vocabulary. A link stated by a concept of another vocabulary is not turned around.
+- Reading a concept's broader, narrower or related links when it has none returns an empty list, not an error.
+- A link names its target by URI. When the target's record is later deleted, the link stays in the document and the page shows the URI as text.
+- Links are held in the document as lists of `{"@id": ...}` entries, so the same URI listed twice in one list is two entries. An import stores each distinct statement a file makes once.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: A concept MUST be able to be given one or more **broader** concepts within the same vocabulary; polyhierarchy (several broader concepts) MUST be supported.
-- **FR-002**: The **narrower** direction MUST be derived from the broader assertion, never asserted separately: if A is broader than B, then B MUST report A as broader and A MUST report B as narrower, from the single assertion. Only one canonical direction is stored.
-- **FR-003**: A concept MUST be able to be given **related** concepts within the same vocabulary; the related association MUST be symmetric — readable identically from either concept — from a single assertion, stored as one canonical row (an assertion in the mirror order MUST resolve to the same association, not a second one).
-- **FR-004**: The programming interface MUST let a caller read a concept's broader concepts, its narrower concepts (derived), and its related concepts through the ORM, each returning an empty result when there are none.
-- **FR-005**: A concept MUST be able to have a broader, narrower, or related link **removed**, after which neither concept reports the other in that direction.
-- **FR-006**: A relation of any type between a concept and **itself** MUST be refused.
-- **FR-007**: A **duplicate** relation MUST be refused: the same broader link asserted twice, or the same related association asserted in either order twice, is held once, not twice.
-- **FR-008**: A pair of concepts joined by a **directly-asserted** broader/narrower link MUST NOT also be joinable by a related link, and vice versa (SKOS disjointness). The violation MUST be refused with a translatable message. Disjointness is evaluated against direct broader/narrower assertions only, not the transitive hierarchy.
-- **FR-009**: Both endpoints of any relation MUST belong to the **same vocabulary** (`ConceptScheme`); a relation across vocabularies MUST be refused. (Cross-vocabulary links are mappings, out of scope.)
-- **FR-010**: The system MUST NOT perform hierarchy traversal to prevent **cycles** in the broader relation this slice; a curator MAY create a cyclic broader chain, and this is a recorded, deliberate non-guarantee (a later feature may add cycle detection).
-- **FR-011**: Every model field the relation model adds MUST declare a human-readable, lazily translatable label and non-empty help text; every user-facing validation message this feature introduces (self-relation, duplicate, disjointness, cross-vocabulary) MUST be translatable, with named placeholders so the translatable form is static. Developer-facing diagnostics are exempt.
-- **FR-012**: Indexing of the relation model's fields MUST be deliberate: the columns used to look a concept's relations up (in either direction) MUST be indexed, the uniqueness that enforces FR-007 MUST be a database constraint, and any queryable-but-unindexed field MUST be a recorded decision.
-- **FR-013**: The test suite MUST ship factories (or equivalent fixtures) able to produce concepts joined by broader/narrower and related links, navigable in both directions.
+- **FR-001**: A concept MUST be able to state one or more broader concepts, as `{"@id": ...}` entries under `skos:broader` in its document; polyhierarchy (several broader concepts) MUST be supported.
+- **FR-002**: The inverse direction MUST be derived when read, never required to be stated: if a concept states another as broader, the other's page MUST list it as narrower, and a concept that states another as narrower MUST be listed as broader on the other's page. Only the stated direction is stored.
+- **FR-003**: A concept MUST be able to state related concepts under `skos:related`. The association MUST read the same from either concept from a single statement, and a statement made from both ends MUST be shown once on each page.
+- **FR-004**: The programming interface MUST let a caller read the URIs a concept links to under any predicate with `linked_uris(curie)`, returning an empty list when there are none.
+- **FR-005**: A link MUST be removable by editing the concept's document and saving it, after which neither concept's page shows the other in that direction.
+- **FR-006**: A link to the concept itself MUST be stored as stated. The package MUST NOT refuse it.
+- **FR-007**: A duplicate link, and a pair stated as both broader and related, MUST be stored as stated. The package MUST NOT enforce SKOS disjointness.
+- **FR-008**: A link MAY name a concept of another vocabulary, or a URI no record of the site holds, and MUST be stored as stated. A link to a record held here MUST lead to that record's page, and any other MUST be shown as its URI.
+- **FR-009**: The system MUST NOT traverse the hierarchy to prevent cycles in the broader relation; a publisher MAY state a cyclic chain, and this is a recorded, deliberate non-guarantee.
+- **FR-010**: The test suite MUST ship factories (or equivalent fixtures) able to produce concepts joined by broader/narrower and related links, readable from both ends.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Concept relation**: a link between two concepts belonging to the same vocabulary, carrying its type. The hierarchy is stored in one canonical direction (broader), with narrower derived; the related association is symmetric and stored once. The relation is the new entity this feature introduces.
-- **Concept (extended)**: unchanged in identity and labelling, now reachable as a node in a graph — it can report its broader concepts, its narrower concepts (derived), and its related concepts, all scoped to its own vocabulary.
-- **Relationship type**: the kind of a stored relation — the hierarchical `broader` (its inverse `narrower` derived on read) and the symmetric `related`. Cross-vocabulary mapping types are explicitly not part of this entity.
+- **Link**: an entry holding a target URI, `{"@id": "..."}`, in a record's document under `skos:broader`, `skos:narrower` or `skos:related`. It belongs to the record that stated it. The page of the target shows the inverse.
+- **Record (links)**: unchanged in identity and labelling, now reachable as a node in a graph — it can report the URIs it links to, and its page shows the links other concepts of its vocabulary make to it.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: Through the ORM alone, a developer can give a concept several broader concepts and read the narrower concepts back from each parent, with no narrower assertion made — verified by test.
-- **SC-002**: A related association set from one concept is readable, identically, from the other, and is stored exactly once regardless of the order it was asserted in — verified by test.
-- **SC-003**: A self-relation of any type is refused — verified by test for broader and for related.
-- **SC-004**: A duplicate relation is refused, including a related association re-asserted in mirror order — verified by test.
-- **SC-005**: Two concepts in a directly-asserted broader/narrower line cannot also be related, in either order of attempt, while a broader link and a related link on two different pairs both succeed — verified by test.
-- **SC-006**: A relation whose endpoints are in different vocabularies is refused — verified by test.
-- **SC-007**: A cyclic broader chain can be created without error and without the system performing hierarchy traversal — verified by test, documenting the deliberate non-guarantee.
-- **SC-008**: A test obtains a navigable concept graph (broader/narrower and a related pair) from the factories in a few lines.
-- **SC-009**: Every field the relation model adds exposes translatable, non-empty metadata and a recorded indexing decision, and every validation message this feature introduces is translatable with named placeholders — verified by the standards test.
-- **SC-010**: Every functional requirement above is exercised by at least one automated test, and the suite passes across the supported Python/Django matrix.
+- **SC-001**: Through the ORM alone, a developer can give a concept several broader concepts and read the narrower concepts back from each parent's page, with no narrower statement made — verified by test.
+- **SC-002**: A related link stated by one concept is shown, identically, on the other concept's page, and is shown once when both state it — verified by test.
+- **SC-003**: A self link, a duplicate link, a broader and a related link between one pair, and a link to a concept held elsewhere are all stored as stated, without error — verified by test.
+- **SC-004**: A link to a record held here leads to its page, and a link to anything else is shown as its URI — verified by test.
+- **SC-005**: A cyclic broader chain can be stored without error and without the system performing hierarchy traversal — verified by test, documenting the deliberate non-guarantee.
+- **SC-006**: A test obtains a navigable concept graph (broader/narrower and a related pair) from the factories in a few lines.
+- **SC-007**: Every functional requirement above is exercised by at least one automated test, and the suite passes across the supported Python/Django matrix.
 
 ## Assumptions
 
-- **Programmatic only.** This slice has no user interface, including the Django admin. Relations are created, read, and removed through the ORM; the live curation experience for building a hierarchy lands with the management interface, roadmap R5 — matching the precedent set by #15 and #16.
-- **Cycle prevention is deliberately deferred.** SKOS does not formally forbid a cycle in the broader relation, and detecting one requires walking the hierarchy on every write — the same traversal cost this slice avoids. Acyclicity is therefore not guaranteed here; a curator can create a loop. Recorded as a deliberate non-guarantee (FR-010, SC-007) for a later validation or editor feature to revisit.
-- **Disjointness is checked at direct adjacency, not transitively.** SKOS's related/broaderTransitive disjointness is enforced only against directly-asserted broader/narrower pairs. Enforcing it across the transitive hierarchy needs the same traversal as cycle detection, so it is scoped to direct pairs this slice, consistent with the cycle deferral. Recorded so the boundary is explicit rather than an oversight.
-- **Relations are intra-vocabulary.** Broader, narrower, and related join concepts within one vocabulary. A link to a concept in another vocabulary is a **mapping** (`exactMatch`, `closeMatch`, …), which SKOS and this package treat as a separate mechanism living in a concept's document — out of scope here and not modelled by the relation.
-- **Storage shape is a planning decision.** How the relation is persisted (a self-referencing many-to-many with a through model carrying the type, the direction of the stored row, and how the derived and symmetric reads are exposed) is decided at planning (S3) and by the Implementers, guided by `docs/brainstorm.md`, not fixed by this specification.
-- **Removal semantics come from #19.** How a concept that participates in relations is retired (deprecation, not deletion; `PROTECT`ed references) is the lifecycle feature's concern. This feature only adds the relations; it does not alter concept removal, and it does not depend on #19 landing first.
-- **RDF projection is later.** How broader/narrower/related are emitted as `skos:broader` / `skos:narrower` / `skos:related` on export (and read on import) belongs to R2/R4. This slice makes the graph exist in the model so those features have something to project; it does not itself serialize RDF.
+- **Programmatic only.** This feature has no user interface, including the Django admin. Links are written to a concept's document and read through `linked_uris()` and the browsing pages.
+- **Links are kept as published.** The package holds a vocabulary faithfully, and what is wrong in a published graph is the publisher's to correct. A link is never refused, merged, dropped or rewritten.
+- **Cycle prevention is deliberately not provided.** SKOS does not formally forbid a cycle in the broader relation, and detecting one requires walking the hierarchy on every write — the same traversal cost this feature avoids. Acyclicity is not guaranteed; recorded as a deliberate non-guarantee (FR-009, SC-005).
+- **The inverse is read, not stored.** Showing the other end of a link means finding the concepts of the vocabulary whose documents mention the concept's URI. It costs a query when the page is built and no row per link.
+- **Links to other vocabularies are statements like any other.** A link to a concept in another vocabulary (`skos:exactMatch`, `skos:closeMatch` and the rest of the mapping predicates) is kept in the document the same way as a broader link, and is shown by the pages. The package gives it no separate handling.
+- **RDF projection is later.** How broader/narrower/related are emitted as `skos:broader` / `skos:narrower` / `skos:related` on export belongs to R4. This feature makes the graph exist in the stored documents so that feature has something to project; it does not itself serialize RDF.

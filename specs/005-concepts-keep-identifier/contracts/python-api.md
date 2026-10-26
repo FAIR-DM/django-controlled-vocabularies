@@ -1,87 +1,70 @@
 # Python API contract — 005-concepts-keep-identifier
 
-The surface this feature adds or changes. Everything already published keeps its name and meaning
-(FR-014); this is additive.
+The surface this feature fixes. A vocabulary and a record each have one `uri`.
 
-## Unchanged, restated so the contract is explicit
-
-```python
-scheme.uri            # -> str   still the record's identity
-concept.uri           # -> str
-collection.uri        # -> str
-Concept.objects.get_by_uri(uri)   # -> Concept, raises Concept.DoesNotExist
-```
-
-What changes is what they *can* return and accept, never their names. `uri` now returns a publisher's
-identifier when the record holds one. `get_by_uri` now resolves identifiers outside this site's
-configured base address, which it previously refused before reaching the database.
-
-## Added
+## The identifier
 
 ```python
-# Field, on ConceptScheme, Concept and Collection.
-record.static_uri        # -> str | None  the permanent URI once static; None while dynamic
+scheme.uri            # -> str   the vocabulary's identity
+record.uri            # -> str   the concept's or collection's identity
 
-# Properties, on all three.
-record.local_url         # -> str         where the record is viewed on this site
-record.has_static_uri    # -> bool        whether the permanent URI has turned static
-
-# Manager lookup, now on all three.
-ConceptScheme.objects.get_by_uri(uri)   # -> ConceptScheme, raises ConceptScheme.DoesNotExist
-Collection.objects.get_by_uri(uri)      # -> Collection,    raises Collection.DoesNotExist
-
-# Validation, importable so #50 can check a value before building a record.
-from controlled_vocabularies.models import validate_static_uri
-validate_static_uri(value)   # -> None, raises ValidationError
+Record.objects.get(uri=uri)           # -> Record, raises Record.DoesNotExist
+ConceptScheme.objects.get(uri=uri)    # -> ConceptScheme, raises ConceptScheme.DoesNotExist
 ```
+
+`uri` is a `CharField` of at most 500 characters, unique for each model, and indexed by that
+constraint. It may hold a publisher's identifier, which is kept as given, or an identifier composed on
+the first save.
 
 ## Behaviour contract
 
 ```python
-# A record that arrived from elsewhere keeps its identifier, verbatim and forever.
-c = Concept.objects.create(scheme=s, name="Granite",
-                           static_uri="http://vocabs.example.org/rock/granite")
+# A row that arrived from elsewhere keeps its identifier, verbatim and forever.
+c = Record.objects.create(scheme=s, type=Record.Type.CONCEPT,
+                          uri="http://vocabs.example.org/rock/granite",
+                          data={"skos:prefLabel": [{"@value": "Granite", "@language": "en"}]})
 c.uri                      # "http://vocabs.example.org/rock/granite"
-c.has_static_uri           # True
-c.name = "Granite (coarse)"; c.save()
+c.slug                     # "granite" — from the last segment of the URI, once
+c.data = {"skos:prefLabel": [{"@value": "Granite (coarse)", "@language": "en"}]}; c.save()
 c.uri                      # unchanged
 # and unchanged again after settings.CONTROLLED_VOCABULARIES_BASE_URI changes.
 
-# A record authored here carries the value it will publish under.
-d = Concept.objects.create(scheme=s, name="Basalt")
-d.static_uri               # None  — still dynamic
-d.has_static_uri           # False
-d.uri == d.local_url       # True — the ordinary case for local unpublished work
-d.uri                      # "{base}/{scheme-slug}/basalt", and it follows a rename
+# A row created without one is given its identifier once, on the first save.
+d = Record.objects.create(scheme=s, type=Record.Type.CONCEPT,
+                          data={"skos:prefLabel": [{"@value": "Basalt", "@language": "en"}]})
+d.uri                      # "{base}/{scheme-slug}/basalt"
+d.slug                     # "basalt"
+# renaming it, or changing the configured base address, and saving does not move d.uri.
 
-# An imported record still has a place on this site.
-c.local_url                # "{base}/{scheme-slug}/granite" — this site, not the publisher's
-c.local_url != c.uri       # True
+# An imported row still has a place on this site.
+reverse("controlled_vocabularies_ui:concept-detail",
+        kwargs={"slug": s.slug, "concept_slug": c.slug})   # "{mount}/{scheme-slug}/granite"
 
 # Lookup answers for both kinds.
-Concept.objects.get_by_uri("http://vocabs.example.org/rock/granite")   # -> c
-Concept.objects.get_by_uri(d.uri)                                     # -> d
-Concept.objects.get_by_uri("http://vocabs.example.org/nothing")       # raises Concept.DoesNotExist
-
-# Refusals, each a ValidationError with a translatable, named-placeholder message.
-validate_static_uri("not-absolute")                    # raises
-validate_static_uri("javascript:alert(1)")             # raises
-validate_static_uri("http://example.org/" + "x" * 500) # raises
-validate_static_uri("urn:uuid:9f6c...")                # accepted — real vocabularies use these
+Record.objects.get(uri="http://vocabs.example.org/rock/granite")   # -> c
+Record.objects.get(uri=d.uri)                                      # -> d
+Record.objects.get(uri="http://vocabs.example.org/nothing")        # raises Record.DoesNotExist
 ```
+
+## Import refusals
+
+`import_skos()` refuses the whole run, with `SkosImportFailed`, writing nothing, when a subject it would
+store has no usable identifier:
+
+| Subject | Reason |
+|---|---|
+| a blank node | `FatalReason.MISSING_IDENTITY` |
+| an identifier beginning `javascript:`, `data:` or `vbscript:` | `FatalReason.REFUSED_IDENTITY` |
+
+Every other scheme is accepted, including `urn:`, `doi:` and `ark:`.
 
 ## Guarantees the tests assert
 
 - The application never rewrites, normalises, re-cases, recomputes, or clears an externally assigned
-  identifier, including on a re-import that matched the record by it (FR-002, FR-013). This is a
-  statement about what the package does, not a guarantee enforced against a caller who assigns a
-  different value deliberately: no write path is defended, and that is the decision, not a gap
-  (decisions.md D18). Make the field non-editable wherever it is exposed once a record is published.
-- A static URI never becomes dynamic again through anything the application does (FR-013).
-- No two records of the same model may hold the same `static_uri`, and the refusal comes from the
-  database constraint (FR-006). Across models there is no constraint and none is wanted (research
-  R4, decisions.md D18).
-- A collection's `local_url` can never equal a concept's, because the `collection` segment separates
-  them — the R1 rule, preserved (FR-008).
-- Records created before this feature report exactly the identifiers they reported before, because they
-  hold no `static_uri` and compose as they always did (FR-009).
+  identifier, including on a re-import that matched the record by it (FR-002). This is a statement about
+  what the package does, not a guarantee enforced against a caller who assigns a different value
+  deliberately: no write path is defended, and that is the decision, not a gap.
+- No two rows of the same model may hold the same `uri`, and the refusal comes from the database
+  constraint (FR-005). Across models there is no constraint and none is wanted.
+- A collection's address on this site can never equal a concept's, because the `collection` segment
+  separates them (FR-007).
