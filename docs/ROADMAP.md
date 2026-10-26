@@ -105,36 +105,14 @@ interface.
 
 ### R3 — Concept consumption field
 
-*partly delivered in [#86](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/86), [#87](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/87), [#88](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/88), [#89](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/89), [#111](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/111), [#164](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/164) · advances G2.*
+*delivered in [#86](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/86), [#87](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/87), [#88](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/88), [#89](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/89), [#111](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/111), [#164](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/164), [#220](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/220), [#222](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/222) · advances G2.*
 
-This is what the whole package was built for: a Django project attaches controlled-vocabulary
-concepts to its own models as first-class data. It shipped as five features and one fix:
-
-- attaching a concept from a chosen vocabulary to a model
-  ([#86](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/86));
-- attaching several concepts
-  ([#87](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/87));
-- choosing a concept by typing instead of scrolling
-  ([#88](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/88));
-- concept selection inside the Django admin
-  ([#89](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/89));
-- narrowing a field's choices to part of a vocabulary
-  ([#164](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/164));
-- the single and multiple fields naming their vocabulary the same way
-  ([#111](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/111)).
-
-**Deliverables:**
-
-- a field (single and multiple) that attaches concepts from a chosen vocabulary to a consumer's
-  model;
-- autocomplete-backed selection in forms and the Django admin;
-- referential integrity, so a referenced concept cannot silently disappear;
-- the concept's label and identity reachable from the consuming record.
-
-Two changes to the field are open: storing the concept's URI in the column the field adds
-([#220](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/220)), and renaming
-`MultiConceptField` to `MultiConceptField`
-([#222](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/222)).
+A Django project attaches controlled-vocabulary concepts to its own models as first-class data.
+`ConceptField` attaches one concept and `MultiConceptField` several, each restricted to the
+vocabularies it names and optionally to one collection in them. Both render as a search-as-you-type
+control in a project's own forms and in the Django admin, refuse deleting a concept a row still
+holds, and read a concept back by its label and its URI. The column each field writes holds the
+concept's URI, so stored data reads without a join and keeps its meaning between databases.
 
 Serves G2. Out of scope: import, export and serving, the editing interface.
 
