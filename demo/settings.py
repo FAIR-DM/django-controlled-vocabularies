@@ -25,7 +25,7 @@ SECRET_KEY = "django-insecure-demo-secret-key-do-not-use-in-production"  # noqa:
 
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "devserver"]
 
 # DEMO_DB_PATH lets a test run point the destructive seed_demo command at a scratch file
 # instead of the developer's real demo database. With no variable set, the documented start
