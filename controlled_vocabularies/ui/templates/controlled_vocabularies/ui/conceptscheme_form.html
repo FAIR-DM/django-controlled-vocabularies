@@ -5,6 +5,17 @@
   without saving, and on the edit page Delete sits at the far end, away from the save button, as
   django-mvp places it.
 {% endcomment %}
+{% block formset %}
+  <datalist id="statement-predicates">
+    {% for curie in predicate_curies %}<option value="{{ curie }}">{% endfor %}
+  </datalist>
+  <c-mvp.form.formset :formset="formset"
+                      layout="tabular"
+                      title="{% trans "Statements" %}"
+                      description="{% trans "Each row is one statement the vocabulary makes about itself. Give the name, and the description if there is one, then add whatever else it should say." %}"
+                      add-label="{% trans "Add statement" %}"
+                      remove-label="{% trans "Remove statement" %}" />
+{% endblock formset %}
 {% block actions %}
   <c-button text="{{ submit_label }}" type="submit" variant="primary" only />
   <c-button text="{% trans "Cancel" %}" href="{{ cancel_url }}" variant="ghost" only />

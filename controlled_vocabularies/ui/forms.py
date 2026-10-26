@@ -1,77 +1,46 @@
-"""The curator's form for a vocabulary's own record."""
+"""The curator's forms for a vocabulary's own record."""
+
+import re
+from urllib.parse import urlsplit
 
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Fieldset, Layout
 from django import forms
 from django.conf import settings
-from django.utils.dateparse import parse_date
+from django.core.exceptions import ValidationError
+from django.forms import BaseFormSet, formset_factory
 from django.utils.translation import gettext_lazy as _
 
 from controlled_vocabularies.models import ConceptScheme
+from controlled_vocabularies.predicates import (
+    PREDICATES,
+    PREFIXES,
+    Kind,
+    Namespaces,
+    Predicate,
+)
 from controlled_vocabularies.ui.filters import language_name
+
+#: The id of the ``<datalist>`` the page offers to every row's predicate input.
+PREDICATE_LIST_ID = "statement-predicates"
+
+#: What a predicate the package does not list is taken to be.
+_UNLISTED = Predicate(Kind.LITERAL)
 
 
 class VocabularyForm(forms.ModelForm):
-    """Name, description, default language and publication details of a vocabulary.
+    """The default language of a vocabulary.
 
-    The name is the default-language ``skos:prefLabel`` and the description the
-    ``dcterms:description``; the publication details are their own predicates. All are
-    written into the vocabulary's document. The identifier and the address segment are
-    never offered: both are made once, when the vocabulary is created.
+    Everything else the vocabulary says about itself is a row of the statements
+    formset beside it. The identifier and the address segment are never offered: both
+    are made once, when the vocabulary is created.
     """
-
-    name = forms.CharField(
-        max_length=255,
-        label=_("Name"),
-        help_text=_("What the vocabulary is called, in its default language."),
-    )
-    description = forms.CharField(
-        required=False,
-        label=_("Description"),
-        widget=forms.Textarea(attrs={"rows": 4}),
-        help_text=_("What the vocabulary covers, in a sentence or two."),
-    )
-    publisher = forms.CharField(
-        required=False,
-        label=_("Publisher"),
-        help_text=_("A name, or the address of one."),
-    )
-    creator = forms.CharField(
-        required=False,
-        label=_("Creator"),
-        help_text=_("A name, or the address of one."),
-    )
-    license = forms.CharField(
-        required=False,
-        label=_("Licence"),
-        help_text=_("The licence's address, or its name."),
-    )
-    version = forms.CharField(
-        required=False,
-        label=_("Version"),
-        help_text=_("As you number it, for example 1.2."),
-    )
-    modified = forms.DateField(
-        required=False,
-        label=_("Last modified"),
-        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
-        help_text=_("When the vocabulary's content last changed."),
-    )
-
-    #: Each publication field and the predicate it is stored under.
-    PUBLICATION_CURIES = {
-        "publisher": "dcterms:publisher",
-        "creator": "dcterms:creator",
-        "license": "dcterms:license",
-        "version": "owl:versionInfo",
-    }
 
     class Meta:
         model = ConceptScheme
         fields = ["default_language"]
 
     def __init__(self, *args, **kwargs):
-        """Offer the configured languages, fix the default language once records exist, and fill the fields."""
+        """Offer the configured languages, and fix the language once records exist."""
         super().__init__(*args, **kwargs)
         scheme = self.instance
         self.fields["default_language"] = forms.ChoiceField(
@@ -100,40 +69,8 @@ class VocabularyForm(forms.ModelForm):
                 "Fixed, because this vocabulary holds records and each one's name is "
                 "read in this language."
             )
-        if scheme.pk:
-            language = scheme.default_language
-            self.initial.update(
-                name=scheme.label(language) or scheme.pref_label,
-                description=self._stored_description(),
-                modified=parse_date(scheme.first_value("dcterms:modified") or ""),
-                **{
-                    field: scheme.first_value(curie)
-                    for field, curie in self.PUBLICATION_CURIES.items()
-                },
-            )
         self.helper = FormHelper()
         self.helper.form_tag = False
-        self.helper.layout = Layout(
-            "name",
-            "description",
-            "default_language",
-            Fieldset(
-                _("Publication details"),
-                "publisher",
-                "creator",
-                "license",
-                "version",
-                "modified",
-            ),
-        )
-
-    def _stored_description(self) -> str:
-        """Return the description in the vocabulary's default language."""
-        scheme = self.instance
-        for entry in scheme.values("dcterms:description"):
-            if entry.get("@language", "").lower() == scheme.default_language.lower():
-                return str(entry["@value"])
-        return ""
 
     def clean_default_language(self):
         """Keep the stored language, and refuse another, once the vocabulary holds records."""
@@ -147,76 +84,213 @@ class VocabularyForm(forms.ModelForm):
             )
         return language
 
-    def save(self, commit=True):
-        """Write the submitted values into the vocabulary's document.
 
-        A value left as it was keeps its stored entries, so a vocabulary with several
-        creators does not lose all but one by being saved.
+class StatementForm(forms.Form):
+    """One statement a vocabulary makes about itself: a predicate, a value, a language.
+
+    A row with no value is blank and is dropped when the vocabulary is saved.
+    """
+
+    predicate = forms.CharField(
+        required=False,
+        label=_("Predicate"),
+        help_text=_("Pick a known term, or enter a prefixed name or a full address."),
+        widget=forms.TextInput(
+            attrs={"list": PREDICATE_LIST_ID, "autocomplete": "off"}
+        ),
+    )
+    value = forms.CharField(required=False, label=_("Value"))
+    language = forms.ChoiceField(required=False, label=_("Language"), choices=())
+
+    _CURIE = re.compile(r"(?P<prefix>[^:/\s]+):[\w.-]+")
+
+    def __init__(self, *args, **kwargs):
+        """Offer the configured languages, and the row's own when it is not among them."""
+        super().__init__(*args, **kwargs)
+        choices = [("", _("None"))] + [
+            (code, language_name(code)) for code, _name in settings.LANGUAGES
+        ]
+        stored = self.initial.get("language", "")
+        if stored and stored not in dict(choices):
+            choices.append((stored, stored))
+        self.fields["language"].choices = choices
+
+    @staticmethod
+    def is_http_uri(text: str) -> bool:
+        """Return whether ``text`` is an absolute http or https address.
 
         Args:
-            commit: Whether to save the vocabulary.
+            text: The text to test.
 
         Returns:
-            The vocabulary.
+            True when it has an http or https scheme and a host, and no whitespace.
         """
-        scheme = super().save(commit=False)
-        data = dict(scheme.data)
-        language = scheme.default_language
-        cleaned = self.cleaned_data
-        self._replace(data, "skos:prefLabel", cleaned["name"], language)
-        self._replace(data, "dcterms:description", cleaned["description"], language)
-        for field, curie in self.PUBLICATION_CURIES.items():
-            self._replace(data, curie, cleaned[field])
-        modified = cleaned["modified"]
-        self._replace(
-            data,
-            "dcterms:modified",
-            modified.isoformat() if modified else "",
-            datatype="xsd:date",
+        parts = urlsplit(text)
+        return (
+            parts.scheme in ("http", "https")
+            and bool(parts.netloc)
+            and not re.search(r"\s", text)
         )
-        scheme.data = data
-        if commit:
-            scheme.save()
-        return scheme
 
-    def _replace(
-        self,
-        data: dict,
-        curie: str,
-        text: str,
-        language: str | None = None,
-        datatype: str | None = None,
-    ) -> None:
-        """Set a predicate to one value, unless the stored first value already is ``text``.
+    def clean(self):
+        """Check the predicate, and the value and language it asks for."""
+        cleaned = super().clean()
+        value = cleaned.get("value", "")
+        predicate = cleaned.get("predicate", "")
+        if not value:
+            return cleaned
+        if not predicate:
+            self.add_error("predicate", _("Name the predicate this value belongs to."))
+            return cleaned
+        if self.is_http_uri(predicate):
+            predicate = Namespaces.compact(predicate)
+        elif not (
+            (match := self._CURIE.fullmatch(predicate)) and match["prefix"] in PREFIXES
+        ):
+            self.add_error(
+                "predicate",
+                _(
+                    "Use a name with a known prefix (%(prefixes)s), or a full "
+                    "http or https address."
+                )
+                % {"prefixes": ", ".join(PREFIXES)},
+            )
+            return cleaned
+        cleaned["predicate"] = predicate
+        spec = PREDICATES.get(predicate, _UNLISTED)
+        if spec.kind is Kind.URI and not self.is_http_uri(value):
+            self.add_error("value", _("This predicate takes an http or https address."))
+        if (
+            spec.translatable
+            and "language" not in self.errors
+            and not cleaned.get("language")
+        ):
+            self.add_error(
+                "language", _("This predicate needs the language of its value.")
+            )
+        return cleaned
+
+
+class StatementFormSet(BaseFormSet):
+    """The statements of a vocabulary, which together become its document.
+
+    Args:
+        default_language: The vocabulary's default language, in which a
+            ``skos:prefLabel`` must be given.
+    """
+
+    def __init__(self, *args, default_language: str, **kwargs):
+        """Remember the default language, and give the set its prefix."""
+        kwargs.setdefault("prefix", "statements")
+        super().__init__(*args, **kwargs)
+        self.default_language = default_language
+
+    @classmethod
+    def initial_for(cls, scheme: ConceptScheme, default_language: str) -> list[dict]:
+        """Return a row for each entry the vocabulary stores.
 
         Args:
-            data: The document, updated in place.
-            curie: The predicate.
-            text: The submitted value; empty removes it.
-            language: The language of a translatable value; entries in other languages stay.
-            datatype: The datatype of a typed literal.
+            scheme: The vocabulary; a new one has no rows yet.
+            default_language: The language of the rows a new vocabulary starts with.
+
+        Returns:
+            Rows in the order of the known predicates, then the others as stored.
         """
-        text = text.strip()
-        entries = data.get(curie, [])
-        ours = [
-            e for e in entries if language is None or e.get("@language") == language
+        if not scheme.pk:
+            return [
+                {"predicate": curie, "language": default_language}
+                for curie in ("skos:prefLabel", "dcterms:description")
+            ]
+        data = scheme.data
+        curies = [curie for curie in PREDICATES if curie in data]
+        curies += [curie for curie in data if curie not in PREDICATES]
+        return [
+            {
+                "predicate": curie,
+                "value": str(entry.get("@value", entry.get("@id", ""))),
+                "language": entry.get("@language", ""),
+            }
+            for curie in curies
+            for entry in data[curie]
         ]
-        if (ours and str(ours[0].get("@value", ours[0].get("@id", ""))) == text) or (
-            not ours and not text
-        ):
+
+    def statements(self) -> list[dict]:
+        """Return the rows to keep: not removed, and with a value.
+
+        Returns:
+            The cleaned rows, in the order they were submitted.
+        """
+        return [
+            form.cleaned_data
+            for form in self.forms
+            if not self._should_delete_form(form) and form.cleaned_data.get("value")
+        ]
+
+    def clean(self):
+        """Refuse a single-valued predicate given twice, and a missing name."""
+        live = [form for form in self.forms if not self._should_delete_form(form)]
+        if not all(form.is_valid() for form in live):
             return
-        kept = [entry for entry in entries if entry not in ours]
-        if text:
-            if language is not None:
-                new = {"@value": text, "@language": language}
-            elif datatype is not None:
-                new = {"@value": text, "@type": datatype}
-            elif text.startswith(("http://", "https://")):
-                new = {"@id": text}
+        errors = []
+        seen = set()
+        for row in self.statements():
+            spec = PREDICATES.get(row["predicate"], _UNLISTED)
+            if spec.many:
+                continue
+            language = row["language"].lower() if spec.translatable else ""
+            if (row["predicate"], language) in seen:
+                message = _("%(predicate)s takes a single value, but is given twice.")
+                if language:
+                    message = _(
+                        "%(predicate)s takes a single value in each language, but is "
+                        "given twice in %(language)s."
+                    )
+                errors.append(
+                    ValidationError(
+                        message,
+                        code="single_valued",
+                        params={
+                            "predicate": row["predicate"],
+                            "language": language_name(language) if language else "",
+                        },
+                    )
+                )
+            seen.add((row["predicate"], language))
+        if ("skos:prefLabel", self.default_language.lower()) not in seen:
+            errors.append(
+                ValidationError(
+                    _("Give the vocabulary a skos:prefLabel in %(language)s."),
+                    code="no_name",
+                    params={"language": language_name(self.default_language)},
+                )
+            )
+        if errors:
+            raise ValidationError(errors)
+
+    def to_data(self) -> dict:
+        """Build the vocabulary's document from the rows.
+
+        Returns:
+            Entries grouped by predicate, in row order.
+        """
+        data: dict[str, list[dict]] = {}
+        for row in self.statements():
+            curie, value, language = row["predicate"], row["value"], row["language"]
+            kind = PREDICATES.get(curie, _UNLISTED).kind
+            if kind is Kind.URI:
+                entry = {"@id": value}
+            elif kind is Kind.TYPED:
+                entry = {"@value": value}
+                if curie == "dcterms:modified":
+                    entry["@type"] = "xsd:date"
             else:
-                new = {"@value": text}
-            kept.append(new)
-        if kept:
-            data[curie] = kept
-        else:
-            data.pop(curie, None)
+                entry = {"@value": value}
+                if language:
+                    entry["@language"] = language
+            data.setdefault(curie, []).append(entry)
+        return data
+
+
+StatementsFormSet = formset_factory(
+    StatementForm, formset=StatementFormSet, extra=0, can_delete=True
+)

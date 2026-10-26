@@ -20,8 +20,13 @@ from mvp.views import (
 )
 
 from controlled_vocabularies.models import ConceptScheme, Record
+from controlled_vocabularies.predicates import PREDICATES
 from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
-from controlled_vocabularies.ui.forms import VocabularyForm
+from controlled_vocabularies.ui.forms import (
+    StatementFormSet,
+    StatementsFormSet,
+    VocabularyForm,
+)
 from controlled_vocabularies.ui.rows import (
     PropertyRows,
     PublicationDetails,
@@ -318,7 +323,43 @@ def vocabulary_url(vocabulary):
     )
 
 
-class VocabularyCreateView(PermissionRequiredMixin, MVPCreateView):
+class _StatementsMixin:
+    """Add the statements formset to the create and edit pages of a vocabulary."""
+
+    def get_statements(self, form):
+        """Return the page's statements formset, built once per request.
+
+        Args:
+            form: The vocabulary form, which decides the default language.
+
+        Returns:
+            The formset, bound to the submission on a POST.
+        """
+        if not hasattr(self, "_statements"):
+            language = form["default_language"].value()
+            self._statements = StatementsFormSet(
+                self.request.POST if self.request.method == "POST" else None,
+                initial=StatementFormSet.initial_for(form.instance, language),
+                default_language=language,
+            )
+        return self._statements
+
+    def get_context_data(self, **kwargs):
+        """Add the formset and the predicates the rows' inputs suggest."""
+        context = super().get_context_data(**kwargs)
+        context["formset"] = self.get_statements(context["form"])
+        context["predicate_curies"] = list(PREDICATES)
+        return context
+
+    def form_valid(self, form):
+        """Save only when the statements are valid too, and write them as the document."""
+        if not self.get_statements(form).is_valid():
+            return self.form_invalid(form)
+        form.instance.data = self.get_statements(form).to_data()
+        return super().form_valid(form)
+
+
+class VocabularyCreateView(_StatementsMixin, PermissionRequiredMixin, MVPCreateView):
     """A curator creates a vocabulary held on this site."""
 
     permission_required = "controlled_vocabularies.add_conceptscheme"
@@ -352,7 +393,7 @@ class VocabularyCreateView(PermissionRequiredMixin, MVPCreateView):
         return context
 
 
-class VocabularyUpdateView(PermissionRequiredMixin, MVPUpdateView):
+class VocabularyUpdateView(_StatementsMixin, PermissionRequiredMixin, MVPUpdateView):
     """A curator edits a vocabulary held on this site. An imported one is refused."""
 
     permission_required = "controlled_vocabularies.change_conceptscheme"
