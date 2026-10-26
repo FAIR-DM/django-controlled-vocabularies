@@ -73,7 +73,7 @@ served URLs, and the editing interface.
 
 ### R2 — RDF import
 
-*partly delivered in [#49](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/49), [#50](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/50), [#51](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/51), [#52](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/52) · advances G8, and G6.*
+*delivered in [#49](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/49), [#50](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/50), [#51](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/51), [#52](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/52), [#219](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/219), [#221](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/221) · advances G8, and G6.*
 
 Import is the only way to get real vocabularies into the system: the heat-flow vocabularies already
 published as Turtle, large external sets, and whatever a curator starts from. Until it existed,
@@ -97,7 +97,7 @@ nothing downstream could be tested against real data. It shipped as four feature
   vocabulary and per record
   ([#219](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/219));
 - both a management command and a programmatic entry point;
-- not yet delivered: the vocabularies a site declares, loaded by one command
+- the vocabularies a site declares in its settings, loaded or refreshed by one command
   ([#221](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/221)).
 
 Serves G8 and G6. Out of scope: export and serving, the consumption field, the editing
