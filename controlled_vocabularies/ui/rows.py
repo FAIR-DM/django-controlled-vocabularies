@@ -143,11 +143,33 @@ class PropertyRows:
             {"@id": uri} for uri in self.inferred.get(curie, []) if uri not in stated
         ]
         return [
-            self.link(entry["@id"])
-            if "@id" in entry
-            else {"text": str(entry["@value"])}
+            self.link(entry["@id"]) if "@id" in entry else {"text": self.text(entry)}
             for entry in stored
         ]
+
+    @classmethod
+    def text(cls, entry: dict) -> str:
+        """Write a literal, or an embedded blank node's statements, as one line of text.
+
+        Args:
+            entry: A literal entry, or an embedded node of statements.
+
+        Returns:
+            The literal's value, or each statement of the node as ``predicate value``,
+            separated by semicolons, with a nested node in parentheses.
+        """
+        if "@value" in entry:
+            return str(entry["@value"])
+        parts = []
+        for curie, entries in entry.items():
+            for value in entries:
+                if "@id" in value:
+                    parts.append(f"{curie} {value['@id']}")
+                elif "@value" in value:
+                    parts.append(f"{curie} {value['@value']}")
+                else:
+                    parts.append(f"{curie} ({cls.text(value)})")
+        return "; ".join(parts)
 
     def link(self, uri: str) -> dict:
         """Build an entry for a link, pointing at the page of a record held here.

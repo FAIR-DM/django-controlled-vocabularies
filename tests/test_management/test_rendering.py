@@ -30,7 +30,7 @@ class TestReportRendererBucketCounts:
 
     def test_an_empty_report_still_prints_every_count_reading_zero(self):
         lines = [str(line) for line in ReportRenderer(ImportReport()).render()]
-        assert len(lines) == 3
+        assert len(lines) == 4
         assert all("0" in line for line in lines)
 
 

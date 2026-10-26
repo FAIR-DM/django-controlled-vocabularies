@@ -25,6 +25,7 @@ class FatalReason(TextChoices):
 
     MISSING_IDENTITY = "missing_identity", _("identifier missing or blank")
     REFUSED_IDENTITY = "refused_identity", _("identifier uses a refused scheme")
+    IDENTIFIER_TOO_LONG = "identifier_too_long", _("identifier too long to store")
     VOCABULARY_UNDETERMINED = (
         "vocabulary_undetermined",
         _("vocabulary not declared and no target named"),
@@ -50,6 +51,10 @@ FATAL_TEMPLATES: dict[FatalReason, Promise] = {
     ),
     FatalReason.REFUSED_IDENTITY: _(
         "'%(subject)s' uses a scheme that can carry executable content; the run was refused."
+    ),
+    FatalReason.IDENTIFIER_TOO_LONG: _(
+        "'%(subject)s' is longer than the %(limit)s characters an identifier is stored "
+        "in; the run was refused."
     ),
     FatalReason.VOCABULARY_UNDETERMINED: _(
         "'%(subject)s' declares no vocabulary of its own, and no target vocabulary was named; the run was refused."
@@ -97,12 +102,15 @@ class ImportReport:
         created: URIs of the records the run created.
         updated: URIs of the records the run updated.
         absent_from_source: URIs of records the file no longer mentions, left untouched.
+        held_elsewhere: URIs the file describes that belong to another vocabulary, left
+            to that vocabulary's own import.
         fatal: One finding per reason the whole run was refused.
     """
 
     created: list[str] = field(default_factory=list)
     updated: list[str] = field(default_factory=list)
     absent_from_source: list[str] = field(default_factory=list)
+    held_elsewhere: list[str] = field(default_factory=list)
     fatal: list[FatalFinding] = field(default_factory=list)
 
     def add_fatal(self, reason: FatalReason, subject: str, **params: str) -> None:

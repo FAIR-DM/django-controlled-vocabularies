@@ -723,6 +723,71 @@ class TestImportKeepsEveryStatement:
             assert len(quartz.values(curie)) == 1
 
 
+BLANK_NODE_OBJECTS = """\
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix skosxl: <http://www.w3.org/2008/05/skos-xl#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+<http://example.org/blank/vocab> a skos:ConceptScheme ;
+    skos:prefLabel "Blank"@en ;
+    dcterms:creator [ foaf:name "Jane" ] .
+<http://example.org/blank/granite> a skos:Concept ;
+    skos:inScheme <http://example.org/blank/vocab> ;
+    skos:prefLabel "Granite"@en ;
+    skosxl:prefLabel [ skosxl:literalForm "Granite"@en ] .
+"""
+
+
+@pytest.mark.django_db
+class TestBlankNodeObjects:
+    GRANITE = "http://example.org/blank/granite"
+
+    def write(self, tmp_path, text=BLANK_NODE_OBJECTS):
+        path = tmp_path / "blank.ttl"
+        path.write_text(text)
+        return path
+
+    def test_a_blank_nodes_statements_are_kept_embedded_in_the_entry(self, tmp_path):
+        import_skos(self.write(tmp_path))
+
+        granite = Record.objects.get(uri=self.GRANITE)
+        assert granite.values("http://www.w3.org/2008/05/skos-xl#prefLabel") == [
+            {
+                "http://www.w3.org/2008/05/skos-xl#literalForm": [
+                    {"@value": "Granite", "@language": "en"}
+                ]
+            }
+        ]
+        scheme = ConceptScheme.objects.get(uri="http://example.org/blank/vocab")
+        assert scheme.values("dcterms:creator") == [
+            {"http://xmlns.com/foaf/0.1/name": [{"@value": "Jane"}]}
+        ]
+
+    def test_reimporting_a_file_with_blank_nodes_stores_the_same_documents(
+        self, tmp_path
+    ):
+        path = self.write(tmp_path)
+        import_skos(path)
+        first = Record.objects.get(uri=self.GRANITE).data
+
+        import_skos(path)
+
+        assert Record.objects.get(uri=self.GRANITE).data == first
+
+    def test_a_cycle_of_blank_nodes_ends(self, tmp_path):
+        path = self.write(
+            tmp_path,
+            BLANK_NODE_OBJECTS
+            + "<http://example.org/blank/granite> skos:note _:a .\n"
+            + "_:a skos:related _:b .\n_:b skos:related _:a .\n",
+        )
+
+        import_skos(path)
+
+        note = Record.objects.get(uri=self.GRANITE).values("skos:note")
+        assert note == [{"skos:related": [{"skos:related": [{}]}]}]
+
+
 @pytest.mark.django_db
 class TestOrderedCollections:
     def test_a_collection_lists_its_members(self):
@@ -890,23 +955,53 @@ class TestRecordMovingBetweenVocabularies:
     A = "http://example.org/reassignment/a"
     B = "http://example.org/reassignment/b"
 
-    def test_a_record_held_by_another_vocabulary_moves_to_the_one_being_imported(self):
+    @staticmethod
+    def placed_in(scheme, tmp_path):
+        """Write the reassignment file with both concepts stating ``scheme``."""
+        path = tmp_path / "placed.ttl"
+        path.write_text(
+            "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
+            f"<{TestRecordMovingBetweenVocabularies.A}> a skos:Concept ;\n"
+            f'    skos:prefLabel "A"@en ; skos:inScheme <{scheme.uri}> .\n'
+            f"<{TestRecordMovingBetweenVocabularies.B}> a skos:Concept ;\n"
+            f'    skos:prefLabel "B"@en ; skos:inScheme <{scheme.uri}> .\n'
+        )
+        return path
+
+    def test_a_record_held_elsewhere_is_left_untouched_when_the_file_does_not_place_it(
+        self,
+    ):
+        first = ConceptSchemeFactory()
+        second = ConceptSchemeFactory()
+        import_skos(FIXTURES / "vocabulary_reassignment.ttl", scheme=first)
+        before = Record.objects.get(uri=self.A)
+
+        report = import_skos(FIXTURES / "vocabulary_reassignment.ttl", scheme=second)
+
+        after = Record.objects.get(uri=self.A)
+        assert (after.scheme, after.slug, after.data) == (
+            first,
+            before.slug,
+            before.data,
+        )
+        assert self.A in report.held_elsewhere
+        assert self.A not in report.updated
+        assert not second.records.exists()
+
+    def test_a_record_the_file_places_in_this_vocabulary_moves_to_it(self, tmp_path):
         first = ConceptSchemeFactory()
         second = ConceptSchemeFactory()
         import_skos(FIXTURES / "vocabulary_reassignment.ttl", scheme=first)
         pk = Record.objects.get(uri=self.A).pk
 
-        report = import_skos(FIXTURES / "vocabulary_reassignment.ttl", scheme=second)
+        report = import_skos(self.placed_in(second, tmp_path), scheme=second)
 
         moved = Record.objects.get(uri=self.A)
-        assert moved.pk == pk
-        assert moved.scheme == second
-        assert moved.uri == self.A
+        assert (moved.pk, moved.scheme) == (pk, second)
         assert self.A in report.updated
-        assert self.A not in report.created
         assert not first.records.exists()
 
-    def test_a_moved_record_gets_a_slug_unused_in_its_new_vocabulary(self):
+    def test_a_moved_record_gets_a_slug_unused_in_its_new_vocabulary(self, tmp_path):
         first = ConceptSchemeFactory()
         second = ConceptSchemeFactory()
         RecordFactory(
@@ -914,11 +1009,42 @@ class TestRecordMovingBetweenVocabularies:
         )
         import_skos(FIXTURES / "vocabulary_reassignment.ttl", scheme=first)
 
-        import_skos(FIXTURES / "vocabulary_reassignment.ttl", scheme=second)
+        import_skos(self.placed_in(second, tmp_path), scheme=second)
 
         slugs = list(second.records.values_list("slug", flat=True))
         assert len(slugs) == len(set(slugs)) == 3
         assert Record.objects.get(uri=self.A).slug
+
+    def test_a_concept_the_file_places_in_another_vocabulary_is_not_imported(
+        self, tmp_path
+    ):
+        held = RecordFactory(uri="http://a.org/granite", data=labelled("Granite"))
+        path = tmp_path / "maps.ttl"
+        path.write_text(
+            "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
+            "<http://b.org/vocab> a skos:ConceptScheme ;\n"
+            '    skos:prefLabel "B"@en .\n'
+            "<http://b.org/rock> a skos:Concept ; skos:inScheme <http://b.org/vocab> ;\n"
+            '    skos:prefLabel "Rock"@en ; skos:exactMatch <http://a.org/granite> .\n'
+            "<http://a.org/granite> a skos:Concept ;\n"
+            "    skos:inScheme <http://a.org/vocab> ;\n"
+            '    skos:prefLabel "Granit"@de .\n'
+            "<http://a.org/basalt> a skos:Concept ;\n"
+            "    skos:inScheme <http://a.org/vocab> ;\n"
+            '    skos:prefLabel "Basalt"@en .\n'
+        )
+
+        report = import_skos(path)
+
+        held.refresh_from_db()
+        assert held.data == labelled("Granite")
+        assert held.scheme.uri != "http://b.org/vocab"
+        assert not Record.objects.filter(uri="http://a.org/basalt").exists()
+        assert sorted(report.held_elsewhere) == [
+            "http://a.org/basalt",
+            "http://a.org/granite",
+        ]
+        assert Record.objects.filter(uri="http://b.org/rock").exists()
 
     def test_a_record_that_stays_in_its_vocabulary_keeps_its_slug(self):
         scheme = ConceptSchemeFactory()
@@ -1080,6 +1206,26 @@ class TestRefusedRuns:
             import_skos(path)
 
         assert fatal_reasons(excinfo) == {FatalReason.REFUSED_IDENTITY}
+        assert not ConceptScheme.objects.exists()
+        assert not Record.objects.exists()
+
+    def test_an_identifier_longer_than_its_column_refuses_the_run_and_writes_nothing(
+        self, tmp_path
+    ):
+        long_uri = "http://example.org/js/" + "x" * 500
+        path = write_turtle(
+            tmp_path,
+            f"""
+            <http://example.org/js/> a skos:ConceptScheme ; skos:prefLabel "S"@en .
+            <{long_uri}> a skos:Concept ;
+                skos:inScheme <http://example.org/js/> ; skos:prefLabel "Long"@en .
+            """,
+        )
+
+        with pytest.raises(SkosImportFailed) as excinfo:
+            import_skos(path)
+
+        assert fatal_reasons(excinfo) == {FatalReason.IDENTIFIER_TOO_LONG}
         assert not ConceptScheme.objects.exists()
         assert not Record.objects.exists()
 

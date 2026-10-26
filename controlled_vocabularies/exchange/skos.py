@@ -98,9 +98,21 @@ class SkosImporter:
 
             documents = {node: self.document(graph, node) for node in nodes}
             scheme = self.upsert_scheme(graph, declared, documents)
+            held = Record.objects.in_bulk(
+                [str(node) for node in nodes], field_name="uri"
+            )
+            claimed = self.claimed_nodes(graph, scheme_node)
             seen = set()
             for node, record_type in nodes.items():
-                self.upsert_record(scheme, node, record_type, documents[node])
+                record = held.get(str(node))
+                if record is not None and record.scheme_id != scheme.pk:
+                    if node not in claimed:
+                        # Described here, held by another vocabulary: its own import owns it.
+                        self.report.held_elsewhere.append(str(node))
+                        continue
+                    # The file says the record belongs here, so its publisher moved it.
+                    record.slug = ""
+                self.upsert_record(scheme, node, record_type, documents[node], record)
                 seen.add(str(node))
             for uri in scheme.records.values_list("uri", flat=True):
                 if uri not in seen:
@@ -227,17 +239,65 @@ class SkosImporter:
             if not isinstance(node, rdflib.Literal):
                 found.setdefault(node, Record.Type.CONCEPT)
 
-        return {
-            node: found[node]
-            for node in sorted(found, key=str)
-            if self.identifiable(node)
-        }
+        claimed = self.claimed_nodes(graph, scheme_node)
+        records = {}
+        for node in sorted(found, key=str):
+            if not self.identifiable(node):
+                continue
+            if node not in claimed and self.claimed_elsewhere(graph, node, scheme_node):
+                # A concept of another vocabulary, described here only to be linked to.
+                self.report.held_elsewhere.append(str(node))
+                continue
+            records[node] = found[node]
+        return records
+
+    @staticmethod
+    def claimed_nodes(
+        graph: rdflib.Graph, scheme_node: rdflib.URIRef
+    ) -> set[rdflib.term.Node]:
+        """Return the subjects the file states belong to the vocabulary being imported.
+
+        Args:
+            graph: The parsed graph.
+            scheme_node: The vocabulary being imported.
+
+        Returns:
+            Every subject naming it with ``skos:inScheme`` or ``skos:topConceptOf``, and
+            every object of its ``skos:hasTopConcept``.
+        """
+        claimed = set(graph.subjects(SKOS.inScheme, scheme_node))
+        claimed |= set(graph.subjects(SKOS.topConceptOf, scheme_node))
+        claimed |= set(graph.objects(scheme_node, SKOS.hasTopConcept))
+        return claimed
+
+    @staticmethod
+    def claimed_elsewhere(
+        graph: rdflib.Graph, node: rdflib.term.Node, scheme_node: rdflib.URIRef
+    ) -> bool:
+        """Return whether the file places a subject in some other vocabulary.
+
+        Args:
+            graph: The parsed graph.
+            node: The subject.
+            scheme_node: The vocabulary being imported.
+
+        Returns:
+            True when the subject names a vocabulary other than ``scheme_node`` with
+            ``skos:inScheme`` or ``skos:topConceptOf``, or another vocabulary lists it
+            with ``skos:hasTopConcept``.
+        """
+        schemes = set(graph.objects(node, SKOS.inScheme))
+        schemes |= set(graph.objects(node, SKOS.topConceptOf))
+        schemes |= set(graph.subjects(SKOS.hasTopConcept, node))
+        return bool(schemes - {scheme_node})
 
     def identifiable(self, node: rdflib.term.Node) -> TypeGuard[rdflib.URIRef]:
         """Return whether a subject's URI can be stored, recording a fatal finding when not.
 
         A blank node cannot be identified again on a re-import. A ``javascript:``, ``data:``
-        or ``vbscript:`` URI is refused because the pages render a record's URI as a link.
+        or ``vbscript:`` URI is refused because the pages render a record's URI as a link,
+        and one longer than the ``uri`` column because the database would refuse it
+        partway through the run.
 
         Args:
             node: The subject.
@@ -251,24 +311,43 @@ class SkosImporter:
         if urllib.parse.urlsplit(str(node)).scheme.lower() in UNSAFE_SCHEMES:
             self.report.add_fatal(FatalReason.REFUSED_IDENTITY, str(node))
             return False
+        limit = Record._meta.get_field("uri").max_length
+        if limit is not None and len(node) > limit:
+            self.report.add_fatal(
+                FatalReason.IDENTIFIER_TOO_LONG, str(node), limit=str(limit)
+            )
+            return False
         return True
 
-    def document(self, graph: rdflib.Graph, node: rdflib.URIRef) -> dict:
+    def document(
+        self,
+        graph: rdflib.Graph,
+        node: rdflib.term.Node,
+        path: frozenset[rdflib.term.Node] = frozenset(),
+    ) -> dict:
         """Gather every statement a subject makes into a document.
 
         Args:
             graph: The parsed graph.
             node: The subject.
+            path: The blank nodes being described around this one, so a cycle of them
+                ends instead of recursing forever.
 
         Returns:
-            The document: CURIE (or full URI) to a list of entries. Entries are sorted so a
-            re-import of the same file stores the same text; ``skos:memberList`` keeps its sequence.
+            The document: CURIE (or full URI) to a list of entries. Entries are sorted so
+            a re-import of the same file stores the same text; ``skos:memberList`` keeps
+            its sequence.
+
+        Raises:
+            SkosImportError: A ``skos:memberList`` loops back on itself.
         """
         document: dict[str, list[dict]] = {}
         for predicate, obj in graph.predicate_objects(node):
             if predicate != SKOS.memberList:
                 key = Namespaces.compact(str(predicate))
-                document.setdefault(key, []).append(self.entry(obj))
+                document.setdefault(key, []).append(
+                    self.entry(graph, obj, path | {node})
+                )
         for entries in document.values():
             entries.sort(key=lambda entry: json.dumps(entry, sort_keys=True))
         for head in graph.objects(node, SKOS.memberList):
@@ -277,8 +356,9 @@ class SkosImporter:
             except ValueError as exc:
                 raise SkosImportError(
                     _(
-                        "'%(subject)s' has a skos:memberList that does not terminate (its "
-                        "rdf:rest chain loops back on itself); the import was refused."
+                        "'%(subject)s' has a skos:memberList that does not terminate "
+                        "(its rdf:rest chain loops back on itself); the import was "
+                        "refused."
                     ),
                     params={"subject": str(node)},
                     code="skos_cyclic_member_list",
@@ -286,21 +366,31 @@ class SkosImporter:
             document["skos:memberList"] = [{"@id": str(member)} for member in members]
         return document
 
-    @staticmethod
-    def entry(obj: rdflib.term.Node) -> dict:
+    def entry(
+        self,
+        graph: rdflib.Graph,
+        obj: rdflib.term.Node,
+        path: frozenset[rdflib.term.Node],
+    ) -> dict:
         """Write one object as the entry JSON-LD would.
 
+        A blank node has no identifier that survives a re-import, so it is written as
+        an embedded node holding its own statements, as JSON-LD embeds one.
+
         Args:
+            graph: The parsed graph.
             obj: A URI, blank node or literal.
+            path: The blank nodes being described around this one.
 
         Returns:
-            ``{"@id": ...}`` for a link, otherwise ``{"@value": ...}`` with its language or
-            datatype.
+            ``{"@id": ...}`` for a link, the embedded statements for a blank node (empty
+            when it is already being described, so a cycle ends), otherwise
+            ``{"@value": ...}`` with its language or datatype.
         """
         if isinstance(obj, rdflib.URIRef):
             return {"@id": str(obj)}
         if not isinstance(obj, rdflib.Literal):
-            return {"@id": f"_:{obj}"}
+            return {} if obj in path else self.document(graph, obj, path)
         entry = {"@value": str(obj)}
         if obj.language:
             entry["@language"] = obj.language
@@ -357,26 +447,22 @@ class SkosImporter:
         node: rdflib.URIRef,
         record_type: str,
         document: dict,
+        record: Record | None,
     ) -> None:
         """Create the record for ``node``, or replace the document of the one holding its URI.
-
-        A record already held by another vocabulary moves into this one with a fresh slug,
-        because a URI is held once.
 
         Args:
             scheme: The vocabulary the record belongs to.
             node: The subject.
             record_type: The record's type.
             document: The record's statements.
+            record: The record already holding the subject's URI, if any.
         """
         uri = str(node)
-        record = Record.objects.filter(uri=uri).first()
         if record is None:
             record = Record(uri=uri)
             self.report.created.append(uri)
         else:
-            if record.scheme_id != scheme.pk:
-                record.slug = ""
             self.report.updated.append(uri)
         record.scheme = scheme
         record.type = record_type

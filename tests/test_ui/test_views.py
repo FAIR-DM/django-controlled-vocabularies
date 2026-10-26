@@ -421,13 +421,15 @@ class TestVocabularyListEntry:
         assert anchor.get_text(strip=True) == scheme.uri
         assert anchor.get("rel") == ["noopener"]
 
-    def test_a_urn_identifier_is_rendered_as_a_link_unrewritten(self, client):
+    def test_an_identifier_that_is_not_a_web_address_is_shown_but_not_linked(
+        self, client
+    ):
         scheme = ConceptSchemeFactory(uri="urn:nbn:example:vocab-1")
 
-        anchor = self.row_for(client, scheme).find("a", href="urn:nbn:example:vocab-1")
+        row = self.row_for(client, scheme)
 
-        assert anchor is not None
-        assert anchor.get_text(strip=True) == "urn:nbn:example:vocab-1"
+        assert row.find("a", href="urn:nbn:example:vocab-1") is None
+        assert "urn:nbn:example:vocab-1" in row.get_text()
 
     def test_an_entry_names_its_publisher_when_it_gives_one(self, client):
         scheme = published(publisher="Dublin Core Metadata Initiative")
@@ -979,13 +981,15 @@ class TestVocabularyDetailDescriptionAndIdentifier:
 
         assert panel.find("a", href=scheme.uri) is not None
 
-    def test_a_urn_identifier_is_rendered_as_a_link_unrewritten(self, client):
+    def test_an_identifier_that_is_not_a_web_address_is_shown_but_not_linked(
+        self, client
+    ):
         scheme = ConceptSchemeFactory(uri="urn:nbn:example:vocab-1")
 
         panel = soup_of(client.get(vocabulary_page(scheme))).select_one(SIDE_PANEL)
-        anchor = panel.find("a", href="urn:nbn:example:vocab-1")
 
-        assert anchor.get_text(strip=True) == "urn:nbn:example:vocab-1"
+        assert panel.find("a", href="urn:nbn:example:vocab-1") is None
+        assert "urn:nbn:example:vocab-1" in panel.get_text()
 
     def test_the_default_language_is_named_in_the_side_panel(self, client):
         scheme = ConceptSchemeFactory(default_language="de")
@@ -1196,6 +1200,15 @@ class TestVocabularyDetailConceptRow:
 
         assert "Plutonic rock" in self.row_for(client, concept).get_text()
 
+    def test_a_row_names_a_broader_concept_that_only_states_it_as_narrower(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        concept = RecordFactory(scheme=scheme, label="Granite")
+        concept_with(scheme, "Plutonic rock", skos__narrower=[link(concept.uri)])
+
+        assert "Plutonic rock" in self.row_for(client, concept).get_text()
+
     def test_the_broader_concept_is_named_in_the_active_language(self, client):
         scheme = ConceptSchemeFactory()
         parent = RecordFactory(
@@ -1275,6 +1288,17 @@ class TestVocabularyDetailTopConcepts:
         assert [c.pk for c in response.context["top_concepts"]] == [mineral.pk, rock.pk]
         panel = soup_of(response).select_one(SIDE_PANEL)
         assert panel.find("a", href=concept_page(rock))
+
+    def test_a_hierarchy_stated_only_as_narrower_lists_the_concepts_at_its_top(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        granite = RecordFactory(scheme=scheme, label="Granite")
+        rock = concept_with(scheme, "Rock", skos__narrower=[link(granite.uri)])
+
+        response = client.get(vocabulary_page(scheme))
+
+        assert [c.pk for c in response.context["top_concepts"]] == [rock.pk]
 
     def test_a_flat_vocabulary_lists_no_top_concepts(self, client):
         scheme = ConceptSchemeFactory()
@@ -2026,6 +2050,16 @@ class TestConceptDetailTypeAndIdentifier:
         identifier_link = soup.find("a", href=concept.uri)
 
         assert concept.uri in identifier_link.get_text(strip=True)
+
+    def test_an_identifier_in_a_scheme_a_browser_would_hand_off_is_not_linked(
+        self, client
+    ):
+        concept = RecordFactory(label="Granite", uri="search-ms:query=granite")
+
+        soup = soup_of(client.get(concept_page(concept)))
+
+        assert soup.find("a", href=concept.uri) is None
+        assert concept.uri in soup.get_text()
 
     def test_an_imported_concept_shows_its_publishers_identifier(self, client):
         concept = RecordFactory(

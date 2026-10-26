@@ -87,6 +87,34 @@ class TestPropertyRowsForABareConcept:
 
 
 @pytest.mark.django_db
+class TestPropertyRowsOfAnEmbeddedNode:
+    def test_an_embedded_blank_node_shows_its_statements_as_text(self):
+        concept = RecordFactory(
+            data=labelled(
+                "Granite",
+                statements={
+                    "dcterms:creator": [
+                        {
+                            "foaf:name": [{"@value": "Jane"}],
+                            "foaf:homepage": [{"@id": "https://example.org/jane"}],
+                            "foaf:account": [{"foaf:nick": [{"@value": "j"}]}],
+                        }
+                    ]
+                },
+            )
+        )
+
+        rows = PropertyRows(concept, "en").build()
+
+        assert row_for(rows, "dcterms:creator")["entries"] == [
+            {
+                "text": "foaf:name Jane; foaf:homepage https://example.org/jane; "
+                "foaf:account (foaf:nick j)"
+            }
+        ]
+
+
+@pytest.mark.django_db
 class TestPropertyRowsOrder:
     def test_known_predicates_come_in_the_table_order_then_the_others_as_stored(self):
         scheme = ConceptSchemeFactory()

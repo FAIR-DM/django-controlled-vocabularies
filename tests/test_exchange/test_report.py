@@ -13,6 +13,7 @@ from controlled_vocabularies.exchange.report import (
 EXAMPLE_FATAL_PARAMS = {
     FatalReason.MISSING_IDENTITY: {},
     FatalReason.REFUSED_IDENTITY: {},
+    FatalReason.IDENTIFIER_TOO_LONG: {"limit": "500"},
     FatalReason.VOCABULARY_UNDETERMINED: {},
     FatalReason.VOCABULARY_TARGET_MISMATCH: {
         "target": "https://example.org/vocab/target"

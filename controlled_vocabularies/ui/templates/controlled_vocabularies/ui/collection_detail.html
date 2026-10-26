@@ -4,7 +4,7 @@
   {% comment %}
     Leads the page, as in concept_detail.html.
   {% endcomment %}
-  <c-mvp.text size="xs" muted><c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" /></c-mvp.text>
+  <c-mvp.text size="xs" muted><c-controlled-vocabularies.identifier :uri="object.uri" /></c-mvp.text>
   <dl>
     {% for row in rows %}
       <c-controlled-vocabularies.property-row term="{{ row.term }}"

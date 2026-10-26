@@ -24,9 +24,25 @@ def validate_document(value: object) -> None:
         value: The candidate document.
 
     Raises:
-        ValidationError: The document is not an object, or a predicate's value is not a list
-            of ``{"@value": ...}`` / ``{"@id": ...}`` entries.
+        ValidationError: The document is not an object, or a predicate's value is not a
+            list of entries.
     """
+
+    def is_statements(node: object) -> bool:
+        """Return whether ``node`` maps predicates to lists of entries.
+
+        Args:
+            node: A document, or a blank node embedded in one.
+
+        Returns:
+            True when every key is a predicate and every value a list of entries.
+        """
+        return isinstance(node, dict) and all(
+            not key.startswith("@")
+            and isinstance(entries, list)
+            and all(map(is_entry, entries))
+            for key, entries in node.items()
+        )
 
     def is_entry(entry: object) -> bool:
         """Return whether ``entry`` is shaped as JSON-LD writes a value.
@@ -35,15 +51,18 @@ def validate_document(value: object) -> None:
             entry: One item of a predicate's list.
 
         Returns:
-            True for a link (``@id``), or a literal (``@value``) with at most a language or a datatype.
+            True for a link (``@id``), a literal (``@value``) with at most a language or
+            a datatype, or an embedded blank node holding statements of its own.
         """
         if not isinstance(entry, dict):
             return False
         if "@id" in entry:
             return set(entry) == {"@id"} and isinstance(entry["@id"], str)
+        if "@value" not in entry:
+            return is_statements(entry)
         qualifiers = set(entry) - {"@value"}
         return (
-            isinstance(entry.get("@value"), str | int | float | bool)
+            isinstance(entry["@value"], str | int | float | bool)
             and qualifiers <= {"@language", "@type"}
             and len(qualifiers) < 2
             and all(isinstance(entry[key], str) for key in qualifiers)
@@ -55,11 +74,11 @@ def validate_document(value: object) -> None:
             code="document_not_object",
         )
     for key, entries in value.items():
-        if not isinstance(entries, list) or not all(map(is_entry, entries)):
+        if not is_statements({key: entries}):
             raise ValidationError(
                 _(
-                    "The value of '%(predicate)s' must be a list of entries, each "
-                    "with an '@id', or an '@value' and at most an '@language' or '@type'."
+                    "The value of '%(predicate)s' must be a list of entries, each a "
+                    "link, a value or an embedded node of statements."
                 ),
                 params={"predicate": key},
                 code="document_bad_entries",
@@ -296,8 +315,12 @@ class RecordQuerySet(models.QuerySet):
         Returns:
             The candidate records.
         """
-        # The stored text is JSON, so the quoted, escaped form is what appears in it.
-        return self.filter(data__icontains=json.dumps(uri))
+        # The stored text is JSON, so the quoted form is what appears in it. SQLite keeps
+        # non-ASCII characters escaped and PostgreSQL's jsonb does not, so both are tried.
+        return self.filter(
+            models.Q(data__icontains=json.dumps(uri))
+            | models.Q(data__icontains=json.dumps(uri, ensure_ascii=False))
+        )
 
 
 class Record(Resource):
@@ -368,7 +391,12 @@ class Record(Resource):
 
     def member_uris(self) -> list[str]:
         """Return the URIs of a collection's members, ordered ones in their sequence."""
-        return self.linked_uris("skos:member") + self.linked_uris("skos:memberList")
+        # A publisher may state a member both ways, so each is listed once.
+        return list(
+            dict.fromkeys(
+                self.linked_uris("skos:memberList") + self.linked_uris("skos:member")
+            )
+        )
 
     def minted_uri(self) -> str:
         """Return the URI for a record authored on this site.

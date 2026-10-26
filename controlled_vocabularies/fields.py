@@ -406,11 +406,13 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
 
     The generated through model protects its concepts from deletion, so ``through`` is
     not the consumer's to supply, nor are ``to`` and ``limit_choices_to``. Takes the
-    same arguments as :class:`ConceptField`.
+    same arguments as :class:`ConceptField`, and a required field must hold at least
+    one concept when the consuming model is cleaned.
 
     Args:
         vocabulary: One vocabulary slug, several, or ``None`` for no restriction.
-        collection: Limit choices to the members of this collection. Needs exactly one vocabulary.
+        collection: Limit choices to the members of this collection. Needs exactly one
+            vocabulary.
         **kwargs: Passed to ``ManyToManyField``.
 
     Raises:
@@ -432,6 +434,62 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
             )
         super().__init__(**self.apply_vocabulary(vocabulary, collection, kwargs))
 
+    @staticmethod
+    def install_required_set_check(cls):
+        """Make ``full_clean()`` report each empty required field, once per class.
+
+        ``full_clean()`` skips many-to-many fields, so a required :class:`ConceptsField`
+        has no hook into model validation without this.
+
+        Args:
+            cls: The consuming model class to wrap.
+        """
+        # A subclass inherits an installed wrapper; wrapping again would report twice.
+        if getattr(cls.full_clean, "concepts_field_required_set_check", False):
+            return
+        original_full_clean = cls.full_clean
+
+        def full_clean(
+            self, exclude=None, validate_unique=True, validate_constraints=True
+        ):
+            """Run the wrapped ``full_clean()``, then report each empty required field."""
+            try:
+                original_full_clean(
+                    self,
+                    exclude=exclude,
+                    validate_unique=validate_unique,
+                    validate_constraints=validate_constraints,
+                )
+            except ValidationError as exc:
+                errors = exc.update_error_dict({})
+            else:
+                errors = {}
+
+            # Skipped for an unsaved row (its m2m manager raises ValueError) and for
+            # ModelForm._post_clean(), the only caller passing validate_unique=False,
+            # which runs before save_m2m() attaches the submission (#124).
+            if self.pk is not None and validate_unique:
+                # Read per call: a wrapper closed over one field would miss a second.
+                for field in type(self)._meta.get_fields():
+                    if (
+                        isinstance(field, ConceptsField)
+                        and not field.blank
+                        and not getattr(self, field.name).exists()
+                    ):
+                        errors.setdefault(field.name, []).append(
+                            ValidationError(
+                                _("%(field)s requires at least one concept."),
+                                code="required",
+                                params={"field": field.verbose_name},
+                            )
+                        )
+
+            if errors:
+                raise ValidationError(errors)
+
+        full_clean.concepts_field_required_set_check = True
+        cls.full_clean = full_clean
+
     def contribute_to_class(self, cls, name, **kwargs):
         """Attach the field, generate its protected through model and add the label and URI accessors."""
         # Skipping ManyToManyField's own contribute_to_class avoids it registering a second
@@ -444,6 +502,7 @@ class ConceptsField(ConceptFieldMixin, ManyToManyField):
 
         if not cls._meta.abstract and not cls._meta.swapped:
             self.remote_field.through = create_membership_model(self, cls)
+            self.install_required_set_check(cls)
             # Connected here so a declaration cannot exist without its guard: an auto_created
             # through model with no receiver takes bulk_create's fast path, which skips m2m_changed.
             # weak=False because the partial has no other reference to keep it alive.

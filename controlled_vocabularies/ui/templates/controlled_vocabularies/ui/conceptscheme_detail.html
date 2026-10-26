@@ -62,7 +62,7 @@
         <div>
           <dt class="text-xs uppercase font-semibold text-base-content/60">{% trans "Identifier" %}</dt>
           <dd class="break-words">
-            <c-link href="{{ vocabulary.uri }}" text="{{ vocabulary.uri }}" hover=True rel="noopener" />
+            <c-controlled-vocabularies.identifier :uri="vocabulary.uri" />
           </dd>
         </div>
         <div>

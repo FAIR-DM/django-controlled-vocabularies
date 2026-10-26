@@ -235,12 +235,10 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
         context["concept_count"] = concepts.count()
         # A concept with no broader concept is a way into the hierarchy. A flat vocabulary has
         # nothing but top concepts, so listing them would only repeat the concept list.
-        has_hierarchy = concepts.filter(data__has_key="skos:broader").exists()
+        self.parents = self.parent_uris(concepts)
         context["top_concepts"] = (
-            concepts.exclude(data__has_key="skos:broader").order_by(
-                Lower("pref_label"), "pk"
-            )
-            if has_hierarchy
+            concepts.exclude(uri__in=self.parents).order_by(Lower("pref_label"), "pk")
+            if self.parents
             else []
         )
         collections = list(
@@ -253,6 +251,29 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
         context["collections"] = collections
         self.describe_rows(context, collections)
         return context
+
+    @staticmethod
+    def parent_uris(concepts):
+        """Map each concept with a broader concept to the first one, from either end.
+
+        A file may state a hierarchy only with ``skos:broader``, only with
+        ``skos:narrower``, or with both, as a concept's own page reads it.
+
+        Args:
+            concepts: The vocabulary's concepts.
+
+        Returns:
+            The URI of each concept that has a broader concept, mapped to that concept's URI.
+        """
+        parents = {}
+        for parent in concepts.filter(data__has_key="skos:narrower"):
+            for child in parent.linked_uris("skos:narrower"):
+                parents.setdefault(child, parent.uri)
+        for child in concepts.filter(data__has_key="skos:broader"):
+            stated = child.linked_uris("skos:broader")
+            if stated:
+                parents[child.uri] = stated[0]
+        return parents
 
     def describe_rows(self, context, collections):
         """Give each concept on the page what its row names beyond its own label.
@@ -268,10 +289,7 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
         members = {
             collection.pk: set(collection.member_uris()) for collection in collections
         }
-        broader = {
-            concept: next(iter(concept.linked_uris("skos:broader")), None)
-            for concept in concepts
-        }
+        broader = {concept: self.parents.get(concept.uri) for concept in concepts}
         labels = {
             record.uri: record.display_label()
             for record in Record.objects.filter(

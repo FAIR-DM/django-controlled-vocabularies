@@ -20,7 +20,7 @@
       competing with the label. An outbound link, hence rel="noopener".
     {% endcomment %}
     <div class="text-xs text-base-content/60 break-words mt-1">
-      <c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" />
+      <c-controlled-vocabularies.identifier :uri="object.uri" />
     </div>
     {% comment %}
       The collections holding the concept, each a badge linking to the collection's page. The view

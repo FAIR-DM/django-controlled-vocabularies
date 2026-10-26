@@ -23,7 +23,7 @@
       {% blocktrans count counter=object.concept_count %}{{ counter }} concept{% plural %}{{ counter }} concepts{% endblocktrans %}{% if object.collection_count %} · {% blocktrans count counter=object.collection_count %}{{ counter }} collection{% plural %}{{ counter }} collections{% endblocktrans %}{% endif %}{% if object.details.modified %} · {% blocktrans with date=object.details.modified %}Updated {{ date }}{% endblocktrans %}{% endif %}
     </div>
     <div class="text-xs text-base-content/60 break-words">
-      <c-link href="{{ object.uri }}" text="{{ object.uri }}" hover=True rel="noopener" />
+      <c-controlled-vocabularies.identifier :uri="object.uri" />
     </div>
   </div>
 </c-list.row>

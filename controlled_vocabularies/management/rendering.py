@@ -31,7 +31,7 @@ class ReportRenderer:
         self.verbosity = verbosity
 
     def render(self) -> Iterator[str]:
-        """Yield the report's lines: the counts, each absent record, then the dry-run notice.
+        """Yield the report's lines: the counts, each record left untouched, then any notice.
 
         Yields:
             One translated line at a time, and none at all at ``--verbosity 0``.
@@ -65,6 +65,17 @@ class ReportRenderer:
         for subject in self.report.absent_from_source:
             yield str(
                 _("'%(subject)s' is present but no longer mentioned by the source.")
+            ) % {"subject": subject}
+        yield str(
+            ngettext_lazy(
+                "%(count)d record belonging to another vocabulary left untouched.",
+                "%(count)d records belonging to another vocabulary left untouched.",
+                len(self.report.held_elsewhere),
+            )
+        ) % {"count": len(self.report.held_elsewhere)}
+        for subject in self.report.held_elsewhere:
+            yield str(
+                _("'%(subject)s' belongs to another vocabulary and was left untouched.")
             ) % {"subject": subject}
         if self.dry_run:
             yield str(_("This was a dry run: nothing was kept."))

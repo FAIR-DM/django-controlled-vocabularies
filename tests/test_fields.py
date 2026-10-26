@@ -1160,6 +1160,117 @@ class OutcropForm(forms.ModelForm):
 
 @pytest.mark.django_db
 class TestConceptsFieldRequiredSet:
+    @pytest.mark.django_db
+    def test_an_optional_field_with_an_empty_set_validates(self):
+        outcrop = OutcropFactory()
+
+        outcrop.full_clean()
+
+    @pytest.mark.django_db
+    def test_a_required_field_with_an_empty_set_is_refused_naming_the_field(self):
+        deposit = DepositFactory()
+
+        with pytest.raises(ValidationError) as excinfo:
+            deposit.full_clean()
+
+        assert [error.code for error in excinfo.value.error_dict["rock_types"]] == [
+            "required"
+        ]
+
+    @pytest.mark.django_db
+    def test_two_required_fields_both_empty_report_both(self):
+        survey = SurveyFactory()
+
+        with pytest.raises(ValidationError) as excinfo:
+            survey.full_clean()
+
+        assert set(excinfo.value.message_dict) >= {
+            "primary_minerals",
+            "secondary_minerals",
+        }
+
+    @pytest.mark.django_db
+    def test_two_required_fields_the_first_empty_the_second_populated_reports_only_the_first(
+        self,
+    ):
+        scheme = ConceptSchemeFactory(name="Mineral")
+        concept = RecordFactory(scheme=scheme)
+        survey = SurveyFactory()
+        survey.secondary_minerals.add(concept)
+
+        with pytest.raises(ValidationError) as excinfo:
+            survey.full_clean()
+
+        assert "primary_minerals" in excinfo.value.message_dict
+        assert "secondary_minerals" not in excinfo.value.message_dict
+
+    @pytest.mark.django_db
+    def test_two_required_fields_the_second_empty_the_first_populated_reports_only_the_second(
+        self,
+    ):
+        scheme = ConceptSchemeFactory(name="Mineral")
+        concept = RecordFactory(scheme=scheme)
+        survey = SurveyFactory()
+        survey.primary_minerals.add(concept)
+
+        with pytest.raises(ValidationError) as excinfo:
+            survey.full_clean()
+
+        assert "secondary_minerals" in excinfo.value.message_dict
+        assert "primary_minerals" not in excinfo.value.message_dict
+
+    def test_an_unsaved_instance_passes_full_clean_without_raising_value_error(self):
+        # Touching Deposit.rock_types before the instance has a primary key raises
+        # ValueError, which full_clean() does not catch, so the check must not reach it.
+        deposit = Deposit(name="not yet surveyed")
+
+        deposit.full_clean()
+
+    @pytest.mark.django_db
+    def test_a_bad_character_field_and_an_empty_required_set_report_both_errors(self):
+        deposit = Deposit(name="")
+        deposit.save()
+
+        with pytest.raises(ValidationError) as excinfo:
+            deposit.full_clean()
+
+        assert "name" in excinfo.value.message_dict
+        assert "rock_types" in excinfo.value.message_dict
+
+    @isolate_apps("tests.testapp")
+    def test_an_inheriting_model_does_not_get_a_second_wrapper(self):
+        # The wrapper resolves the instance's own class at call time, so a
+        # subclass is already covered by the one it inherits. Installing a
+        # second around it would report every empty required field twice.
+        class Parent(models.Model):
+            firsts = ConceptsField(
+                vocabulary="rock-type", verbose_name="firsts", help_text="the first set"
+            )
+
+            class Meta:
+                app_label = "testapp"
+
+        class Child(Parent):
+            seconds = ConceptsField(
+                vocabulary="rock-type",
+                verbose_name="seconds",
+                help_text="the second set",
+            )
+
+            class Meta:
+                app_label = "testapp"
+
+        assert Parent.__dict__["full_clean"].concepts_field_required_set_check
+        assert "full_clean" not in Child.__dict__
+        assert {
+            field.name
+            for field in Child._meta.get_fields()
+            if isinstance(field, ConceptsField)
+        } == {
+            "firsts",
+            "seconds",
+        }
+
     def test_a_required_fields_form_half_rejects_an_empty_selection(self):
         form = DepositForm(data={"name": "Granite deposit", "rock_types": []})
 

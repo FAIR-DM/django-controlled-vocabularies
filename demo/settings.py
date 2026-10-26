@@ -148,8 +148,6 @@ USE_TZ = True
 TIME_ZONE = "UTC"
 USE_I18N = True
 
-# Django's own default (LANGUAGE_CODE="en-us") is not itself a member of the default
-# LANGUAGES list, which the importer's own configuration check refuses to import against
-# (controlled_vocabularies.exchange.skos.SkosImporter — DEFAULT_LANGUAGE_UNCONFIGURED) — the
-# seed command fails without this, before it stores a single concept.
+# The seeded vocabularies are in English, and a vocabulary an import creates without a
+# preferred label to take its default language from falls back to this one.
 LANGUAGE_CODE = "en"

@@ -34,6 +34,11 @@ class TestValidateDocument:
             {"dcterms:created": [{"@value": "2026-01-01", "@type": "xsd:date"}]},
             {"owl:versionInfo": [{"@value": 3}]},
             {"skos:broader": [{"@id": "https://example.org/x"}]},
+            {
+                "skosxl:prefLabel": [
+                    {"skosxl:literalForm": [{"@value": "Granite", "@language": "en"}]}
+                ]
+            },
             {"skos:altLabel": []},
         ],
     )
@@ -60,6 +65,7 @@ class TestValidateDocument:
             {"skos:prefLabel": [{"@value": "Granite", "@language": 3}]},
             {"skos:broader": [{"@id": "https://example.org/x", "@language": "en"}]},
             {"skos:broader": [{"@id": 3}]},
+            {"skosxl:prefLabel": [{"skosxl:literalForm": [{"@value": []}]}]},
         ],
     )
     def test_a_predicate_without_well_formed_entries_is_refused(self, document):
@@ -272,9 +278,7 @@ class TestIdentity:
     def test_a_collection_authored_here_gets_a_uri_under_a_collection_segment(self):
         collection = RecordFactory(label="Igneous", type=Record.Type.COLLECTION)
 
-        expected = (
-            f"{conf.get_base_uri()}/{collection.scheme.slug}/collection/igneous"
-        )
+        expected = f"{conf.get_base_uri()}/{collection.scheme.slug}/collection/igneous"
         assert collection.uri == expected
 
     def test_a_vocabulary_authored_here_gets_a_uri_under_the_base(self):
@@ -388,6 +392,14 @@ class TestRecordQuerySet:
 
         assert list(Record.objects.mentioning(uri)) == [linking]
 
+    def test_mentioning_matches_a_uri_with_non_ascii_characters(self):
+        uri = "https://example.org/géologie/granit"
+        linking = RecordFactory(
+            data=labelled("Child", statements={"skos:broader": [{"@id": uri}]})
+        )
+
+        assert list(Record.objects.mentioning(uri)) == [linking]
+
 
 class TestRecord:
     def test_default_language_is_the_vocabularys(self):
@@ -441,6 +453,21 @@ class TestRecord:
         )
 
         assert collection.member_uris() == [member.uri for member in members]
+
+    def test_a_member_stated_both_in_sequence_and_as_a_member_is_listed_once(self):
+        first, second = "https://example.org/first", "https://example.org/second"
+        collection = RecordFactory(
+            type=Record.Type.ORDERED_COLLECTION,
+            data=labelled(
+                "Both",
+                statements={
+                    "skos:member": [{"@id": first}, {"@id": second}],
+                    "skos:memberList": [{"@id": second}, {"@id": first}],
+                },
+            ),
+        )
+
+        assert collection.member_uris() == [second, first]
 
     def test_member_uris_of_a_concept_is_empty(self):
         assert RecordFactory().member_uris() == []
