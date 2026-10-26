@@ -4,6 +4,8 @@ from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
 
+from demo.views import TermPickerView
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     # Sign-in for the curator's pages. The package adds none of its own; a project provides it.
@@ -16,6 +18,7 @@ urlpatterns = [
     # reversal failure on every render, and the root address returns 404.
     # The endpoint the open page listens on to reload itself after a change.
     path("__reload__/", include("django_browser_reload.urls")),
+    path("term-picker/", TermPickerView.as_view(), name="term-picker"),
     path(
         "",
         RedirectView.as_view(pattern_name="controlled_vocabularies_ui:vocabulary-list"),
