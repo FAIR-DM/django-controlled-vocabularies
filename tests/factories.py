@@ -2,7 +2,7 @@
 
 import factory
 
-from controlled_vocabularies.models import ConceptScheme, Record
+from controlled_vocabularies.models import ConceptScheme, Link, Record
 from tests.testapp.models import (
     Artifact,
     Borehole,
@@ -74,6 +74,20 @@ class RecordFactory(factory.django.DjangoModelFactory):
     data = factory.LazyAttribute(
         lambda record: labelled(record.label, record.scheme.default_language)
     )
+
+
+class LinkFactory(factory.django.DjangoModelFactory):
+    """Build a saved :class:`Link` row from a new record, with a unique target.
+
+    The row is made directly, so it need not match the source record's document.
+    """
+
+    class Meta:
+        model = Link
+
+    source = factory.SubFactory(RecordFactory)
+    predicate = "skos:broader"
+    target = factory.Sequence(lambda n: f"https://example.org/target/{n}")
 
 
 def relation_graph(scheme=None):

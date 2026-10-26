@@ -462,3 +462,47 @@ class Record(Resource):
             if "@value" in entry
         )
         super().save(*args, **kwargs)
+
+
+class Link(models.Model):
+    """One link a record's document states, copied into a row so it can be queried.
+
+    The document stays the only source of truth. The rows are rebuilt from it each time
+    the record is saved, so a page that asks who links to a record reads an index
+    instead of every document.
+    """
+
+    source = models.ForeignKey(
+        Record,
+        on_delete=models.CASCADE,
+        related_name="links",
+        verbose_name=_("source"),
+        help_text=_("The record whose document states the link."),
+    )
+    predicate = models.CharField(
+        max_length=500,
+        verbose_name=_("predicate"),
+        help_text=_(
+            "The key the link is stored under in the document, written as a CURIE such "
+            "as skos:broader, or as a full URI."
+        ),
+    )
+    target = models.CharField(
+        max_length=500,
+        verbose_name=_("target"),
+        help_text=_(
+            "The URI the link points at, as stored. It may name a concept this site "
+            "does not hold."
+        ),
+    )
+
+    class Meta:
+        # The source column's own index serves rebuilding a record's rows. This one
+        # answers who links to a URI, alone or under given predicates (ADR 0025).
+        indexes = [
+            models.Index(fields=["target", "predicate"], name="link_target_predicate")
+        ]
+
+    def __str__(self) -> str:
+        """Return the link as ``source predicate target``."""
+        return f"{self.source.uri} {self.predicate} {self.target}"

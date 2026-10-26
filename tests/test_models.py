@@ -10,11 +10,13 @@ from controlled_vocabularies import conf
 from controlled_vocabularies.models import (
     PREF_LABEL_MAX_LENGTH,
     ConceptScheme,
+    Link,
     Record,
     validate_document,
 )
 from tests.factories import (
     ConceptSchemeFactory,
+    LinkFactory,
     RecordFactory,
     SpecimenFactory,
     collection_with_members,
@@ -369,6 +371,17 @@ class TestIdentity:
         assert slugs == ["rocks", "rocks-2", "rocks-3"]
 
 
+class TestLink:
+    def test_it_names_the_source_the_predicate_and_the_target(self):
+        link = LinkFactory(predicate="skos:related", target="https://example.org/x")
+
+        text = str(link)
+
+        assert link.source.uri in text
+        assert "skos:related" in text
+        assert "https://example.org/x" in text
+
+
 class TestRecordQuerySet:
     def test_mentioning_finds_a_record_linking_to_the_uri(self):
         target = RecordFactory()
@@ -496,7 +509,7 @@ class TestConsumingModelProtection:
 
 
 class TestFieldMetadata:
-    @pytest.mark.parametrize("model", [ConceptScheme, Record])
+    @pytest.mark.parametrize("model", [ConceptScheme, Record, Link])
     def test_every_field_has_a_translatable_verbose_name_and_help_text(self, model):
         fields = [
             field
