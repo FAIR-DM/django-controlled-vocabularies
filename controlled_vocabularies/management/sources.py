@@ -101,7 +101,7 @@ class SourceResolver:
     def __init__(self, source: str, *, serialization: str | None = None) -> None:
         self.source = source
         self.serialization = serialization
-        self._temp_path: Path | None = None
+        self.temp_path: Path | None = None
 
     def classify(self) -> str:
         """Classify :attr:`source` as a URL or a path.
@@ -190,7 +190,7 @@ class SourceResolver:
             # (RFC 3986 section 5.1.3, docs/adr/0006-a-document-identity-comes-from-where-it-was-published.md).
             final_url = response.url
             fd, name = tempfile.mkstemp()
-            self._temp_path = Path(name)
+            self.temp_path = Path(name)
             written = 0
             started = time.monotonic()
             with os.fdopen(fd, "wb") as tmp:
@@ -222,7 +222,7 @@ class SourceResolver:
                         )
                     tmp.write(chunk)
         return Fetched(
-            path=self._temp_path, content_type=content_type, final_url=final_url
+            path=self.temp_path, content_type=content_type, final_url=final_url
         )
 
     def resolve_serialization(self, fetched: Fetched) -> str:
@@ -265,5 +265,5 @@ class SourceResolver:
 
         A no-op for a local path, and safe to call more than once.
         """
-        if self._temp_path is not None:
-            self._temp_path.unlink(missing_ok=True)
+        if self.temp_path is not None:
+            self.temp_path.unlink(missing_ok=True)

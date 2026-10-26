@@ -58,8 +58,13 @@ class PropertyRows:
             found.uri: found
             for found in Record.objects.filter(uri__in=linked).select_related("scheme")
         }
+        # The record's own vocabulary is always linked, stated or not (build()).
         self.schemes = {
-            found.uri: found for found in ConceptScheme.objects.filter(uri__in=linked)
+            self.scheme.uri: self.scheme,
+            **{
+                found.uri: found
+                for found in ConceptScheme.objects.filter(uri__in=linked)
+            },
         }
 
     @staticmethod

@@ -223,6 +223,9 @@ class SkosImporter:
         for predicate in (SKOS.inScheme, SKOS.topConceptOf):
             for node in graph.subjects(predicate, scheme_node):
                 found.setdefault(node, Record.Type.CONCEPT)
+        for node in graph.objects(scheme_node, SKOS.hasTopConcept):
+            if not isinstance(node, rdflib.Literal):
+                found.setdefault(node, Record.Type.CONCEPT)
 
         return {
             node: found[node]
@@ -269,9 +272,18 @@ class SkosImporter:
         for entries in document.values():
             entries.sort(key=lambda entry: json.dumps(entry, sort_keys=True))
         for head in graph.objects(node, SKOS.memberList):
-            document["skos:memberList"] = [
-                {"@id": str(member)} for member in RdfList(graph, head)
-            ]
+            try:
+                members = list(RdfList(graph, head))
+            except ValueError as exc:
+                raise SkosImportError(
+                    _(
+                        "'%(subject)s' has a skos:memberList that does not terminate (its "
+                        "rdf:rest chain loops back on itself); the import was refused."
+                    ),
+                    params={"subject": str(node)},
+                    code="skos_cyclic_member_list",
+                ) from exc
+            document["skos:memberList"] = [{"@id": str(member)} for member in members]
         return document
 
     @staticmethod

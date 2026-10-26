@@ -371,8 +371,13 @@ class Record(Resource):
         return self.linked_uris("skos:member") + self.linked_uris("skos:memberList")
 
     def minted_uri(self) -> str:
-        """Return the URI for a record authored on this site."""
-        return f"{conf.get_base_uri()}/{self.scheme.slug}/{self.slug}"
+        """Return the URI for a record authored on this site.
+
+        A collection's sits under a ``collection`` segment, as its page does, so it never
+        names the same address as a concept with the same slug.
+        """
+        segment = "collection/" if self.is_collection else ""
+        return f"{conf.get_base_uri()}/{self.scheme.slug}/{segment}{self.slug}"
 
     def siblings(self) -> models.QuerySet:
         """Return the other records of the same vocabulary."""
