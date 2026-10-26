@@ -69,7 +69,7 @@ class TestConceptControlRendersOnAdminPages:
         assert response.status_code == 200
         assert_control_rendered(response.content.decode(), Specimen, "rock_type")
 
-    def test_add_page_renders_the_control_for_a_concepts_field(self, admin_client):
+    def test_add_page_renders_the_control_for_a_multi_concept_field(self, admin_client):
         response = admin_client.get(reverse("admin:testapp_outcrop_add"))
 
         assert response.status_code == 200
@@ -91,7 +91,9 @@ class TestConceptControlRendersOnAdminPages:
         assert_control_rendered(content, Specimen, "rock_type")
         assert concept.display_label() in content
 
-    def test_change_page_shows_every_concept_a_concepts_field_holds(self, admin_client):
+    def test_change_page_shows_every_concept_a_multi_concept_field_holds(
+        self, admin_client
+    ):
         scheme = ConceptSchemeFactory(name="Mineral")
         concepts = [
             RecordFactory(scheme=scheme, label=f"Mineral concept {i}") for i in range(3)
@@ -144,12 +146,12 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
 
         response = admin_client.post(
             reverse("admin:testapp_specimen_add"),
-            {"name": "Granite sample", "rock_type": concept.pk, "_save": "Save"},
+            {"name": "Granite sample", "rock_type": concept.uri, "_save": "Save"},
         )
 
         assert response.status_code == 302
         specimen = Specimen.objects.get(name="Granite sample")
-        assert specimen.rock_type_id == concept.pk
+        assert specimen.rock_type_id == concept.uri
 
     def test_a_foreign_concept_is_refused_by_the_add_page_for_a_concept_field(
         self, admin_client
@@ -161,7 +163,7 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
             reverse("admin:testapp_specimen_add"),
             {
                 "name": "Wrong vocabulary sample",
-                "rock_type": foreign_concept.pk,
+                "rock_type": foreign_concept.uri,
                 "_save": "Save",
             },
         )
@@ -171,7 +173,7 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
         assert not Specimen.objects.filter(name="Wrong vocabulary sample").exists()
         assert 'id="id_rock_type_error"' in content
 
-    def test_a_legitimate_concept_saves_through_the_add_page_for_a_concepts_field(
+    def test_a_legitimate_concept_saves_through_the_add_page_for_a_multi_concept_field(
         self, admin_client
     ):
         scheme = ConceptSchemeFactory(name="Mineral")
@@ -179,14 +181,14 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
 
         response = admin_client.post(
             reverse("admin:testapp_outcrop_add"),
-            {"name": "Basalt outcrop", "minerals": [concept.pk], "_save": "Save"},
+            {"name": "Basalt outcrop", "minerals": [concept.uri], "_save": "Save"},
         )
 
         assert response.status_code == 302
         outcrop = Outcrop.objects.get(name="Basalt outcrop")
         assert concept in outcrop.minerals.all()
 
-    def test_a_foreign_concept_is_refused_by_the_add_page_for_a_concepts_field(
+    def test_a_foreign_concept_is_refused_by_the_add_page_for_a_multi_concept_field(
         self, admin_client
     ):
         other_scheme = ConceptSchemeFactory(name="Rock Type")
@@ -196,7 +198,7 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
             reverse("admin:testapp_outcrop_add"),
             {
                 "name": "Wrong vocabulary outcrop",
-                "minerals": [foreign_concept.pk],
+                "minerals": [foreign_concept.uri],
                 "_save": "Save",
             },
         )
@@ -213,7 +215,7 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
         concept = RecordFactory(scheme=scheme)
         admin_client.post(
             reverse("admin:testapp_specimen_add"),
-            {"name": "Protected sample", "rock_type": concept.pk, "_save": "Save"},
+            {"name": "Protected sample", "rock_type": concept.uri, "_save": "Save"},
         )
 
         with pytest.raises(ProtectedError):
@@ -223,14 +225,14 @@ class TestAdminSubmissionSavesAndFieldRulesStillBite:
             name="Protected sample", rock_type=concept
         ).exists()
 
-    def test_a_concepts_field_saved_through_the_admin_still_cannot_be_deleted(
+    def test_a_multi_concept_field_saved_through_the_admin_still_cannot_be_deleted(
         self, admin_client
     ):
         scheme = ConceptSchemeFactory(name="Mineral")
         concept = RecordFactory(scheme=scheme)
         admin_client.post(
             reverse("admin:testapp_outcrop_add"),
-            {"name": "Protected outcrop", "minerals": [concept.pk], "_save": "Save"},
+            {"name": "Protected outcrop", "minerals": [concept.uri], "_save": "Save"},
         )
 
         with pytest.raises(ProtectedError):
@@ -327,7 +329,7 @@ class TestConceptFieldOffersNoRelatedObjectAffordance:
         assert_no_related_object_affordance(content)
         assert_control_rendered(content, Specimen, "rock_type")
 
-    def test_add_page_offers_no_affordance_for_a_concepts_field(
+    def test_add_page_offers_no_affordance_for_a_multi_concept_field(
         self, admin_client, concept_registered_admin_site
     ):
         with override_settings(ROOT_URLCONF=URLConf(concept_registered_admin_site)):
@@ -338,7 +340,7 @@ class TestConceptFieldOffersNoRelatedObjectAffordance:
         assert_no_related_object_affordance(content)
         assert_control_rendered(content, Outcrop, "minerals")
 
-    def test_change_page_offers_no_affordance_for_a_concepts_field(
+    def test_change_page_offers_no_affordance_for_a_multi_concept_field(
         self, admin_client, concept_registered_admin_site
     ):
         scheme = ConceptSchemeFactory(name="Mineral")
@@ -564,7 +566,7 @@ class TestNewInlineRowSavesItsConcept:
             "specimens-MAX_NUM_FORMS": "1000",
             "specimens-0-id": "",
             "specimens-0-name": "Newly added specimen",
-            "specimens-0-rock_type": str(concept.pk),
+            "specimens-0-rock_type": concept.uri,
             "_save": "Save",
         }
 
@@ -576,7 +578,7 @@ class TestNewInlineRowSavesItsConcept:
         assert response.status_code == 302
         specimen = Specimen.objects.get(name="Newly added specimen")
         assert specimen.locality_id == locality.pk
-        assert specimen.rock_type_id == concept.pk
+        assert specimen.rock_type_id == concept.uri
 
 
 class AutocompleteSpecimenAdmin(admin.ModelAdmin):
@@ -688,14 +690,14 @@ class TestExplicitDeclarationWins:
                 reverse("admin:testapp_specimen_add"),
                 {
                     "name": f"{site_fixture_name} sample",
-                    "rock_type": concept.pk,
+                    "rock_type": concept.uri,
                     "_save": "Save",
                 },
             )
 
         assert response.status_code == 302
         specimen = Specimen.objects.get(name=f"{site_fixture_name} sample")
-        assert specimen.rock_type_id == concept.pk
+        assert specimen.rock_type_id == concept.uri
 
     @pytest.mark.parametrize(
         "site_fixture_name",
@@ -713,7 +715,7 @@ class TestExplicitDeclarationWins:
                 reverse("admin:testapp_specimen_add"),
                 {
                     "name": f"{site_fixture_name} wrong vocabulary",
-                    "rock_type": foreign_concept.pk,
+                    "rock_type": foreign_concept.uri,
                     "_save": "Save",
                 },
             )
@@ -905,14 +907,14 @@ class TestCustomAdminSiteGetsTheSameBehaviour:
                 reverse("admin:testapp_specimen_add"),
                 {
                     "name": "Custom site sample",
-                    "rock_type": concept.pk,
+                    "rock_type": concept.uri,
                     "_save": "Save",
                 },
             )
 
         assert response.status_code == 302
         specimen = Specimen.objects.get(name="Custom site sample")
-        assert specimen.rock_type_id == concept.pk
+        assert specimen.rock_type_id == concept.uri
 
     def test_an_ineligible_concept_is_refused_through_the_custom_sites_add_page(
         self, admin_client, custom_admin_site
@@ -925,7 +927,7 @@ class TestCustomAdminSiteGetsTheSameBehaviour:
                 reverse("admin:testapp_specimen_add"),
                 {
                     "name": "Custom site wrong vocabulary",
-                    "rock_type": foreign_concept.pk,
+                    "rock_type": foreign_concept.uri,
                     "_save": "Save",
                 },
             )

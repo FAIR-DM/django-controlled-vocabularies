@@ -7,7 +7,7 @@ from django.db import DatabaseError
 from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 
-from .fields import ConceptField, ConceptsField
+from .fields import ConceptField, MultiConceptField
 from .models import ConceptScheme, Record
 
 CHECK_ID = "controlled_vocabularies.W001"
@@ -34,7 +34,7 @@ def concept_fields():
         field
         for model in apps.get_models()
         for field in model._meta.get_fields()
-        if isinstance(field, (ConceptField, ConceptsField))
+        if isinstance(field, (ConceptField, MultiConceptField))
     ]
 
 

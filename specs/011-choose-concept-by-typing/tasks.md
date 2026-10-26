@@ -82,7 +82,7 @@ because it documents what the others built.
 
 - **T004** — Both fields render as the control, with nothing declared (FR-001, FR-003, FR-009).
 
-  Create `controlled_vocabularies/forms.py` with `ConceptChoiceField`, `ConceptsChoiceField` and
+  Create `controlled_vocabularies/forms.py` with `ConceptChoiceField`, `MultiConceptChoiceField` and
   their two widgets. Add `formfield()` to `ConceptFieldMixin` in `fields.py`, returning them with
   `css_framework` pinned to the framework-free default and every kwarg Django supplies passed
   through, and giving the widget the model field instance it needs for its own `get_queryset()`.

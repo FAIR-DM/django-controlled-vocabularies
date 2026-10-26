@@ -415,7 +415,7 @@ Under the collection restriction, say what an `ordered` collection buys — the 
 while the search box is empty, relevance order once someone types (decisions D8). Do not promise a
 sequence anywhere else.
 
-`CONTEXT.md` defines the restriction and reconciles the existing `ConceptField`/`ConceptsField`
+`CONTEXT.md` defines the restriction and reconciles the existing `ConceptField`/`MultiConceptField`
 entries (lines 49-50), which currently describe the vocabulary restriction as the whole story.
 
 Public markdown: humanize before commit, and no internal handles.

@@ -1,11 +1,11 @@
 # Choosing a concept
 
-`ConceptField` and `ConceptsField` render as a search-as-you-type control, both in your own forms
-and on Django admin pages.
+`ConceptField` and `MultiConceptField` render as a search-as-you-type control, both in your own
+forms and on Django admin pages.
 
 ## Choosing a concept by typing
 
-`ConceptField` and `ConceptsField` render as a search-as-you-type control by default. A project
+`ConceptField` and `MultiConceptField` render as a search-as-you-type control by default. A project
 declaring either gets it without naming a widget, writing an endpoint, or configuring anything
 per field — an ordinary `ModelForm` built from the model already renders it.
 
@@ -41,7 +41,7 @@ naming both the route and the `INSTALLED_APPS` entry, rather than the underlying
 
 A search matches what a person types against every preferred, alternative and hidden label of a
 concept, in any language, using the `search_text` copy kept on each `Record`. It returns, per
-concept, its identifier, its name in the active language, and the name of the vocabulary it belongs
+concept, its URI, its name in the active language, and the name of the vocabulary it belongs
 to — nothing else, no notes or alternative labels. Only concepts are searched, so a collection is
 never offered. The results are restricted to whatever vocabularies the field declares, the same restriction that
 already governs which concepts a form accepts; a field naming no vocabulary searches every concept
@@ -49,14 +49,19 @@ in the database. The endpoint carries **no permission rule by default** — it s
 concept data the rest of this package publishes at stable URIs. A project holding vocabularies it
 does not want searched restricts the include instead, at whatever access level fits.
 
+The control is a form field and its widget, both in `controlled_vocabularies.forms`. A
+`ConceptField` renders as `ConceptChoiceField` with `ConceptWidget`, and a `MultiConceptField` as
+`MultiConceptChoiceField` with `MultiConceptWidget`. A form that declares one of these fields itself
+uses the same classes. The control submits each chosen concept's URI.
+
 The control needs a browser running JavaScript. Without it, both fields still work as an ordinary
 required-relation form field; only the search-as-you-type behaviour is unavailable.
 
 ## Choosing a concept in the admin
 
-A model that declares `ConceptField` or `ConceptsField` gets the same search-as-you-type control on
-its Django admin pages once it's registered — nothing further to configure. `ModelAdmin` builds the
-field the same way it builds any other, and the wiring is the three steps above: the route,
+A model that declares `ConceptField` or `MultiConceptField` gets the same search-as-you-type control
+on its Django admin pages once it's registered — nothing further to configure. `ModelAdmin` builds
+the field the same way it builds any other, and the wiring is the three steps above: the route,
 `django_tomselect` in `INSTALLED_APPS`, and its middleware. The admin adds nothing to that list.
 
 A concept is chosen on these pages, never created or edited there. Django ordinarily puts an
@@ -66,18 +71,18 @@ not this package's own models are registered in the admin, and whatever permissi
 person holds. Concepts arrive by [importing](importing.md) a published vocabulary — a controlled
 vocabulary stops being controlled the moment a data-entry form can invent or edit one.
 
-Where the admin presents the field read-only — listed in `readonly_fields`, or because the
-signed-in person may view the page but not change it — the concept is shown by its name
-and no control renders. This is Django's own read-only presentation, not this package's: with
-`Record` registered, a single concept links to its own change page. Several concepts, on a
-`ConceptsField`, always render as plain text. The package neither adds to this nor suppresses it.
+Where the admin presents the field read-only — listed in `readonly_fields`, or because the signed-in
+person may view the page but not change it — the concept is shown by its name and no control
+renders. This is Django's own read-only presentation, not this package's: with `Record` registered,
+a single concept links to its own change page. Several concepts, on a `MultiConceptField`, always
+render as plain text. The package neither adds to this nor suppresses it.
 
 A project can still ask for a different control the way it would for any other related field:
 
 - `autocomplete_fields` renders Django's own autocomplete widget instead — Django requires the
   related model to be registered and searchable, as it does for any field named this way.
-- `raw_id_fields` renders Django's plain identifier input, with the magnifying-glass lookup link
-  Django gives every field named this way. That link opens a list to pick from — it selects a
+- `raw_id_fields` renders Django's plain identifier input, which takes the concept's URI, with the
+  magnifying-glass lookup link Django gives every field named this way. That link opens a list to pick from — it selects a
   concept, it does not create one.
 - A `ModelForm` declaring its own widget for the field via `Meta.widgets`, passed to
   `ModelAdmin.form`, renders that widget.

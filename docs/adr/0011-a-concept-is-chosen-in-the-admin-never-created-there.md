@@ -4,8 +4,8 @@
 
 ## Decision
 
-On a consuming model's Django admin page, `ConceptField` and `ConceptsField` render a control that
-offers no way to add, change, delete or view the related concept. All four of Django's
+On a consuming model's Django admin page, `ConceptField` and `MultiConceptField` render a control
+that offers no way to add, change, delete or view the related concept. All four of Django's
 related-object links are absent, whether or not this package's own models are registered in the
 admin, and whatever permissions the signed-in person holds.
 

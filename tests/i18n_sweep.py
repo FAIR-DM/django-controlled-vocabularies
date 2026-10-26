@@ -213,7 +213,7 @@ class FieldsChecksI18nVisitor(ast.NodeVisitor):
 
     def visit_Dict(self, node: ast.Dict) -> None:
         """Record bare literals under field-metadata keys of any dict literal."""
-        # ConceptsField builds its through model's Meta as `type("Meta", (), {...})`, so
+        # MultiConceptField builds its through model's Meta as `type("Meta", (), {...})`, so
         # the metadata sits in a positional dict a keyword check never sees.
         for key, value in zip(node.keys, node.values, strict=True):
             name = self.str_constant(key) if key is not None else None

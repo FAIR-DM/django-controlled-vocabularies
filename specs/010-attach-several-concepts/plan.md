@@ -5,7 +5,7 @@
 
 ## Summary
 
-Ship `ConceptsField`, a `ManyToManyField` subclass a consuming project declares on its own model,
+Ship `MultiConceptField`, a `ManyToManyField` subclass a consuming project declares on its own model,
 naming by slug the vocabulary its concepts come from — one, several, or none. It fixes what the
 consumer does not supply — the target, the membership model, and the choice restriction — and adds
 the two guarantees a many-valued relation does not provide on its own.
@@ -65,7 +65,7 @@ model and is generated per declaration; the test app carries the only new migrat
 | V — Security & data-safety | The delete guard is the data-safety mechanism. Its boundary is stated honestly in the README: it is enforced by Django's collector, not by a database constraint, because Django emits no `ON DELETE` clause for any relation (R6). | Pass |
 | VI — Documentation | README gains the multiple-value declaration, the readback, what required and optional mean, and the query-cost note. `CONTEXT.md` gains the term. CHANGELOG records the addition. | Pass |
 | VII — Dependency discipline | Nothing added. | Pass |
-| VIII — Compatibility | The article already names `ConceptsField` as part of the Python API contract, so the name is fixed by the constitution rather than chosen here. | Pass |
+| VIII — Compatibility | The article already names `MultiConceptField` as part of the Python API contract, so the name is fixed by the constitution rather than chosen here. | Pass |
 | IX — URI identity & downstream-data safety | The article's `on_delete=PROTECT` clause is honoured through the generated through model, which is the only place a many-valued relation can carry it. | Pass |
 | X — Stack & architecture norms | Models stay the source of truth. Nothing here touches RDF. | Pass |
 | XII — Internationalization | `help_text` on the field, translatable validation messages with named placeholders. The `TypeError`s refusing fixed kwargs are developer diagnostics and are exempt. | Pass |
@@ -92,11 +92,11 @@ specs/010-attach-several-concepts/
 
 ```text
 controlled_vocabularies/
-├── fields.py          # ConceptsField added alongside ConceptField
+├── fields.py          # MultiConceptField added alongside ConceptField
 └── checks.py          # widened to both field types
 
 tests/
-├── test_fields.py     # new classes for ConceptsField
+├── test_fields.py     # new classes for MultiConceptField
 ├── conftest.py        # fixtures extended
 ├── factories.py       # unchanged
 └── testapp/
@@ -107,7 +107,7 @@ tests/
 ## Approach
 
 **1. The field, and what it fixes.** *(Propagated 2026-08-12 from the spec refinement, D9.)*
-`ConceptsField(ManyToManyField)` takes an **optional** `vocabulary` and fixes three things the
+`MultiConceptField(ManyToManyField)` takes an **optional** `vocabulary` and fixes three things the
 consumer may not supply: `to="controlled_vocabularies.Concept"`, `limit_choices_to`, and `through`.
 
 `vocabulary` accepts three shapes, normalised once in `__init__` to a tuple of slugs:
@@ -180,10 +180,10 @@ one on the consuming model class, once per class, delegating to the original `fu
 constraints on that installation, the first from FR-010 and the other two from R5 and the probe
 output:
 
-- **It checks every required `ConceptsField` on the class, not the one that installed it.** The
+- **It checks every required `MultiConceptField` on the class, not the one that installed it.** The
   installation happens once per class, so a wrapper closing over the field instance that triggered it
-  would leave a second required `ConceptsField` on the same model unenforced, silently and with
-  nothing failing. The wrapper resolves the class's required `ConceptsField`s from
+  would leave a second required `MultiConceptField` on the same model unenforced, silently and with
+  nothing failing. The wrapper resolves the class's required `MultiConceptField`s from
   `cls._meta.get_fields()` when it runs, and FR-010 applies to each of them.
 
 - **It must skip an unsaved record.** Touching the relation descriptor on an instance with no primary
@@ -207,7 +207,7 @@ a model that already defines either name keeps its own.
 warning id, the same single query for the distinct slugs, the same silence on a `DatabaseError`. The
 existing tests continue to cover the single-value case.
 
-Two things the refinement changes here. A `ConceptsField` contributes **each** of the slugs it names
+Two things the refinement changes here. A `MultiConceptField` contributes **each** of the slugs it names
 to the distinct set, not one, and a field naming none contributes nothing and can never be warned
 about (FR-004). A field naming three vocabularies of which one is absent warns about that one and
 stays quiet about the other two, so the warning names the missing slug rather than the field's whole
@@ -255,7 +255,7 @@ indirection, so Complexity Tracking is otherwise empty.
   `full_clean` itself after the field is declared would shadow it. Worth a README sentence.
 - **Two fields on one model against one vocabulary.** The generated through model is named from the
   owning model and the field name, so two declarations cannot collide, but this is asserted rather
-  than assumed: the test app carries a model with both a `ConceptField` and a `ConceptsField` against
+  than assumed: the test app carries a model with both a `ConceptField` and a `MultiConceptField` against
   the same vocabulary.
 - **`ProtectedError` is not `ValidationError`.** A curator deleting through a form or the admin sees
   an exception, not a friendly message. That is exactly what FS-009 already does for the single-value

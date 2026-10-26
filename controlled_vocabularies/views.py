@@ -27,7 +27,7 @@ class ConceptAutocompleteView(AutocompleteModelView):
     allow_anonymous = True
     allowed_filter_fields = []
     allowed_ordering_fields = []
-    value_fields = ["id"]
+    value_fields = ["uri"]
     virtual_fields = ["display_label", "vocabulary"]
 
     def search(self, queryset: QuerySet, query: str) -> QuerySet:
@@ -135,12 +135,12 @@ class ConceptAutocompleteView(AutocompleteModelView):
         }
 
     def prepare_results(self, results):
-        """Shape each result to its identifier, display label and vocabulary name only."""
+        """Shape each result to its URI, display label and vocabulary name only."""
         # Overridden outright: display_label and vocabulary are virtual fields with no queryset
         # annotation behind them, and the base would add permission and URL keys.
         return [
             {
-                "id": concept.pk,
+                "uri": concept.uri,
                 "display_label": concept.display_label(),
                 "vocabulary": concept.scheme.display_label(),
             }

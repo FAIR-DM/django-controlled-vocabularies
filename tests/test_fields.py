@@ -8,7 +8,7 @@ import pytest
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.db import connection, models, transaction
+from django.db import IntegrityError, connection, models, transaction
 from django.db.models import CASCADE, PROTECT, ProtectedError, Q
 from django.test.utils import CaptureQueriesContext, isolate_apps
 from django.utils import translation
@@ -19,7 +19,7 @@ from controlled_vocabularies import fields as fields_module
 from controlled_vocabularies.fields import (
     ConceptField,
     ConceptFieldMixin,
-    ConceptsField,
+    MultiConceptField,
 )
 from controlled_vocabularies.models import ConceptScheme, Record
 from tests.factories import (
@@ -86,7 +86,7 @@ def bilingual(english, german):
     }
 
 
-@pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestSharedVocabularyContract:
     def test_inherits_the_shared_contract(self, field_class):
         assert issubclass(field_class, ConceptFieldMixin)
@@ -143,6 +143,7 @@ class TestSharedVocabularyContract:
         assert "limit_choices_to" not in kwargs
         assert "on_delete" not in kwargs
         assert "through" not in kwargs
+        assert "to_field" not in kwargs
 
         rebuilt = import_string(path)(*args, **kwargs)
         assert rebuilt.vocabulary == field.vocabulary
@@ -154,7 +155,7 @@ class TestSharedVocabularyContract:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestSharedVocabularyRestriction:
     def test_a_named_vocabulary_admits_only_its_concepts(self, field_class):
         rock = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
@@ -200,7 +201,7 @@ class TestSharedVocabularyRestriction:
         assert len(ctx.captured_queries) == 0
 
 
-@pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestSharedLimitChoicesToCallable:
     def test_limit_choices_to_is_a_callable_resolved_on_demand(self, field_class):
         assert callable(
@@ -209,7 +210,7 @@ class TestSharedLimitChoicesToCallable:
         assert callable(field_class().remote_field.limit_choices_to)
 
 
-@pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestSharedCollectionArgument:
     def test_collection_defaults_to_none(self, field_class):
         assert field_class(vocabulary="rock-type").collection is None
@@ -263,7 +264,7 @@ class TestSharedCollectionArgument:
 
 # Both defaults stay static gettext_lazy strings: % on a lazy proxy evaluates it
 # immediately.
-@pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestSharedRestrictedHelpText:
     def test_an_unrestricted_field_keeps_the_unrestricted_default(self, field_class):
         field = field_class(vocabulary="rock-type")
@@ -304,7 +305,7 @@ class TestSharedRestrictedHelpText:
 # Q objects wrapping a subquery compare by identity, so every test evaluates the
 # resolved Q against real rows instead of comparing Qs.
 @pytest.mark.django_db
-@pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestCollectionRestrictionResolves:
     def test_resolves_to_exactly_the_collection_members(self, field_class):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -368,7 +369,7 @@ class TestCollectionRestrictionResolves:
 # limit_choices_to is re-resolved on every read, so a restriction cached at
 # construction fails here.
 @pytest.mark.django_db
-@pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestCollectionRestrictionResolvesLive:
     def test_a_concept_added_to_the_collection_after_construction_appears_on_the_next_read(
         self, field_class
@@ -401,6 +402,11 @@ class TestConceptFieldConstruction:
     def test_rejects_consumer_supplied_on_delete(self):
         with pytest.raises(TypeError, match="on_delete"):
             ConceptField(vocabulary="rock-type", on_delete=PROTECT)
+
+    def test_rejects_consumer_supplied_to_field(self):
+        # A column holding anything but the URI would break the URI accessor.
+        with pytest.raises(TypeError, match="to_field"):
+            ConceptField(vocabulary="rock-type", to_field="id")
 
     def test_help_text_has_a_translatable_default(self):
         field = ConceptField(vocabulary="rock-type")
@@ -440,43 +446,83 @@ class TestConceptFieldDeconstruct:
 
         assert rebuilt.vocabulary == field.vocabulary
         assert rebuilt.remote_field.on_delete is PROTECT
+        assert rebuilt.remote_field.field_name == "uri"
 
 
-class TestConceptsFieldConstruction:
+@pytest.mark.django_db
+class TestConceptFieldStoresTheConceptsUri:
+    def test_the_column_holds_the_concepts_uri(self):
+        concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
+        specimen = SpecimenFactory(rock_type=concept)
+
+        stored = Specimen.objects.filter(pk=specimen.pk).values_list(
+            "rock_type_id", flat=True
+        )
+
+        assert list(stored) == [concept.uri]
+
+    def test_a_row_written_with_the_uri_alone_reads_back_the_concept(self):
+        concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
+
+        specimen = Specimen.objects.create(name="Granite", rock_type_id=concept.uri)
+
+        assert Specimen.objects.get(pk=specimen.pk).rock_type == concept
+
+    def test_the_uri_accessor_reads_the_column_without_a_query(
+        self, django_assert_num_queries
+    ):
+        concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
+        specimen = Specimen.objects.get(pk=SpecimenFactory(rock_type=concept).pk)
+
+        with django_assert_num_queries(0):
+            assert specimen.get_rock_type_uri() == concept.uri
+
+    def test_a_uri_no_concept_holds_is_refused_by_the_database(self):
+        # The savepoint rolls the bad row back, so the test's own teardown check stays clean.
+        with pytest.raises(IntegrityError), transaction.atomic():
+            Specimen.objects.create(
+                name="Unknown", rock_type_id="https://example.org/no-such-concept"
+            )
+            connection.check_constraints(table_names=[Specimen._meta.db_table])
+
+
+class TestMultiConceptFieldConstruction:
     def test_fixes_to_record(self):
-        field = ConceptsField(vocabulary="rock-type")
+        field = MultiConceptField(vocabulary="rock-type")
 
         assert field.remote_field.model == "controlled_vocabularies.Record"
 
     @pytest.mark.django_db
     def test_construction_issues_no_queries(self):
         with CaptureQueriesContext(connection) as ctx:
-            ConceptsField(vocabulary="rock-type")
-            ConceptsField(vocabulary=["gcmd", "agu-index"])
-            ConceptsField()
+            MultiConceptField(vocabulary="rock-type")
+            MultiConceptField(vocabulary=["gcmd", "agu-index"])
+            MultiConceptField()
 
         assert len(ctx.captured_queries) == 0
 
     def test_rejects_consumer_supplied_through(self):
         # A consumer-supplied through model would silently drop the PROTECT guard.
         with pytest.raises(TypeError, match="through"):
-            ConceptsField(
+            MultiConceptField(
                 vocabulary="rock-type", through="controlled_vocabularies.Record"
             )
 
     def test_help_text_has_a_translatable_default(self):
-        field = ConceptsField(vocabulary="rock-type")
+        field = MultiConceptField(vocabulary="rock-type")
 
         assert isinstance(field.help_text, Promise)
         assert str(field.help_text)
 
     def test_help_text_default_is_overridable(self):
-        field = ConceptsField(vocabulary="rock-type", help_text="Pick some rock types.")
+        field = MultiConceptField(
+            vocabulary="rock-type", help_text="Pick some rock types."
+        )
 
         assert field.help_text == "Pick some rock types."
 
 
-class TestConceptsFieldMembershipModel:
+class TestMultiConceptFieldMembershipModel:
     def test_membership_model_is_named_owner_fieldname(self):
         field = Deposit._meta.get_field("rock_types")
 
@@ -493,6 +539,21 @@ class TestConceptsFieldMembershipModel:
         owner_fk = field.remote_field.through._meta.get_field("deposit")
 
         assert owner_fk.remote_field.on_delete is CASCADE
+
+    @pytest.mark.django_db
+    def test_the_membership_models_concept_column_holds_the_concepts_uri(self):
+        concepts = RecordFactory.create_batch(
+            2, scheme=ConceptSchemeFactory(name="Rock Type")
+        )
+        deposit = DepositFactory()
+        deposit.rock_types.set(concepts)
+        through = Deposit._meta.get_field("rock_types").remote_field.through
+
+        stored = through.objects.filter(deposit=deposit).values_list(
+            "record_id", flat=True
+        )
+
+        assert set(stored) == {concept.uri for concept in concepts}
 
     def test_deconstruct_still_emits_no_through_once_bound(self):
         # Meta.auto_created keeps ManyToManyField.deconstruct() from emitting it.
@@ -525,16 +586,16 @@ class TestConceptsFieldMembershipModel:
         assert not any(error.id in {"fields.E304", "fields.E305"} for error in errors)
 
     @isolate_apps("tests.testapp")
-    def test_declaring_two_concepts_fields_on_one_model_warns_of_nothing(self):
+    def test_declaring_two_multi_concept_fields_on_one_model_warns_of_nothing(self):
         # Skipping ManyToManyField's through generation must skip it, not call it and
         # then generate again: that registers the through model twice and Django
         # warns "was already registered".
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
 
-            class DoubleConceptsField(models.Model):
-                a = ConceptsField(vocabulary="mineral", related_name="+")
-                b = ConceptsField(vocabulary="mineral", related_name="+")
+            class DoubleMultiConceptField(models.Model):
+                a = MultiConceptField(vocabulary="mineral", related_name="+")
+                b = MultiConceptField(vocabulary="mineral", related_name="+")
 
                 class Meta:
                     app_label = "testapp"
@@ -574,7 +635,7 @@ class TestConsumingModelMigrations:
 
 
 @pytest.mark.django_db
-class TestConceptsFieldConsumingModels:
+class TestMultiConceptFieldConsumingModels:
     def test_all_seven_factories_build_valid_saved_rows(self):
         assert DepositFactory().pk is not None
         assert SurveyFactory().pk is not None
@@ -624,7 +685,7 @@ class TestConceptsFieldConsumingModels:
         assert concept in photograph.keywords.all()
 
 
-class TestConceptsFieldMetadata:
+class TestMultiConceptFieldMetadata:
     @pytest.mark.parametrize(
         ("model", "field_name"),
         [
@@ -637,7 +698,7 @@ class TestConceptsFieldMetadata:
             (Photograph, "keywords"),
         ],
     )
-    def test_every_concepts_field_has_translatable_help_text_and_a_verbose_name(
+    def test_every_multi_concept_field_has_translatable_help_text_and_a_verbose_name(
         self, model, field_name
     ):
         field = model._meta.get_field(field_name)
@@ -648,7 +709,7 @@ class TestConceptsFieldMetadata:
 
 
 @pytest.mark.django_db
-class TestConceptsFieldAttachAndReadBack:
+class TestMultiConceptFieldAttachAndReadBack:
     def test_two_attached_concepts_are_returned_and_no_third(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
         first = RecordFactory(scheme=scheme)
@@ -698,7 +759,7 @@ class TestConceptsFieldAttachAndReadBack:
 
 
 @pytest.mark.django_db
-class TestConceptsFieldWritePathVocabularyCheck:
+class TestMultiConceptFieldWritePathVocabularyCheck:
     def test_add_of_a_concept_from_an_unnamed_vocabulary_is_refused_and_the_set_is_unchanged(
         self,
     ):
@@ -791,7 +852,7 @@ class TestConceptsFieldWritePathVocabularyCheck:
 
 
 @pytest.mark.django_db
-class TestConceptsFieldCollectionRestrictionWritePath:
+class TestMultiConceptFieldCollectionRestrictionWritePath:
     def test_forward_add_of_a_non_member_is_refused_and_the_set_is_unchanged(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
         collection, members = collection_with_members(
@@ -869,7 +930,7 @@ class TestConceptsFieldCollectionRestrictionWritePath:
 
 
 @pytest.mark.django_db
-class TestConceptsFieldSeveralVocabulariesWritePath:
+class TestMultiConceptFieldSeveralVocabulariesWritePath:
     def test_a_concept_from_either_named_vocabulary_attaches(self):
         rock_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
         mineral_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
@@ -895,7 +956,7 @@ class TestConceptsFieldSeveralVocabulariesWritePath:
 
 
 @pytest.mark.django_db
-class TestConceptsFieldNoVocabularyWritePath:
+class TestMultiConceptFieldNoVocabularyWritePath:
     def test_concepts_from_several_distinct_vocabularies_all_attach_and_none_is_refused(
         self,
     ):
@@ -919,7 +980,7 @@ class DepositForm(forms.ModelForm):
 
 
 @pytest.mark.django_db
-class TestConceptsFieldFormChoices:
+class TestMultiConceptFieldFormChoices:
     def test_form_field_offers_only_the_named_vocabularys_concepts(self):
         matching_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
         other_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
@@ -933,7 +994,7 @@ class TestConceptsFieldFormChoices:
         other_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
 
         form = DepositForm(
-            data={"name": "Wrong vocabulary", "rock_types": [other_concept.pk]}
+            data={"name": "Wrong vocabulary", "rock_types": [other_concept.uri]}
         )
 
         assert not form.is_valid()
@@ -943,7 +1004,7 @@ class TestConceptsFieldFormChoices:
     def test_valid_submission_saves_and_the_memberships_appear(self):
         concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
 
-        form = DepositForm(data={"name": "Granite deposit", "rock_types": [concept.pk]})
+        form = DepositForm(data={"name": "Granite deposit", "rock_types": [concept.uri]})
 
         assert form.is_valid(), form.errors
         deposit = form.save()
@@ -959,7 +1020,7 @@ class FieldNoteForm(forms.ModelForm):
 
 
 @pytest.mark.django_db
-class TestConceptsFieldSeveralVocabulariesFormChoices:
+class TestMultiConceptFieldSeveralVocabulariesFormChoices:
     def test_form_field_offers_the_concepts_of_both_named_vocabularies_and_no_others(
         self,
     ):
@@ -983,7 +1044,7 @@ class PhotographForm(forms.ModelForm):
 
 
 @pytest.mark.django_db
-class TestConceptsFieldNoVocabularyFormChoices:
+class TestMultiConceptFieldNoVocabularyFormChoices:
     def test_form_field_offers_every_concept_in_the_database_and_no_collection(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
         collection, members = collection_with_members(scheme=scheme)
@@ -996,7 +1057,7 @@ class TestConceptsFieldNoVocabularyFormChoices:
 
 
 @pytest.mark.django_db
-class TestConceptsFieldDeleteGuard:
+class TestMultiConceptFieldDeleteGuard:
     def test_deleting_a_held_concept_is_refused(self):
         concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
         deposit = DepositFactory()
@@ -1081,7 +1142,7 @@ class TestConceptsFieldDeleteGuard:
 
 
 @pytest.mark.django_db
-class TestConceptsFieldLabelAndUriAccessors:
+class TestMultiConceptFieldLabelAndUriAccessors:
     def test_labels_accessor_returns_the_active_languages_label_for_each_attached_concept(
         self, multilingual_scheme
     ):
@@ -1121,7 +1182,7 @@ class TestConceptsFieldLabelAndUriAccessors:
         assert photograph.get_keywords_uris() == []
 
 
-class TestConceptsFieldAccessorsWithoutADatabase:
+class TestMultiConceptFieldAccessorsWithoutADatabase:
     def test_both_accessors_return_an_empty_list_on_an_unsaved_row_rather_than_raising(
         self,
     ):
@@ -1134,8 +1195,8 @@ class TestConceptsFieldAccessorsWithoutADatabase:
 
     @isolate_apps("tests.testapp")
     def test_a_models_own_definition_survives_the_contribution_guard(self):
-        class OwnLabelsConceptsFieldModel(models.Model):
-            keywords = ConceptsField(blank=True, related_name="+")
+        class OwnLabelsMultiConceptFieldModel(models.Model):
+            keywords = MultiConceptField(blank=True, related_name="+")
 
             class Meta:
                 app_label = "testapp"
@@ -1143,7 +1204,7 @@ class TestConceptsFieldAccessorsWithoutADatabase:
             def get_keywords_labels(self):
                 return ["this model's own labels, not the field's"]
 
-        instance = OwnLabelsConceptsFieldModel()
+        instance = OwnLabelsMultiConceptFieldModel()
 
         assert instance.get_keywords_labels() == [
             "this model's own labels, not the field's"
@@ -1159,7 +1220,7 @@ class OutcropForm(forms.ModelForm):
 
 
 @pytest.mark.django_db
-class TestConceptsFieldRequiredSet:
+class TestMultiConceptFieldRequiredSet:
     @pytest.mark.django_db
     def test_an_optional_field_with_an_empty_set_validates(self):
         outcrop = OutcropFactory()
@@ -1243,7 +1304,7 @@ class TestConceptsFieldRequiredSet:
         # subclass is already covered by the one it inherits. Installing a
         # second around it would report every empty required field twice.
         class Parent(models.Model):
-            firsts = ConceptsField(
+            firsts = MultiConceptField(
                 vocabulary="rock-type", verbose_name="firsts", help_text="the first set"
             )
 
@@ -1251,7 +1312,7 @@ class TestConceptsFieldRequiredSet:
                 app_label = "testapp"
 
         class Child(Parent):
-            seconds = ConceptsField(
+            seconds = MultiConceptField(
                 vocabulary="rock-type",
                 verbose_name="seconds",
                 help_text="the second set",
@@ -1260,12 +1321,12 @@ class TestConceptsFieldRequiredSet:
             class Meta:
                 app_label = "testapp"
 
-        assert Parent.__dict__["full_clean"].concepts_field_required_set_check
+        assert Parent.__dict__["full_clean"].multi_concept_field_required_set_check
         assert "full_clean" not in Child.__dict__
         assert {
             field.name
             for field in Child._meta.get_fields()
-            if isinstance(field, ConceptsField)
+            if isinstance(field, MultiConceptField)
         } == {
             "firsts",
             "seconds",
@@ -1292,7 +1353,7 @@ class TestConceptsFieldRequiredSet:
         assert not deposit.rock_types.exists()
 
         form = DepositForm(
-            data={"name": deposit.name, "rock_types": [concept.pk]}, instance=deposit
+            data={"name": deposit.name, "rock_types": [concept.uri]}, instance=deposit
         )
 
         assert form.is_valid(), form.errors
@@ -1529,7 +1590,7 @@ class TestConceptFieldFormChoices:
         other_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
 
         form = SpecimenForm(
-            data={"name": "Wrong vocabulary", "rock_type": other_concept.pk}
+            data={"name": "Wrong vocabulary", "rock_type": other_concept.uri}
         )
 
         assert not form.is_valid()
@@ -1764,7 +1825,7 @@ class TestWriteGuardRefusalsAreTranslatable:
 # Article XII. Wrapping one in _() would break nothing visible, so only a test stops a
 # later pass doing it.
 class TestDeclarationRuleTypeErrorsStayUntranslated:
-    @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
+    @pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
     def test_a_collection_naming_no_vocabulary_raises_a_plain_string(self, field_class):
         with pytest.raises(TypeError) as excinfo:
             field_class(collection="core-samples")
@@ -1772,7 +1833,7 @@ class TestDeclarationRuleTypeErrorsStayUntranslated:
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str
 
-    @pytest.mark.parametrize("field_class", [ConceptField, ConceptsField])
+    @pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
     def test_a_non_string_collection_raises_a_plain_string(self, field_class):
         with pytest.raises(TypeError) as excinfo:
             field_class(vocabulary="rock-type", collection=42)
@@ -1787,9 +1848,9 @@ class TestDeclarationRuleTypeErrorsStayUntranslated:
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str
 
-    def test_concepts_fields_own_through_setting_raises_a_plain_string(self):
+    def test_multi_concept_fields_own_through_setting_raises_a_plain_string(self):
         with pytest.raises(TypeError) as excinfo:
-            ConceptsField(vocabulary="rock-type", through="whatever")
+            MultiConceptField(vocabulary="rock-type", through="whatever")
 
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str

@@ -24,9 +24,9 @@ __all__ = [
     "ConceptWidgetReferenceMixin",
     "ConceptWidgetRouteMixin",
     "ConceptWidgetValidationMixin",
-    "ConceptsChoiceField",
-    "ConceptsWidget",
     "DeclinesAdminRelatedWrapperMixin",
+    "MultiConceptChoiceField",
+    "MultiConceptWidget",
 ]
 
 MISSING_ROUTE_MESSAGE = _(
@@ -46,7 +46,7 @@ def tomselect_config() -> TomSelectConfig:
     # css_framework takes the enum's value: TomSelectConfig.validate() rejects the member itself.
     return TomSelectConfig(
         url=AUTOCOMPLETE_URL_NAME,
-        value_field="id",
+        value_field="uri",
         label_field="display_label",
         css_framework=AllowedCSSFrameworks.DEFAULT.value,  # type: ignore[arg-type]
     )
@@ -129,14 +129,14 @@ class ConceptWidget(
         js = ["controlled_vocabularies/js/concept-inline.js"]
 
 
-class ConceptsWidget(
+class MultiConceptWidget(
     ConceptWidgetRouteMixin,
     ConceptWidgetReferenceMixin,
     ConceptWidgetValidationMixin,
     ConceptWidgetDisplayMixin,
     TomSelectModelMultipleWidget,
 ):
-    """The control :class:`ConceptsChoiceField` renders."""
+    """The control :class:`MultiConceptChoiceField` renders."""
 
     class Media:
         js = ["controlled_vocabularies/js/concept-inline.js"]
@@ -183,10 +183,10 @@ class ConceptChoiceField(DeclinesAdminRelatedWrapperMixin, TomSelectModelChoiceF
         self.widget.model_field = model_field
 
 
-class ConceptsChoiceField(  # type: ignore[misc]
+class MultiConceptChoiceField(  # type: ignore[misc]
     DeclinesAdminRelatedWrapperMixin, TomSelectModelMultipleChoiceField
 ):
-    """The form field :class:`~controlled_vocabularies.fields.ConceptsField` renders as.
+    """The form field :class:`~controlled_vocabularies.fields.MultiConceptField` renders as.
 
     Args:
         *args: Passed to ``TomSelectModelMultipleChoiceField``.
@@ -195,7 +195,7 @@ class ConceptsChoiceField(  # type: ignore[misc]
         **kwargs: Passed to ``TomSelectModelMultipleChoiceField``.
     """
 
-    widget_class = ConceptsWidget
+    widget_class = MultiConceptWidget
 
     def __init__(self, *args, model_field=None, **kwargs):
         kwargs.setdefault("config", tomselect_config())

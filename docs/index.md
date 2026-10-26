@@ -10,7 +10,7 @@ how to install it, and the shortest example that works. These pages are the manu
 
 - **[Configuration](configuration.md)** — the base address identifiers are composed from, and how a
   row's URI and slug are made and kept.
-- **[Attaching concepts to your models](fields.md)** — `ConceptField` and `ConceptsField`,
+- **[Attaching concepts to your models](fields.md)** — `ConceptField` and `MultiConceptField`,
   restricting either to the vocabularies you name, and narrowing further to the members of a
   collection.
 - **[Choosing a concept](search.md)** — the search-as-you-type control in your own forms and on

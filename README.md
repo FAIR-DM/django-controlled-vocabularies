@@ -148,15 +148,16 @@ class Specimen(models.Model):
 ```
 
 The field is a `ForeignKey` to a `Record`, the model that holds each concept, restricted to the
-vocabulary you name. A form built from
+vocabulary you name. Its column holds the concept's URI, so the value reads on its own without a
+join. A form built from
 the model offers that vocabulary's concepts through a search box, a concept from anywhere else is
 refused, and a concept a record still points at cannot be deleted. Read it back by label or by
 address:
 
 ```python
-specimen.rock_type              # the attached Record, or None
+specimen.rock_type  # the attached Record, or None
 specimen.get_rock_type_label()  # its name in the active language
-specimen.get_rock_type_uri()    # its URI
+specimen.get_rock_type_uri()  # its URI
 ```
 
 ## Documentation

@@ -30,8 +30,17 @@ All notable changes to this project are documented in this file. The format foll
 - **Breaking:** the migrations start again at a new `0001_initial`, and no data migration is
   provided. A site on 0.1.0 imports its vocabularies again from their published files after
   upgrading, and attaches concepts again to the rows of its own models that referenced them.
-- **Breaking:** `ConceptField` and `ConceptsField` point at `Record`, limited to concepts, in place
-  of `Concept`. `vocabulary=` and `collection=` are unchanged.
+- **Breaking:** `ConceptField` and `MultiConceptField` point at `Record`, limited to concepts, in
+  place of `Concept`. `vocabulary=` and `collection=` are unchanged.
+- **Breaking:** the column a `ConceptField` adds, and the concept column of the table a
+  `MultiConceptField` links through, hold the concept's URI in place of its database id
+  (`to_field="uri"`, still `on_delete=PROTECT`). A default can be written as a URI,
+  `get_<field>_uri()` reads the column without a query, and the search control and its endpoint
+  submit and return a concept's `uri` in place of its `id`. `makemigrations` cannot see the change,
+  so a project regenerates the migrations of the models that declare these fields (#220).
+- **Breaking:** `ConceptsField` is renamed `MultiConceptField`, its form field
+  `ConceptsChoiceField` is renamed `MultiConceptChoiceField` and its widget `ConceptsWidget` is
+  renamed `MultiConceptWidget`. The old names are removed (#222).
 - **Breaking:** an import keeps every statement it reads, in every language, including notations,
   mappings to other vocabularies and statements outside SKOS. This closes the concern of #181:
   notations and mappings are no longer discarded. A run is refused only for a subject with no usable
@@ -87,8 +96,8 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Removed
 
-- **Breaking:** the `branch=` and `concepts=` arguments of `ConceptField` and `ConceptsField`. A
-  field can be narrowed to a collection with `collection=`, which needs one vocabulary.
+- **Breaking:** the `branch=` and `concepts=` arguments of `ConceptField` and `MultiConceptField`.
+  A field can be narrowed to a collection with `collection=`, which needs one vocabulary.
 - **Breaking:** the helpers on the old models, among them `add_label`, `add_note`, `add_broader`,
   `add_related`, `Collection.add`, `set_slug` and `get_by_uri`, and the `static_uri` and
   `has_static_uri` attributes. A row has one `uri`: an imported row keeps its publisher's, and
