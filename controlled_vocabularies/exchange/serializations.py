@@ -44,7 +44,6 @@ class Serialization:
         negotiable: Whether rdflib registers a media type for it, so ``Accept`` can pick
             it.
         extension: The file extension, without the dot.
-        quads: Whether it is written from a ``Dataset`` rather than a ``Graph``.
     """
 
     name: str
@@ -52,7 +51,6 @@ class Serialization:
     media_type: str
     negotiable: bool
     extension: str
-    quads: bool
 
     @classmethod
     @functools.cache
@@ -91,25 +89,7 @@ class Serialization:
             media_type=(slashed or [MEDIA_TYPES.get(name, "text/plain")])[0],
             negotiable=bool(slashed),
             extension=EXTENSIONS.get(name) or next(suffixes, name),
-            quads=cls.refuses_a_graph(name),
         )
-
-    @staticmethod
-    def refuses_a_graph(name: str) -> bool:
-        """Return whether a serializer refuses a plain graph.
-
-        Args:
-            name: A name the serializer is registered under.
-
-        Returns:
-            True when writing an empty ``Graph`` with it raises, as ``nquads`` and
-            ``trix`` do because they only make sense for a store of several graphs.
-        """
-        try:
-            rdflib.Graph().serialize(format=name)
-        except Exception:
-            return True
-        return False
 
     @classmethod
     def named(cls, name: str) -> Serialization | None:
@@ -140,18 +120,23 @@ class Serialization:
     def serialize(self, graph: rdflib.Graph) -> bytes:
         """Write a graph in this serialization.
 
+        The statements are written from the default graph of a ``Dataset``, which every
+        serializer accepts. A format that names graphs, such as TriG or N-Quads, then
+        holds them in its default graph, where a reader expecting one graph finds them.
+
         Args:
             graph: The statements to write.
 
         Returns:
-            The encoded document. A quads serialization holds the statements in its
-            default graph.
+            The encoded document.
+
+        Raises:
+            ValueError: The format cannot express one of the graph's terms, as RDF/XML
+                cannot a predicate ending in ``/``.
         """
-        source: rdflib.Graph = graph
-        if self.quads:
-            source = rdflib.Dataset()
-            for prefix, namespace in graph.namespaces():
-                source.bind(prefix, namespace)
-            for triple in graph:
-                source.add(triple)
-        return source.serialize(format=self.name, encoding="utf-8")
+        dataset = rdflib.Dataset()
+        for prefix, namespace in graph.namespaces():
+            dataset.bind(prefix, namespace)
+        for triple in graph:
+            dataset.add(triple)
+        return dataset.serialize(format=self.name, encoding="utf-8")

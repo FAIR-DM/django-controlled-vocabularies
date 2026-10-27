@@ -1,6 +1,7 @@
 """Serve a page's subject as RDF when the request asks for it (FS-018)."""
 
 from django.http import HttpResponse
+from django.http.request import MediaType
 from django.utils.cache import patch_vary_headers
 from django.utils.http import content_disposition_header
 from django.utils.translation import gettext_lazy as _
@@ -56,21 +57,37 @@ class RepresentationMixin:
             subject = self.get_representation_subject()
             if serialization is None:
                 return self.unknown_format()
-            response = self.representation(subject, serialization)
+            download = True
+        else:
+            media_type = self.negotiated_media_type(request)
+            if media_type == "text/html":
+                return super().get(request, *args, **kwargs)
+            subject = self.get_representation_subject()
+            if media_type is None:
+                return self.refusal()
+            serialization = Serialization.for_media_type(media_type)
+            download = False
+        try:
+            body = serialization.serialize(subject.to_graph())
+        except ValueError:
+            # The format cannot express one of the row's terms, as RDF/XML cannot a
+            # predicate ending in "/". The row is still served in every other format.
+            return self.refusal()
+        response = HttpResponse(body, content_type=serialization.media_type)
+        if download:
             response["Content-Disposition"] = content_disposition_header(
                 as_attachment=True, filename=f"{subject.slug}.{serialization.extension}"
             )
-            return response
-        media_type = self.negotiated_media_type(request)
-        if media_type == "text/html":
-            return super().get(request, *args, **kwargs)
-        subject = self.get_representation_subject()
-        if media_type is None:
-            return self.refusal()
-        return self.representation(subject, Serialization.for_media_type(media_type))
+        return response
 
     def negotiated_media_type(self, request):
         """Choose between the page and the RDF media types from ``Accept``.
+
+        Each offered type takes the quality of the most specific accepted entry it
+        matches, with the entry's parameters set aside, so a JSON-LD ``profile`` or a
+        ``charset`` still selects its type. The highest quality wins. A tie goes to the
+        page, which is offered first, so a client that accepts anything and names Turtle
+        first still gets what a browser would.
 
         Args:
             request: The request.
@@ -79,32 +96,25 @@ class RepresentationMixin:
             ``"text/html"`` for the page, an RDF media type, or None when the request
             accepts nothing the site can produce.
         """
-        negotiable = [s.media_type for s in Serialization.all() if s.negotiable]
-        chosen = request.get_preferred_type(["text/html", *negotiable])
-        if chosen in (None, "text/html"):
-            return chosen
-        # A tie between HTML and RDF goes to the page, so a client that accepts anything
-        # and names Turtle first still gets what a browser would.
-        html = request.accepted_type("text/html")
-        if html is not None and html.quality == request.accepted_type(chosen).quality:
-            return "text/html"
-        return chosen
-
-    @staticmethod
-    def representation(subject, serialization):
-        """Write the subject's own statements in one serialization.
-
-        Args:
-            subject: A ``ConceptScheme`` or a ``Record``.
-            serialization: The ``Serialization`` to write.
-
-        Returns:
-            The response, carrying the serialization's media type.
-        """
-        return HttpResponse(
-            serialization.serialize(subject.to_graph()),
-            content_type=serialization.media_type,
-        )
+        offered = [
+            "text/html",
+            *(s.media_type for s in Serialization.all() if s.negotiable),
+        ]
+        best, best_quality = None, 0.0
+        for media_type in offered:
+            entry = next(
+                (
+                    accepted
+                    for accepted in request.accepted_types_by_precedence
+                    if MediaType(f"{accepted.main_type}/{accepted.sub_type}").match(
+                        media_type
+                    )
+                ),
+                None,
+            )
+            if entry is not None and entry.quality > best_quality:
+                best, best_quality = media_type, entry.quality
+        return best
 
     def refusal(self):
         """Build the 406 response for a request that accepts nothing on offer.

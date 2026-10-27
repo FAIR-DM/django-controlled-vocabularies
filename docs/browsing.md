@@ -436,8 +436,16 @@ is not given it: it gets a 406, described below.
   `Accept: text/turtle, text/html` and `Accept: text/turtle, */*` both give the page, because
   HTML is as acceptable as Turtle. Giving HTML a lower quality, as in
   `Accept: text/html;q=0.5, text/turtle`, gives Turtle.
+- Parameters on an accepted type do not stop it matching:
+  `Accept: application/ld+json; profile="http://www.w3.org/ns/json-ld#expanded"` and
+  `Accept: text/turtle; charset=utf-8` get JSON-LD and Turtle.
 - A header that names only types the site cannot produce, such as `Accept: application/json`,
   gets a plain-text `406 Not Acceptable` that lists the types on offer.
+- A row holding a term one format cannot express gets the same `406` for that format, by
+  `Accept` or by `?format=`, and is served in every other. RDF/XML, for one, cannot write a
+  property whose address ends in `/` or whose last part starts with a digit.
+- An entry with `q=0` is ignored rather than read as a refusal, so
+  `Accept: text/html;q=0, */*` still gets the page. Name the RDF type you want instead.
 - An address that names no vocabulary or record is a 404 whatever the header says.
 
 The RDF is returned inline, with no `Content-Disposition` header. Every response from these three
@@ -491,8 +499,8 @@ Each `href` is relative to the page's address and returns the media type named b
 ### On a view of your own
 
 The three pages get this from `RepresentationMixin`, in `controlled_vocabularies.ui.representations`.
-A project that serves a vocabulary or record from a view of its own can put the mixin leftmost in
-the view's bases and say what the subject is:
+A project that serves a vocabulary or record from a view of its own can list the mixin before
+the view class in its bases and say what the subject is:
 
 ```python
 from django.views.generic import DetailView
@@ -512,8 +520,8 @@ class TermView(RepresentationMixin, DetailView):
 The mixin also puts `rdf_alternates` in the template context, the list the page head's alternate
 links are drawn from.
 
-The mixin answers before the page is built, so the view's own access rules, such as a
-`LoginRequiredMixin` to its left, apply to the RDF exactly as they do to the page.
+The mixin answers in `get()`, after the view's `dispatch()`, so an access rule such as
+`LoginRequiredMixin` applies to the RDF exactly as it does to the page.
 
 ## Try it: the demo project
 

@@ -12,15 +12,16 @@ the row records, so FR-003's "nothing else" holds.
 
 **ADR:** docs/adr/0028-a-rows-rdf-is-its-own-document-and-its-class.md
 
-## D2. N-Quads and TriX are written from a dataset
+## D2. Every format is written from a dataset's default graph
 
-Both refuse a plain graph. The spec offers a format that writes a named set of graphs when the one
-graph can be written as such a set, and both can, from a `Dataset` whose default graph holds the
-statements. Which serializers need that is found by asking each one once, not by a list, so a
-later rdflib's context-only serializer is handled the same way. `patch` is the one serializer left
-out, because its output is a change set.
+N-Quads and TriX refuse a plain graph, and TriG accepts one but writes its statements into a graph
+named by a random blank node, which a reader expecting one graph reads as empty. Every serializer
+accepts a `Dataset`, so the graph is copied into a dataset's default graph and written from there
+for every format: a format that names graphs then holds the statements in its default graph, and
+the others write exactly what they wrote from the graph. `patch` is the one serializer left out,
+because its output is a change set.
 
-**ADR:** none — a detail of how two rdflib writers are called, local to the format table.
+**ADR:** none — a detail of how rdflib's writers are called, local to the format table.
 
 ## D3. On an equal rank, the page wins
 
@@ -89,3 +90,16 @@ two plain branches of `get()`, and negotiation returns a media type or `None`. B
 are unchanged.
 
 **ADR:** none — a cleanup with no change in behaviour.
+
+## D10. Review fixes: an unwritable term is a 406, and Accept parameters are set aside
+
+RDF/XML cannot write a property whose address ends in `/` or whose last part starts with a digit,
+and an import keeps such properties. That request is refused with the same 406 as a type the site
+cannot produce, and the row is served in every other format. An accepted type's parameters, such
+as a JSON-LD `profile` or a `charset`, are set aside when matching, because Django's matching does
+not let an accepted type with parameters match an offered type without them. Each offered type
+takes the quality of the most specific entry it matches, and the page is offered first, so a tie
+still gives the page. An entry with `q=0` is dropped by Django before matching, so it cannot be read
+as a refusal of HTML. No known client sends one, and the limitation is documented.
+
+**ADR:** none — local to the negotiation in one mixin, and documented in docs/browsing.md.

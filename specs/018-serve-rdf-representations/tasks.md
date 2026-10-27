@@ -72,7 +72,7 @@ As plan.md §2. Tests:
   on both sides; then `isomorphic`. Write and read back each graph several times with fresh blank
   nodes, because a serializer's output can depend on the order it visits blank nodes, which
   changes from run to run (D6);
-- `nquads` and `trix` are marked as written from a dataset, Turtle is not;
+- TriG and N-Quads read into one plain graph give back the statements: every format is written from a dataset's default graph (D2);
 - short names: Turtle `ttl`, RDF/XML `xml`, N-Triples `nt`, JSON-LD `json-ld`;
 - extensions: Turtle `ttl`, RDF/XML `rdf`, JSON-LD `jsonld`, N-Triples `nt`, `longturtle` `ttl`;
 - every serialization has a media type; exactly those rdflib registers a `/` name for are

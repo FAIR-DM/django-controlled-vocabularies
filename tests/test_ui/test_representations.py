@@ -271,6 +271,29 @@ class TestAcceptKeepsThePage:
 
         assert response["Content-Type"].split(";")[0] == "text/turtle"
 
+    @pytest.mark.parametrize(
+        ("accept", "media_type"),
+        [
+            (
+                'application/ld+json; profile="http://www.w3.org/ns/json-ld#expanded"',
+                "application/ld+json",
+            ),
+            (
+                'application/ld+json;profile="http://www.w3.org/ns/json-ld#compacted", '
+                "text/html;q=0.5",
+                "application/ld+json",
+            ),
+            ("text/turtle; charset=utf-8", "text/turtle"),
+        ],
+    )
+    def test_parameters_on_an_accepted_type_do_not_stop_it_matching(
+        self, client, subject, accept, media_type
+    ):
+        response = ask(client, subject, accept)
+
+        assert response.status_code == 200
+        assert response["Content-Type"].split(";")[0] == media_type
+
     def test_turtle_with_a_wildcard_at_the_same_quality_gives_the_page(
         self, client, subject
     ):
@@ -306,6 +329,26 @@ class TestAcceptRefusal:
 
         assert response.status_code == 406
         assert response["Content-Type"].startswith("text/plain")
+
+    def test_a_row_a_format_cannot_express_is_refused_not_a_server_error(
+        self, client, db
+    ):
+        # RDF/XML cannot write a predicate ending in "/", which an import keeps.
+        concept = RecordFactory(
+            data=labelled(
+                "Granite",
+                statements={"http://example.org/p/": [{"@value": "x"}]},
+            )
+        )
+
+        by_accept = ask(client, concept, "application/rdf+xml")
+        by_format = client.get(address(concept), {"format": "xml"})
+
+        for response in (by_accept, by_format):
+            assert response.status_code == 406
+            assert response["Content-Type"].startswith("text/plain")
+            assert "Content-Disposition" not in response
+        assert ask(client, concept, "text/turtle").status_code == 200
 
     def test_text_plain_alone_is_not_taken_for_ntriples(self, client, subject):
         response = ask(client, subject, "text/plain")
@@ -533,8 +576,9 @@ class TestFormatRefusal:
         assert response.status_code == 400
         assert not response["Content-Type"].startswith("text/html")
         body = response.content.decode()
+        names = body.rsplit(":", 1)[1].strip(" .\n").split(", ")
         for name in ("ttl", "xml", "json-ld", "nt"):
-            assert name in body
+            assert name in names
 
     def test_an_unknown_name_is_not_settled_by_accept(self, client, subject):
         response = client.get(

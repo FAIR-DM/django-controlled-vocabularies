@@ -180,7 +180,10 @@ turtle.media_type, turtle.extension  # ("text/turtle", "ttl")
 
 The list follows the installed rdflib. Two of its writers are left out: `patch`, whose output is a
 change between graphs, and `pretty-xml`, which can repeat part of an RDF list (`xml` writes the
-same syntax). N-Quads and TriX are written as a dataset whose default graph holds the statements.
+same syntax). A format that names graphs, such as TriG, N-Quads or TriX, holds the statements in
+its default graph, so a reader expecting one graph finds them there. `serialize()` raises
+`ValueError` when the format cannot express one of the graph's terms, as RDF/XML cannot a
+property whose address ends in `/`.
 
 ## What an import keeps
 

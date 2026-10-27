@@ -51,9 +51,9 @@ registered serializer, as a `Graph` and as a `Dataset` holding it in its default
 | Patch | `patch` | refused | yes, as a change set |
 
 - **Offered:** every serializer but `patch` and `pretty-xml`. Its output is a set of additions and deletions, a
-  change between graphs, which FR-002 excludes. N-Quads and TriX refuse a plain graph and are
-  written from a `Dataset` whose default graph holds the statements. That is the "named set of
-  graphs" case the spec allows.
+  change between graphs, which FR-002 excludes. N-Quads and TriX refuse a plain graph, and TriG
+  writes a plain graph into a graph named by a random blank node. Every format is therefore
+  written from a `Dataset` whose default graph holds the statements (D2).
 - **Names:** every name rdflib registers for an offered serializer is accepted by `?format=`. The
   list is read from `rdflib.plugin.plugins(kind=Serializer)` at request time, so a serializer a
   later rdflib adds is offered with no change here (FR-002).

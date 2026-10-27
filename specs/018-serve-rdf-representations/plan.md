@@ -70,7 +70,6 @@ class Serialization:
     media_type: str     # what Content-Type carries
     negotiable: bool    # whether rdflib registers a media type for it, so Accept can pick it
     extension: str
-    quads: bool         # written from a Dataset, not a Graph
 
     @classmethod
     def all(cls) -> list["Serialization"]: ...          # cached
@@ -90,10 +89,8 @@ class Serialization:
   `hext`), otherwise `text/plain`.
 - `extension`: `EXTENSIONS` override first, else the first suffix in
   `rdflib.util.SUFFIX_FORMAT_MAP` that maps to one of the names, else `name`.
-- `quads`: `nquads` and `trix`, detected by trying the serializer on an empty `Graph` once and
-  catching its refusal, cached with the table. A hard-coded pair would miss a later context-only
-  serializer, and the check runs once per process.
-- `serialize()` wraps the graph in a `Dataset`'s default graph when `quads` is set.
+- `serialize()` copies the graph into a `Dataset`'s default graph and writes that, for every
+  format (D2).
 - `all()` is computed once (`functools.cache`).
 
 ### 3. `controlled_vocabularies/ui/representations.py` (new, UI)

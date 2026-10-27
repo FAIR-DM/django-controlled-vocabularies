@@ -3,6 +3,7 @@
 import pytest
 import rdflib
 import rdflib.plugin
+from rdflib.compare import isomorphic
 from rdflib.serializer import Serializer
 
 from controlled_vocabularies.exchange.graph import document_graph
@@ -76,12 +77,31 @@ class TestSerializationTable:
         assert Serialization.named("no-such-format") is None
         assert Serialization.for_media_type("text/x-nothing") is None
 
-    @pytest.mark.parametrize("name", ["nquads", "trix"])
-    def test_dataset_serializers_are_marked_quads(self, name):
-        assert by_name(name).quads is True
+    @pytest.mark.parametrize("name", ["trig", "nquads"])
+    def test_a_format_that_names_graphs_holds_the_statements_in_its_default_graph(
+        self, name
+    ):
+        # Read into one plain graph, as a client expecting one graph does. Writing the
+        # graph directly would put the statements in a graph named by a random blank
+        # node, and this would read back nothing.
+        graph = rdflib.Graph()
+        subject = rdflib.URIRef("http://example.org/c")
+        graph.add((subject, rdflib.RDFS.label, rdflib.Literal("C", lang="en")))
+        graph.add((subject, rdflib.RDFS.seeAlso, rdflib.URIRef("http://example.org/d")))
+        body = by_name(name).serialize(graph)
+        assert isomorphic(rdflib.Graph().parse(data=body, format=name), graph)
 
-    def test_turtle_is_not_written_from_a_dataset(self):
-        assert by_name("ttl").quads is False
+    def test_a_term_the_format_cannot_express_raises_value_error(self):
+        graph = rdflib.Graph()
+        graph.add(
+            (
+                rdflib.URIRef("http://example.org/c"),
+                rdflib.URIRef("http://example.org/p/"),
+                rdflib.Literal("x"),
+            )
+        )
+        with pytest.raises(ValueError):
+            by_name("xml").serialize(graph)
 
     @pytest.mark.parametrize(
         ("name", "extension"),
