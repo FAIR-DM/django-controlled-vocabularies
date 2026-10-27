@@ -445,6 +445,35 @@ pages, the HTML page included, carries `Vary: Accept`, so a cache keeps the page
 type apart. A view that a project has put behind a login requirement answers an RDF request the
 way it answers a browser: the requirement runs first.
 
+### Downloading a file with `?format=`
+
+Adding `?format=` to the address of any of the three pages returns the same statements as a file
+download. The value is a short name or a media type that the installed rdflib can write:
+
+| `?format=` | Format | File extension |
+|---|---|---|
+| `ttl` | Turtle | `.ttl` |
+| `xml` | RDF/XML | `.rdf` |
+| `json-ld` | JSON-LD | `.jsonld` |
+| `nt` | N-Triples | `.nt` |
+
+Every other serializer rdflib registers answers to its own name as well, and a media type such as
+`?format=text/turtle` is accepted as a name.
+
+```bash
+curl -OJ 'http://127.0.0.1:8000/browse/data-collection-methods/fieldwork/?format=ttl'
+```
+
+The response carries a `Content-Disposition: attachment` header and the file is named after the
+subject's slug and the format's extension, so the example above saves `fieldwork.ttl`. A concept or
+collection is named by its own slug alone, not the vocabulary's. On a vocabulary's page the
+download holds the vocabulary's own statements, whatever `?q=` or the other list parameters say.
+
+`?format=` decides on its own: when it is present the `Accept` header is not read, so
+`?format=xml` with `Accept: text/turtle` returns RDF/XML. A name the site does not offer, including
+an empty one, gets a plain-text `400 Bad Request` that lists the short names on offer. An address
+that names no vocabulary or record is a 404 whatever `?format=` says.
+
 ### Finding the RDF from the page
 
 Each of the three pages names its RDF alternatives in its `<head>`, in the order Turtle, RDF/XML,
