@@ -8,6 +8,15 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Added
 
+- A vocabulary's page and a concept's or collection's page answer with RDF. A client asking
+  for an RDF media type in `Accept` gets the row's own statements in that serialization at the
+  page's address, and `?format=` downloads them as `<slug>.<extension>` in any format the
+  installed rdflib writes faithfully. A browser still gets the page. Each page names its Turtle,
+  RDF/XML, JSON-LD and N-Triples alternatives in its `<head>` (#231). See
+  [Asking a page for RDF](docs/browsing.md#asking-a-page-for-rdf) and
+  [ADR 0028](docs/adr/0028-a-rows-rdf-is-its-own-document-and-its-class.md).
+- `to_graph()` on `ConceptScheme` and `Record` returns the row's own statements as an
+  `rdflib.Graph`, and `Serialization` lists the formats it can be written in.
 - The demo project serves the package's documentation as its pages. `docs/` is built with Sphinx
   and MyST by `manage.py build_docs` and served inside the application shell by django-mvp-sphinx,
   a development dependency. The root address opens the documentation's front page, and the sidebar
