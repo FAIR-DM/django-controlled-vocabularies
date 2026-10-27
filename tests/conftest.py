@@ -5,6 +5,11 @@ import socket
 import threading
 
 import pytest
+import rdflib
+import rdflib.parser
+import rdflib.plugin
+from rdflib.compare import isomorphic
+from rdflib.namespace import XSD
 
 from tests.factories import ConceptSchemeFactory, RecordFactory
 
@@ -167,3 +172,84 @@ def hanging_socket():
         yield f"http://127.0.0.1:{port}/"
     finally:
         sock.close()
+
+
+class RdfReadBack:
+    """Read serialized RDF back into statements so two renderings can be compared."""
+
+    @staticmethod
+    def parse(serialization, data):
+        """Parse serialized bytes into one graph holding the statements of all its graphs.
+
+        The parser is the one rdflib registers under the serialization's name, else the
+        one registered under its media type.
+
+        Args:
+            serialization: The ``Serialization`` the bytes were written in.
+            data: The serialized bytes.
+
+        Returns:
+            A graph of every statement, whichever graph of the document held it.
+        """
+        for name in (serialization.name, serialization.media_type):
+            try:
+                rdflib.plugin.get(name, rdflib.parser.Parser)
+            except rdflib.plugin.PluginException:
+                continue
+            break
+        dataset = rdflib.Dataset()
+        dataset.parse(data=data, format=name)
+        statements = rdflib.Graph()
+        for subject, predicate, obj, _graph in dataset.quads():
+            statements.add((subject, predicate, obj))
+        return statements
+
+    @staticmethod
+    def plain(graph):
+        """Return a copy of ``graph`` with every ``xsd:string`` literal made plain.
+
+        Args:
+            graph: The graph to normalise.
+
+        Returns:
+            The copy.
+        """
+        normalised = rdflib.Graph()
+        for subject, predicate, obj in graph:
+            if isinstance(obj, rdflib.Literal) and obj.datatype == XSD.string:
+                obj = rdflib.Literal(str(obj))
+            normalised.add((subject, predicate, obj))
+        return normalised
+
+    @classmethod
+    def same_statements(cls, left, right):
+        """Return whether two graphs state the same thing, treating blank nodes as unnamed.
+
+        Args:
+            left: One graph.
+            right: The other.
+
+        Returns:
+            True when they are isomorphic once ``xsd:string`` literals are made plain.
+        """
+        return isomorphic(cls.plain(left), cls.plain(right))
+
+    @classmethod
+    def survives(cls, serialization, graph):
+        """Return whether a graph written in a serialization reads back unchanged.
+
+        Args:
+            serialization: The ``Serialization`` to write in.
+            graph: The graph to write.
+
+        Returns:
+            True when the output parses back to the same statements.
+        """
+        return cls.same_statements(
+            cls.parse(serialization, serialization.serialize(graph)), graph
+        )
+
+
+@pytest.fixture
+def rdf_read_back():
+    return RdfReadBack
