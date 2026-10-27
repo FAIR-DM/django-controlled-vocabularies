@@ -66,7 +66,7 @@ path of this setting (see [browsing vocabularies](browsing.md#a-vocabularys-own-
 
 The package runs on any database Django supports. On PostgreSQL, its migrations also enable the
 `pg_trgm` extension and add the two trigram indexes concept search uses (see
-[searching a large vocabulary](choosing-a-concept.md#searching-a-large-vocabulary)). There is
+[searching a large vocabulary](how-to/choosing-a-concept.md#searching-a-large-vocabulary)). There is
 nothing to configure, and `django.contrib.postgres` does not need to be in `INSTALLED_APPS`.
 
 Enabling the extension needs a database user allowed to create one. `pg_trgm` is a trusted

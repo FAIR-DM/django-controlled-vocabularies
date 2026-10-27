@@ -76,7 +76,7 @@ page restricted wraps the include where it mounts these routes.
 ## Wiring it up
 
 This section adds to the package's base configuration rather than replacing it: `django_tomselect`
-and its middleware are still required, as [choosing a concept by typing](choosing-a-concept.md#choosing-a-concept-by-typing)
+and its middleware are still required, as [choosing a concept by typing](how-to/choosing-a-concept.md#choosing-a-concept-by-typing)
 describes, and `manage.py check` says so on startup if they are missing.
 
 Add the ui app and django-mvp's own stack to `INSTALLED_APPS` — quoted from this package's own

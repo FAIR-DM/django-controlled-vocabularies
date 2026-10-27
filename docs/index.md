@@ -14,8 +14,8 @@ shortest example that works. These pages are the manual.
 - **[Attaching concepts to your models](fields.md)** — `ConceptField` and `MultiConceptField`,
   restricting either to the vocabularies you name, and narrowing further to the members of a
   collection.
-- **[Choosing a concept](choosing-a-concept.md)** — the search-as-you-type control in your own
-  forms and on Django admin pages, and the three wiring steps it needs.
+- **[Choosing a concept](how-to/choosing-a-concept.md)** — the search-as-you-type control in your
+  own forms and on Django admin pages, and the three wiring steps it needs.
 - **[Browsing vocabularies](browsing.md)** — the opt-in `ui` extra: the list of vocabularies, a
   page for each vocabulary, concept and collection, and the runnable demo project.
 - **[Importing a published vocabulary](importing.md)** — declaring your site's vocabularies and
@@ -28,7 +28,7 @@ shortest example that works. These pages are the manual.
 
 configuration
 fields
-choosing-a-concept
+how-to/choosing-a-concept
 browsing
 importing
 ```
