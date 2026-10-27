@@ -8,6 +8,15 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Added
 
+- A concept field can be restricted to a branch of its vocabulary's hierarchy:
+  `ConceptField(vocabulary=ROCK_TYPE, branch="https://vocab.example.org/rock-type/igneous")`, and
+  the same on `MultiConceptField`. The field offers that concept and every concept below it, found
+  from the `skos:broader` and `skos:narrower` links either side states, and a collection is never
+  offered. It needs exactly one vocabulary and cannot be combined with `collection`. A root that is
+  not a concept of the vocabulary is reported by `controlled_vocabularies.W005`. See
+  [ADR 0027](docs/adr/0027-a-field-may-be-restricted-to-a-branch-read-from-the-links-table.md).
+- `RecordQuerySet.in_branch(scheme_uri, root_uri)` returns a record and every record below it in
+  one vocabulary.
 - A concept field can say where its vocabulary is published:
   `ConceptField(vocabulary=Vocabulary(uri, source=..., format=...))`. `manage.py
   sync_vocabularies` loads every vocabulary a field on an installed model names, including a field
