@@ -32,7 +32,9 @@ changes never take a shortened review path.
 ### Article VI — Documentation
 Public API changes ship their docs in the same PR: README + CHANGELOG updated. Docstrings,
 component annotations and code comments follow
-[`docs/contributing/standards/code-documentation.md`](docs/contributing/standards/code-documentation.md). If the repo ships
+[`docs/contributing/standards/code-documentation.md`](docs/contributing/standards/code-documentation.md). The pages under
+`docs/` and the README's quickstart follow
+[`docs/contributing/standards/documentation.md`](docs/contributing/standards/documentation.md). If the repo ships
 built docs, they must build clean. The README follows the project's README standard (package:
 `## Scope and philosophy` is mandatory).
 
@@ -166,4 +168,4 @@ index (absolute URLs); the public API honours the deprecation policy (Article VI
 
 ---
 
-**Version**: 2.2.0 | **Ratified**: 2026-07-22 | **Last Amended**: 2026-10-26
+**Version**: 2.3.0 | **Ratified**: 2026-07-22 | **Last Amended**: 2026-10-27

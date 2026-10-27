@@ -41,6 +41,8 @@ importing
   component annotations and comments.
 - **[Django standards](contributing/standards/django.md)** — where code lives, and when a new
   abstraction is worth adding.
+- **[Documentation standards](contributing/standards/documentation.md)** — how pages are split into
+  tutorial, how-to, reference and explanation, and how the README quickstart is written.
 
 ```{toctree}
 :caption: Contributing
@@ -49,6 +51,7 @@ importing
 contributing/standards/testing
 contributing/standards/code-documentation
 contributing/standards/django
+contributing/standards/documentation
 ```
 
 ## Direction and decisions
