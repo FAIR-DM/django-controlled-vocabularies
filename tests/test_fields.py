@@ -61,6 +61,7 @@ from tests.testapp.models import (
 
 ALL_SAMPLES = f"{ROCK_TYPE.uri}/collection/all-samples"
 NO_SUCH_COLLECTION = f"{ROCK_TYPE.uri}/collection/no-such-collection"
+NO_SUCH_CONCEPT = f"{ROCK_TYPE.uri}/no-such-concept"
 
 
 def admitted_by(field):
@@ -357,6 +358,70 @@ class TestSharedRestrictedHelpText:
         )
 
         assert field.help_text == "Pick a sample rock."
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
+class TestSharedBranchArgument:
+    def test_branch_defaults_to_none(self, field_class):
+        assert field_class(vocabulary=ROCK_TYPE.uri).branch is None
+
+    def test_branch_stores_the_uri(self, field_class):
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+
+        assert field.branch == NO_SUCH_CONCEPT
+
+    @pytest.mark.parametrize("branch", [42, "", "igneous"])
+    def test_a_branch_that_is_not_a_uri_is_refused(self, field_class, branch):
+        with pytest.raises(TypeError):
+            field_class(vocabulary=ROCK_TYPE.uri, branch=branch)
+
+    def test_a_branch_naming_no_vocabulary_is_refused(self, field_class):
+        with pytest.raises(TypeError):
+            field_class(branch=NO_SUCH_CONCEPT)
+
+    def test_a_branch_naming_several_vocabularies_is_refused(self, field_class):
+        with pytest.raises(TypeError):
+            field_class(vocabulary=[ROCK_TYPE.uri, MINERAL.uri], branch=NO_SUCH_CONCEPT)
+
+    def test_a_branch_with_a_collection_is_refused(self, field_class):
+        with pytest.raises(TypeError, match="one restriction"):
+            field_class(
+                vocabulary=ROCK_TYPE.uri,
+                collection=CORE_SAMPLES,
+                branch=NO_SUCH_CONCEPT,
+            )
+
+    def test_branch_is_emitted_and_survives_the_round_trip(self, field_class):
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+
+        _, _, _, kwargs = field.deconstruct()
+        rebuilt = field_class(**kwargs)
+
+        assert kwargs["branch"] == NO_SUCH_CONCEPT
+        assert "collection" not in kwargs
+        assert rebuilt.branch == NO_SUCH_CONCEPT
+
+    def test_no_branch_is_not_emitted(self, field_class):
+        _, _, _, kwargs = field_class(vocabulary=ROCK_TYPE.uri).deconstruct()
+
+        assert "branch" not in kwargs
+
+    def test_clone_rebuilds_a_branch_restricted_field(self, field_class):
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+
+        assert field.clone().branch == NO_SUCH_CONCEPT
+
+    def test_a_branch_restricted_field_gets_the_restricted_default(self, field_class):
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+
+        assert field.help_text == field_class.default_restricted_help_text
+
+    def test_construction_issues_no_query(self, field_class):
+        with CaptureQueriesContext(connection) as ctx:
+            field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT).deconstruct()
+
+        assert len(ctx.captured_queries) == 0
 
 
 # Q objects wrapping a subquery compare by identity, so every test evaluates the
