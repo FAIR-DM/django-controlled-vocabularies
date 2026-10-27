@@ -1,0 +1,5 @@
+{# @description The links in a page's head to the same record or vocabulary written as RDF, for software that reads a page's head to find them. #}
+{# @prop alternates:list | description:"The representations, each a dict with a media_type and an href." #}
+<c-vars alternates />
+{% for alternate in alternates %}<link rel="alternate" type="{{ alternate.media_type }}" href="{{ alternate.href }}">
+{% endfor %}

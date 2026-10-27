@@ -1,6 +1,6 @@
 """Models for vocabularies and the records they hold, with SKOS statements in JSON."""
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
@@ -12,6 +12,9 @@ from django.utils.translation import get_language
 from django.utils.translation import gettext_lazy as _
 
 from controlled_vocabularies import conf
+
+if TYPE_CHECKING:
+    import rdflib
 
 PREF_LABEL_MAX_LENGTH = 255
 
@@ -142,6 +145,9 @@ class Resource(models.Model):
     #: Annotation only: a vocabulary has the column, a record reads its vocabulary's.
     default_language: str
 
+    #: The CURIE of the class stated for a row whose document states no ``rdf:type``.
+    rdf_class: str
+
     class Meta:
         abstract = True
 
@@ -205,6 +211,31 @@ class Resource(models.Model):
         return (
             str(entries[0].get("@value", entries[0].get("@id", ""))) if entries else ""
         )
+
+    def to_graph(self) -> "rdflib.Graph":
+        """Return the row's own statements as an RDF graph.
+
+        The graph holds what the row's document states about its ``uri`` and nothing
+        gathered from other rows. A document that states no ``rdf:type`` gets one from
+        ``rdf_class``, and a record whose document states no ``skos:inScheme`` gets its
+        own vocabulary: both are recorded by the row itself.
+
+        Returns:
+            The graph, with the row's ``uri`` as its subject.
+        """
+        # Imported here: the exchange package imports these models.
+        from controlled_vocabularies.exchange.graph import document_graph
+
+        return document_graph(self.uri, self.recorded_document(), self.rdf_class)
+
+    def recorded_document(self) -> dict:
+        """Return the document with what the row records outside it.
+
+        Returns:
+            The row's document, as stored.
+        """
+        document: dict = self.data
+        return document
 
     def minted_uri(self) -> str:
         """Return the URI for a row authored on this site, from its slug.
@@ -311,6 +342,7 @@ class ConceptScheme(Resource):
         ),
     )
     name_curies = ("skos:prefLabel", "dcterms:title")
+    rdf_class = "skos:ConceptScheme"
 
     def __str__(self) -> str:
         """Return the vocabulary's name."""
@@ -478,6 +510,23 @@ class Record(Resource):
     def default_language(self) -> str:  # type: ignore[override]
         """The default language of the record's vocabulary."""
         return self.scheme.default_language
+
+    @property
+    def rdf_class(self) -> str:  # type: ignore[override]
+        """The SKOS class the record is an instance of, its ``type`` column."""
+        return self.type
+
+    def recorded_document(self) -> dict:
+        """Return the document, naming the record's vocabulary when it does not.
+
+        Returns:
+            The stored document, with ``skos:inScheme`` set to the vocabulary's URI
+            when the document states none.
+        """
+        document: dict = self.data
+        if "skos:inScheme" in document:
+            return document
+        return {**document, "skos:inScheme": [{"@id": self.scheme.uri}]}
 
     @property
     def is_collection(self) -> bool:

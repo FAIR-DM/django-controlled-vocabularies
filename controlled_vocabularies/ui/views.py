@@ -11,6 +11,7 @@ from mvp.views import MVPDetailView, MVPListView
 
 from controlled_vocabularies.models import ConceptScheme, Link, Record
 from controlled_vocabularies.ui.filters import ConceptFilter, VocabularyFilter
+from controlled_vocabularies.ui.representations import RepresentationMixin
 from controlled_vocabularies.ui.rows import PropertyRows, PublicationDetails
 
 __all__ = [
@@ -117,12 +118,16 @@ class VocabularyListView(StrippedSearchMixin, MVPListView):
         return context
 
 
-class ConceptDetailView(VocabularyPageMixin, MVPDetailView):
+class ConceptDetailView(RepresentationMixin, VocabularyPageMixin, MVPDetailView):
     """A single concept's own page, resolved within the vocabulary its address names."""
 
     model = Record
     slug_url_kwarg = "concept_slug"
     template_name = "controlled_vocabularies/ui/concept_detail.html"
+
+    def get_representation_subject(self):
+        """Return the record the address names."""
+        return self.get_object()
 
     def get_queryset(self):
         """Limit to the vocabulary's concepts."""
@@ -146,12 +151,16 @@ class ConceptDetailView(VocabularyPageMixin, MVPDetailView):
         return context
 
 
-class CollectionDetailView(VocabularyPageMixin, MVPDetailView):
+class CollectionDetailView(RepresentationMixin, VocabularyPageMixin, MVPDetailView):
     """A single collection's own page, resolved within the vocabulary its address names."""
 
     model = Record
     slug_url_kwarg = "collection_slug"
     template_name = "controlled_vocabularies/ui/collection_detail.html"
+
+    def get_representation_subject(self):
+        """Return the record the address names."""
+        return self.get_object()
 
     def get_queryset(self):
         """Limit to the vocabulary's collections."""
@@ -168,7 +177,7 @@ class CollectionDetailView(VocabularyPageMixin, MVPDetailView):
         return context
 
 
-class VocabularyDetailView(StrippedSearchMixin, MVPListView):
+class VocabularyDetailView(RepresentationMixin, StrippedSearchMixin, MVPListView):
     """A single vocabulary's page: the concepts it holds, and a side panel about the vocabulary.
 
     A list view over ``Record`` rather than a detail view over ``ConceptScheme``,
@@ -203,6 +212,10 @@ class VocabularyDetailView(StrippedSearchMixin, MVPListView):
         self.queryset = Record.objects.filter(
             scheme=self.vocabulary, type=Record.Type.CONCEPT
         ).select_related("scheme")
+
+    def get_representation_subject(self):
+        """Return the vocabulary the address names."""
+        return self.vocabulary
 
     def get_page_title(self):
         """Return the vocabulary's name."""

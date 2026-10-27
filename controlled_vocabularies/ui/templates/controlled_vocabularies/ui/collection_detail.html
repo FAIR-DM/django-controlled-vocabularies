@@ -1,5 +1,18 @@
 {% extends "detail_view.html" %}
 {% load i18n %}
+{% block head %}{{ block.super }}<c-controlled-vocabularies.rdf-alternates :alternates="rdf_alternates" />{% endblock %}
+{% block page.actions %}{{ block.super }}<c-mvp.page.side.toggle for="record-side" text="{% trans "Alternate representations" %}" icon="download" />{% endblock page.actions %}
+{% block page.side %}
+  <c-mvp.page.side id="record-side"
+                   label="{% trans "About this collection" %}"
+                   position="end"
+                   align="title"
+                   width="md">
+    <div class="flex flex-col gap-4 px-3 text-sm">
+      <c-controlled-vocabularies.rdf-representations :downloads="rdf_downloads" />
+    </div>
+  </c-mvp.page.side>
+{% endblock page.side %}
 {% block page.content %}
   {% comment %}
     Leads the page, as in concept_detail.html.

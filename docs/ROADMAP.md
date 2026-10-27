@@ -185,17 +185,22 @@ authoring returns when a project needs it.
 *Full feature · advances G3, and G4.*
 
 Serving a vocabulary held here as standards-compliant RDF at stable concept URIs, with content
-negotiation. It means something only once a project authors its own vocabularies, so it follows
-R5. A concept in a vocabulary published here is deprecated the same way as an imported one: the
-vocabulary states it.
+negotiation. A vocabulary's page and a record's page already return their own statements as RDF,
+chosen by the `Accept` header or downloaded as a file with `?format=`. Publication means something
+only once a project authors its own vocabularies, so it follows R5. A concept in a vocabulary
+published here is deprecated the same way as an imported one: the vocabulary states it.
 
 **Deliverables:**
 
 - vocabulary publication as a deliberate, one-way release that freezes its concept URIs;
-- concept and scheme URLs that resolve to valid SKOS in Turtle and at least one other
-  serialization, chosen by content negotiation;
-- a human-readable response alongside the machine ones;
 - a vocabulary exported this way that re-imports cleanly.
+
+**Delivered:**
+
+- concept and scheme URLs that resolve to valid SKOS in Turtle and at least one other
+  serialization, chosen by content negotiation or `?format=`, for a record's and a vocabulary's
+  own statements;
+- a human-readable response alongside the machine ones.
 
 Serves G3 and G4. Out of scope: the editing interface, browsing external sources.
 

@@ -1,10 +1,12 @@
 """Tests for controlled_vocabularies.models."""
 
 import pytest
+import rdflib
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.utils import translation
 from django.utils.functional import Promise
+from rdflib.namespace import RDF, SKOS
 
 from controlled_vocabularies import conf
 from controlled_vocabularies.models import (
@@ -773,3 +775,79 @@ class TestFieldMetadata:
             assert isinstance(field.verbose_name, Promise), field.name
             assert isinstance(field.help_text, Promise), field.name
             assert field.help_text, field.name
+
+
+class TestToGraph:
+    def test_vocabulary_without_a_stated_type_is_a_concept_scheme(self):
+        scheme = ConceptSchemeFactory()
+
+        graph = scheme.to_graph()
+
+        assert (rdflib.URIRef(scheme.uri), RDF.type, SKOS.ConceptScheme) in graph
+
+    def test_ordered_collection_states_its_type(self):
+        collection, _members = collection_with_members(ordered=True)
+
+        graph = collection.to_graph()
+
+        assert (
+            rdflib.URIRef(collection.uri),
+            RDF.type,
+            SKOS.OrderedCollection,
+        ) in graph
+
+    def test_concept_without_a_stated_type_is_a_concept(self):
+        concept = RecordFactory()
+
+        graph = concept.to_graph()
+
+        assert (rdflib.URIRef(concept.uri), RDF.type, SKOS.Concept) in graph
+
+    @pytest.mark.parametrize("make", [ConceptSchemeFactory, RecordFactory])
+    def test_subject_is_the_rows_uri(self, make):
+        row = make()
+
+        assert set(row.to_graph().subjects()) == {rdflib.URIRef(row.uri)}
+
+    def test_graph_holds_only_the_rows_own_statements(self):
+        scheme = ConceptSchemeFactory()
+        parent = RecordFactory(scheme=scheme)
+        child = RecordFactory(
+            scheme=scheme,
+            data=labelled("Child", statements={"skos:broader": [{"@id": parent.uri}]}),
+        )
+
+        graph = child.to_graph()
+
+        assert set(graph.subjects()) == {rdflib.URIRef(child.uri)}
+
+    def test_record_without_a_stated_vocabulary_names_its_own(self):
+        concept = RecordFactory()
+
+        graph = concept.to_graph()
+
+        assert set(graph.objects(rdflib.URIRef(concept.uri), SKOS.inScheme)) == {
+            rdflib.URIRef(concept.scheme.uri)
+        }
+
+    def test_record_that_states_its_vocabulary_keeps_only_what_it_states(self):
+        elsewhere = "http://example.org/other-scheme"
+        concept = RecordFactory(
+            data=labelled("Granite", statements={"skos:inScheme": [{"@id": elsewhere}]})
+        )
+
+        graph = concept.to_graph()
+
+        assert set(graph.objects(rdflib.URIRef(concept.uri), SKOS.inScheme)) == {
+            rdflib.URIRef(elsewhere)
+        }
+
+    def test_vocabulary_gets_no_in_scheme(self):
+        scheme = ConceptSchemeFactory()
+
+        assert not set(scheme.to_graph().objects(None, SKOS.inScheme))
+
+    def test_rdf_class_of_a_record_follows_its_type_column(self):
+        record = RecordFactory(type=Record.Type.COLLECTION)
+
+        assert record.rdf_class == "skos:Collection"
