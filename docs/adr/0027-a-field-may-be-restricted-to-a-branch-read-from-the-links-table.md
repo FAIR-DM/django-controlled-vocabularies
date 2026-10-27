@@ -19,9 +19,11 @@ ships collections, because a collection is a curator's own grouping. A project t
 vocabulary as published can name a collection only if the publisher made one, so it had the whole
 vocabulary or nothing to offer.
 
-ADR 0025 copied each record's links into a `Link` table. On PostgreSQL 17 with a vocabulary of
-37,840 concepts, a recursive query over that table answered a whole branch in 96 milliseconds. That
-is fast enough to run on every read.
+ADR 0025 copied each record's links into a `Link` table, which a recursive query can walk. On
+PostgreSQL 17 with a vocabulary of 37,840 concepts (GCMD Science Keywords, ten times over), the
+query below answers a branch of 53 concepts in 10 to 16 milliseconds and a branch of 3,784 in about
+240. Checking whether one value lies in that larger branch takes 170. That is fast enough to run
+on every read.
 
 ## Decision
 
@@ -57,8 +59,9 @@ and column name and with every value as a bound parameter.
 - It combines its rows with `UNION` and not `UNION ALL`, so a cycle in the stored links ends the
   walk and each concept appears once. A published vocabulary can contain a cycle, and a read that
   never ended on data the database accepted would be a defect.
-- Both directions are in one subquery that the recursive step joins to, because PostgreSQL allows
-  a recursive term to refer to the walk once.
+- Both directions are one join with an `OR`, because PostgreSQL allows a recursive term to refer
+  to the walk once. Each side of the `OR` starts from the records found so far, so every step is
+  an indexed lookup.
 - It runs on SQLite and PostgreSQL, the two databases the package supports.
 
 `manage.py check` warns, with the id it already uses for a missing collection
@@ -77,6 +80,11 @@ No index is added (Article XIII).
 - Both directions end in a lookup of a record by its URI, which is unique and so indexed.
 
 ### Rejected alternatives
+
+**Building the edges apart from the walk.** A subquery listing every parent and child pair in
+both directions, which the recursive step then joins to, reads simpler, but it is evaluated whole on
+every step. Measured on the same data, it took 650 milliseconds for the 53-concept branch and 2.8
+seconds for the 3,784-concept one.
 
 **A closure table.** Storing every ancestor and descendant pair would make a branch one flat
 lookup, but ADR 0025 already rejected it: it is much larger than the links, and it must be

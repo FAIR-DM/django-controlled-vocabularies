@@ -30,7 +30,7 @@ Ambiguities surfaced by the structured coverage scan over the drafted spec, reso
 
 ### Session 2026-10-27 (branch restriction)
 
-Decisions taken with the maintainer when the branch restriction was added, recorded in ADR 0027.
+Decisions taken when the branch restriction was added, recorded in ADR 0027.
 
 - **Q: Why a branch, when a collection already narrows a field?** → A: A publisher almost always ships `skos:broader` and `skos:narrower` links and rarely ships collections, because a collection is a curator's own grouping. Without a branch, a consumer restricting an imported vocabulary to one subject area has nothing to name. Integrated into User Story 2.
 - **Q: Does a branch include the concept it names, or only what is below it?** → A: Inclusive. A consumer naming a branch is naming a subject area, and the branch's own term is usually the right answer where nothing below it is more specific. The argument is therefore named for a branch rather than for what is under one. Integrated into FR-012.

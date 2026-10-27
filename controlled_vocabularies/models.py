@@ -382,38 +382,33 @@ class RecordQuerySet(models.QuerySet):
         link_source = column(Link, "source")
         link_predicate = column(Link, "predicate")
         link_target = column(Link, "target")
-        # Union rather than union all, so a cycle in the stored links ends the walk. The
-        # edges are a subquery in both directions because PostgreSQL allows a recursive
-        # term to refer to the walk only once. Every value is a parameter.
+        # Union rather than union all, so a cycle in the stored links ends the walk.
+        # PostgreSQL allows a recursive term to refer to the walk only once, so both
+        # directions are one join with an OR. Each side of it is an indexed lookup from
+        # the records found so far: an edge set built apart from the walk is read whole
+        # on every step. Every value is a parameter.
         sql = f"""
             WITH RECURSIVE vocabulary(id) AS (
                 SELECT {scheme_pk} FROM {scheme_table} WHERE {scheme_uri_column} = %s
-            ), branch(uri) AS (
-                SELECT {record_uri} FROM {record_table}
+            ), branch(id, uri) AS (
+                SELECT {record_pk}, {record_uri} FROM {record_table}
                  WHERE {record_scheme} IN (SELECT id FROM vocabulary)
                    AND {record_uri} = %s
                 UNION
-                SELECT edge.child
-                  FROM branch
-                  JOIN (
-                      SELECT l.{link_target} AS parent, c.{record_uri} AS child
-                        FROM {link_table} l
-                        JOIN {record_table} c ON c.{record_pk} = l.{link_source}
-                       WHERE l.{link_predicate} = %s
-                         AND c.{record_scheme} IN (SELECT id FROM vocabulary)
-                      UNION ALL
-                      SELECT p.{record_uri}, c.{record_uri}
-                        FROM {link_table} l
-                        JOIN {record_table} p ON p.{record_pk} = l.{link_source}
-                        JOIN {record_table} c ON c.{record_uri} = l.{link_target}
-                       WHERE l.{link_predicate} = %s
-                         AND p.{record_scheme} IN (SELECT id FROM vocabulary)
-                         AND c.{record_scheme} IN (SELECT id FROM vocabulary)
-                  ) edge ON edge.parent = branch.uri
+                SELECT c.{record_pk}, c.{record_uri}
+                  FROM branch b
+                  JOIN {link_table} l
+                    ON (l.{link_predicate} = %s AND l.{link_target} = b.uri)
+                    OR (l.{link_predicate} = %s AND l.{link_source} = b.id)
+                  JOIN {record_table} c
+                    ON (l.{link_predicate} = %s AND c.{record_pk} = l.{link_source})
+                    OR (l.{link_predicate} = %s AND c.{record_uri} = l.{link_target})
+                 WHERE c.{record_scheme} IN (SELECT id FROM vocabulary)
             )
             SELECT uri FROM branch
         """  # noqa: S608 identifiers come from model metadata
-        params = [scheme_uri, root_uri, "skos:broader", "skos:narrower"]
+        broader, narrower = "skos:broader", "skos:narrower"
+        params = [scheme_uri, root_uri, broader, narrower, broader, narrower]
         return self.filter(uri__in=RawSQL(sql, params))  # noqa: S611
 
 
