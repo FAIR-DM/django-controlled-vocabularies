@@ -1,9 +1,11 @@
 """Models for vocabularies and the records they hold, with SKOS statements in JSON."""
 
+from typing import cast
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import connections, models, transaction
+from django.db.models.expressions import RawSQL
 from django.db.models.functions import Lower
 from django.utils.text import slugify
 from django.utils.translation import get_language
@@ -344,6 +346,75 @@ class RecordQuerySet(models.QuerySet):
         if curies:
             links = links.filter(predicate__in=curies)
         return self.filter(models.Exists(links))
+
+    def in_branch(self, scheme_uri: str, root_uri: str) -> "RecordQuerySet":
+        """Narrow to the record ``root_uri`` and every record below it in one vocabulary.
+
+        A record is below another when its document states ``skos:broader`` the other,
+        or the other's document states ``skos:narrower`` it, at any depth. Both
+        directions are followed at every step, and only downward, so the root's own
+        broader concept and its siblings are left out. The walk stays inside the
+        vocabulary, reads the ``Link`` rows and ends on a cycle, returning each record
+        once. It is one recursive query, sent as a subquery inside the filter.
+
+        Args:
+            scheme_uri: The URI of the vocabulary to walk.
+            root_uri: The URI of the record the branch grows from.
+
+        Returns:
+            The root and the records below it. Empty when the vocabulary holds no
+            record with that URI.
+        """
+        quote = connections[self.db].ops.quote_name
+
+        def column(model, name):
+            """Return the quoted database column of a model's field."""
+            return quote(cast(str, model._meta.get_field(name).column))
+
+        scheme_table = quote(ConceptScheme._meta.db_table)
+        record_table = quote(self.model._meta.db_table)
+        link_table = quote(Link._meta.db_table)
+        scheme_pk = column(ConceptScheme, "id")
+        scheme_uri_column = column(ConceptScheme, "uri")
+        record_pk = column(self.model, "id")
+        record_uri = column(self.model, "uri")
+        record_scheme = column(self.model, "scheme")
+        link_source = column(Link, "source")
+        link_predicate = column(Link, "predicate")
+        link_target = column(Link, "target")
+        # Union rather than union all, so a cycle in the stored links ends the walk. The
+        # edges are a subquery in both directions because PostgreSQL allows a recursive
+        # term to refer to the walk only once. Every value is a parameter.
+        sql = f"""
+            WITH RECURSIVE vocabulary(id) AS (
+                SELECT {scheme_pk} FROM {scheme_table} WHERE {scheme_uri_column} = %s
+            ), branch(uri) AS (
+                SELECT {record_uri} FROM {record_table}
+                 WHERE {record_scheme} IN (SELECT id FROM vocabulary)
+                   AND {record_uri} = %s
+                UNION
+                SELECT edge.child
+                  FROM branch
+                  JOIN (
+                      SELECT l.{link_target} AS parent, c.{record_uri} AS child
+                        FROM {link_table} l
+                        JOIN {record_table} c ON c.{record_pk} = l.{link_source}
+                       WHERE l.{link_predicate} = %s
+                         AND c.{record_scheme} IN (SELECT id FROM vocabulary)
+                      UNION ALL
+                      SELECT p.{record_uri}, c.{record_uri}
+                        FROM {link_table} l
+                        JOIN {record_table} p ON p.{record_pk} = l.{link_source}
+                        JOIN {record_table} c ON c.{record_uri} = l.{link_target}
+                       WHERE l.{link_predicate} = %s
+                         AND p.{record_scheme} IN (SELECT id FROM vocabulary)
+                         AND c.{record_scheme} IN (SELECT id FROM vocabulary)
+                  ) edge ON edge.parent = branch.uri
+            )
+            SELECT uri FROM branch
+        """  # noqa: S608 identifiers come from model metadata
+        params = [scheme_uri, root_uri, "skos:broader", "skos:narrower"]
+        return self.filter(uri__in=RawSQL(sql, params))  # noqa: S611
 
 
 class Record(Resource):

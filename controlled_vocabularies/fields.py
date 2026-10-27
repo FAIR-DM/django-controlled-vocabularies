@@ -178,6 +178,13 @@ class ConceptFieldMixin:
                 type__in=Record.COLLECTION_TYPES,
             ).first()
             restriction &= Q(uri__in=collection.member_uris() if collection else [])
+        if self.branch is not None:
+            (vocabulary,) = self.vocabulary
+            restriction &= Q(
+                uri__in=Record.objects.in_branch(vocabulary.uri, self.branch).values(
+                    "uri"
+                )
+            )
         return restriction
 
     def vocabulary_uris(self):

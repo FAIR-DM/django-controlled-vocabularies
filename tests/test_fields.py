@@ -39,6 +39,7 @@ from tests.factories import (
     SpecimenFactory,
     SurveyFactory,
     collection_with_members,
+    concept_below,
 )
 from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import (
@@ -486,6 +487,109 @@ class TestCollectionRestrictionResolves:
 
         assert admitted == set(rock_members)
         assert not set(mineral_members) & admitted
+
+
+# The traversal itself is tested on RecordQuerySet.in_branch; these tests check what
+# the field admits when it is put on top.
+@pytest.mark.django_db
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
+class TestBranchRestrictionResolves:
+    def test_the_root_and_a_concept_two_levels_below_it_are_admitted(self, field_class):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        child = concept_below(root, "Volcanic")
+        grandchild = concept_below(child, "Basalt")
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root, child, grandchild}
+
+    def test_a_concept_the_parent_states_as_narrower_is_admitted(self, field_class):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        child = concept_below(root, "Volcanic", stated_by="parent")
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root, child}
+
+    def test_a_sibling_branch_and_the_roots_broader_concept_are_not_admitted(
+        self, field_class
+    ):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        top = RecordFactory(scheme=scheme, label="Rock")
+        root = concept_below(top, "Igneous")
+        below = concept_below(root, "Basalt")
+        sibling = concept_below(top, "Sedimentary")
+        cousin = concept_below(sibling, "Limestone")
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root, below}
+        assert not {top, sibling, cousin} & admitted
+
+    def test_a_root_with_nothing_below_admits_exactly_the_root(self, field_class):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        top = RecordFactory(scheme=scheme, label="Rock")
+        root = concept_below(top, "Igneous")
+        concept_below(top, "Sedimentary")
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root}
+
+    def test_a_branch_that_does_not_exist_admits_nothing(self, field_class):
+        ConceptSchemeFactory(name="Rock Type")
+        RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
+
+        admitted = admitted_by(
+            field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+        )
+
+        assert admitted == set()
+
+    def test_a_collection_below_the_root_is_never_admitted(self, field_class):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        collection, members = collection_with_members(scheme=scheme)
+        root.data["skos:narrower"] = [{"@id": collection.uri}]
+        root.save()
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert collection not in admitted
+
+    def test_a_same_named_concept_in_another_vocabulary_does_not_widen_the_field(
+        self, field_class
+    ):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        foreign = concept_below(
+            root, "Quartz", scheme=ConceptSchemeFactory(name="Mineral")
+        )
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root}
+        assert foreign not in admitted
+
+
+# limit_choices_to is re-resolved on every read, so a restriction cached at
+# construction fails here.
+@pytest.mark.django_db
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
+class TestBranchRestrictionResolvesLive:
+    def test_a_concept_added_below_the_root_after_construction_appears_on_the_next_read(
+        self, field_class
+    ):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri)
+        assert admitted_by(field) == {root}
+
+        newcomer = concept_below(root, "Basalt")
+
+        assert admitted_by(field) == {root, newcomer}
 
 
 # limit_choices_to is re-resolved on every read, so a restriction cached at
