@@ -76,7 +76,7 @@ page restricted wraps the include where it mounts these routes.
 ## Wiring it up
 
 This section adds to the package's base configuration rather than replacing it: `django_tomselect`
-and its middleware are still required, as [choosing a concept by typing](search.md#choosing-a-concept-by-typing)
+and its middleware are still required, as [choosing a concept by typing](choosing-a-concept.md#choosing-a-concept-by-typing)
 describes, and `manage.py check` says so on startup if they are missing.
 
 Add the ui app and django-mvp's own stack to `INSTALLED_APPS` — quoted from this package's own
@@ -401,18 +401,27 @@ uv sync --extra ui
 
 uv run python manage.py migrate
 uv run python manage.py seed_demo
+uv run python manage.py build_docs
 uv run python manage.py runserver
 ```
 
-The three commands run through `uv run` so they use the environment the install just built,
+The four commands run through `uv run` so they use the environment the install just built,
 whatever `python` on the shell's path happens to be — on many systems there is no `python` there
 at all.
 
 `migrate` builds the database, `seed_demo` loads two small vocabularies and a set of sign-in
-accounts into it, and `runserver` serves the site at `http://127.0.0.1:8000/`, which redirects
-straight to the populated, searchable vocabulary list at `http://127.0.0.1:8000/browse/`. An open
-page reloads itself when a template, static file or Python module changes, through
-`django-browser-reload` and `django-watchfiles` from the development dependencies. The seeded
+accounts into it, `build_docs` builds this documentation with Sphinx, and `runserver` serves the
+site at `http://127.0.0.1:8000/`.
+
+The demo's pages are this documentation: the root address opens its front page at
+`http://127.0.0.1:8000/docs/`, served inside the application shell by
+[django-mvp-sphinx](https://github.com/django-mvp/django-mvp-sphinx), a development dependency.
+The sidebar on every page, the documentation's and the browsing pages', starts with a Vocabularies
+entry that leads to the populated, searchable vocabulary list at `http://127.0.0.1:8000/browse/`,
+followed by the documentation's contents. Edit a page under `docs/` and run `build_docs` again to
+see the change on the next request. An open page reloads itself when a template, static file or
+Python module changes, through `django-browser-reload` and `django-watchfiles` from the
+development dependencies. The seeded
 content is the DCMI Type Vocabulary, a real vocabulary published by the Dublin Core Metadata
 Initiative, imported from a SKOS file that declares its own vocabulary, and Data Collection
 Methods, a short vocabulary loaded from a file that declares none, so the command creates the

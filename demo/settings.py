@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     # "daisy_cotton" below "mvp": both ship an icon component, and the first app to declare a
     # template path wins.
     "mvp",
+    # Serves docs/ as the demo's own pages, from the build `manage.py build_docs` writes.
+    "mvp_sphinx",
     "daisy_cotton",
     "crispy_forms",
     # Ahead of django_tomselect, so mvp_forms' template for its widget is the one found.

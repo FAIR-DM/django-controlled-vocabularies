@@ -3,8 +3,9 @@
 Import published SKOS controlled vocabularies into Django, and reference their concepts from your
 own models.
 
-The [README](../README.md) is the front door — what this package is, what it deliberately is not,
-how to install it, and the shortest example that works. These pages are the manual.
+The [README](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/README.md) is the
+front door — what this package is, what it deliberately is not, how to install it, and the
+shortest example that works. These pages are the manual.
 
 ## Using the package
 
@@ -13,13 +14,24 @@ how to install it, and the shortest example that works. These pages are the manu
 - **[Attaching concepts to your models](fields.md)** — `ConceptField` and `MultiConceptField`,
   restricting either to the vocabularies you name, and narrowing further to the members of a
   collection.
-- **[Choosing a concept](search.md)** — the search-as-you-type control in your own forms and on
-  Django admin pages, and the three wiring steps it needs.
+- **[Choosing a concept](choosing-a-concept.md)** — the search-as-you-type control in your own
+  forms and on Django admin pages, and the three wiring steps it needs.
 - **[Browsing vocabularies](browsing.md)** — the opt-in `ui` extra: the list of vocabularies, a
   page for each vocabulary, concept and collection, and the runnable demo project.
 - **[Importing a published vocabulary](importing.md)** — declaring your site's vocabularies and
   loading them all with one command, reading SKOS from a file or a URL, what an import keeps, and
   what the import report tells you.
+
+```{toctree}
+:caption: Using the package
+:hidden:
+
+configuration
+fields
+choosing-a-concept
+browsing
+importing
+```
 
 ## Contributing
 
@@ -30,11 +42,31 @@ how to install it, and the shortest example that works. These pages are the manu
 - **[Django standards](contributing/standards/django.md)** — where code lives, and when a new
   abstraction is worth adding.
 
+```{toctree}
+:caption: Contributing
+:hidden:
+
+contributing/standards/testing
+contributing/standards/code-documentation
+contributing/standards/django
+```
+
 ## Direction and decisions
 
 - **[Roadmap](ROADMAP.md)** — which release delivers what, and how versions are gated.
-- **[Goals](../GOALS.md)** — the enduring directions the project steers toward.
-- **[Decision records](adr/)** — one file per architecturally significant decision, kept for the
-  reasoning behind it.
-- **[Domain terminology](../CONTEXT.md)** — what a vocabulary, a concept and a collection mean here.
-- **[Changelog](../CHANGELOG.md)** — what changed in each release.
+- **[Goals](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/GOALS.md)** — the
+  enduring directions the project steers toward.
+- **[Decision records](adr/index.md)** — one file per architecturally significant decision, kept
+  for the reasoning behind it.
+- **[Domain terminology](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/CONTEXT.md)**
+  — what a vocabulary, a concept and a collection mean here.
+- **[Changelog](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/CHANGELOG.md)**
+  — what changed in each release.
+
+```{toctree}
+:caption: Direction and decisions
+:hidden:
+
+ROADMAP
+adr/index
+```

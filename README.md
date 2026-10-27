@@ -186,7 +186,7 @@ The full manual lives in
 [`docs/`](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/index.md):
 [configuration](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/configuration.md),
 [attaching concepts to your models](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/fields.md),
-[choosing a concept](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/search.md),
+[choosing a concept](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/choosing-a-concept.md),
 [browsing vocabularies](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/browsing.md),
 and [importing a published vocabulary](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/importing.md).
 

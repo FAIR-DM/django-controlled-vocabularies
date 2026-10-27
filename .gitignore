@@ -37,3 +37,6 @@ tags
 # Django
 *.sqlite3
 db.sqlite3
+
+# The documentation build the demo serves (manage.py build_docs).
+docs/_build/

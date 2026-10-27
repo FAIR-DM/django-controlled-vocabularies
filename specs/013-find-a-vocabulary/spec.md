@@ -79,7 +79,7 @@ A person looking at a site holding more vocabularies than fit on a screen types 
 ### User Story 3 - Run the page and look at it (Priority: P1)
 
 Someone with a fresh clone of the repository — the maintainer at a review, a contributor deciding
-whether the package suits them — installs it, runs three commands, and has a browser open on a
+whether the package suits them — installs it, runs four commands, and has a browser open on a
 populated vocabulary list. They did not write a settings module, wire up seven applications, or
 find their own SKOS file first. They can search it and page through it.
 
@@ -101,9 +101,11 @@ cannot rot silently.
    two entries is visible rather than described.
 3. **Given** a seeded demo in any state, **When** the seed command is run again, **Then** the demo
    returns to the same state, whatever was added or removed before.
-4. **Given** the demo, **When** its root address is opened, **Then** it leads to the list rather
-   than to a missing page.
-5. **Given** a change to the package or the demo, **When** it is proposed, **Then** an unattended
+4. **Given** the demo, **When** its root address is opened, **Then** it leads to the package's
+   documentation, served as the demo's own pages, rather than to a missing page.
+5. **Given** any page of the demo, documentation or browsing, **When** its sidebar is read,
+   **Then** it holds an entry leading to the list, and the documentation's contents.
+6. **Given** a change to the package or the demo, **When** it is proposed, **Then** an unattended
    check installs the demo, seeds it, serves it and reads the list back, and fails if any step
    does not work.
 
@@ -160,7 +162,7 @@ They can also put the largest vocabularies first, or the most recently updated.
 - **FR-012**: The page MUST be reachable by a name the package owns rather than a fixed path, so a project chooses the address it is mounted at.
 - **FR-013**: Each entry MUST link to the vocabulary's own page.
 - **FR-014**: The repository MUST carry a runnable demonstration project that serves this page, configured the way the package's own documentation tells a project to configure it.
-- **FR-015**: The demonstration MUST be reachable in three documented commands from a fresh clone with dependencies installed — build the database, load content, serve it — and its root address MUST lead to the list rather than to a missing page.
+- **FR-015**: The demonstration MUST be reachable in four documented commands from a fresh clone with dependencies installed — build the database, load content, build the documentation, serve it. Its pages MUST be the package's documentation, built from `docs/` and served inside the application shell, and its root address MUST lead to the documentation's front page rather than to a missing page. Every page's sidebar MUST lead to the list as well as to the documentation's pages.
 - **FR-016**: The demonstration's content MUST include both a vocabulary imported from a file that declares its own and one the seed command creates for a file that declares none, and loading it MUST be repeatable: running the command again returns the demonstration to the same state from any prior state.
 - **FR-017**: The demonstration MUST be checked without a person: an unattended run installs it, loads its content, serves it, and reads the list back, failing if any step does not work.
 - **FR-018**: The demonstration MUST be recognisable as one — a local database, an obviously throwaway secret, and documentation saying plainly that it is not a production configuration.
@@ -185,7 +187,7 @@ They can also put the largest vocabularies first, or the most recently updated.
 - **SC-004**: The address of a narrowed list, opened fresh, produces the same vocabularies in the same order.
 - **SC-005**: The number of database queries the page runs does not grow with the number of vocabularies it shows.
 - **SC-006**: Every string the page shows a reader can be translated, and none is fixed in one language.
-- **SC-007**: A person who has never seen this repository can look at the working page within three commands of a fresh clone, and the same walk runs unattended on every proposed change.
+- **SC-007**: A person who has never seen this repository can look at the working page within four commands of a fresh clone, and the same walk runs unattended on every proposed change.
 
 ## Assumptions
 

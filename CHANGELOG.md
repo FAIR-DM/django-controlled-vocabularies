@@ -8,6 +8,12 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Added
 
+- The demo project serves the package's documentation as its pages. `docs/` is built with Sphinx
+  and MyST by `manage.py build_docs` and served inside the application shell by django-mvp-sphinx,
+  a development dependency. The root address opens the documentation's front page, and the sidebar
+  on every page, documentation and browsing alike, starts with a Vocabularies entry leading to the
+  vocabulary list, followed by the documentation's contents. Running the demo is now four
+  commands: `migrate`, `seed_demo`, `build_docs` and `runserver`.
 - A concept field can be restricted to a branch of its vocabulary's hierarchy:
   `ConceptField(vocabulary=ROCK_TYPE, branch="https://vocab.example.org/rock-type/igneous")`, and
   the same on `MultiConceptField`. The field offers that concept and every concept below it, found
@@ -31,6 +37,8 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Changed
 
+- The page on choosing a concept moved from `docs/search.md` to `docs/choosing-a-concept.md`,
+  because django-mvp-sphinx keeps the `search/` address of a documentation site for its own search.
 - **Breaking:** `ConceptField` and `MultiConceptField` name a vocabulary by its URI, and
   `collection` names a collection by its URI. A slug raises a `TypeError` when the field is
   declared. Rewrite `vocabulary="rock-type"` as the vocabulary's URI, in your models and in every

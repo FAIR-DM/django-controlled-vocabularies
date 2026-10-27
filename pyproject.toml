@@ -73,6 +73,11 @@ ui = [
 dev = [
     "mvp-shared[dev,test]; python_version >= '3.12'",
     "django-mvp>=0.31.0,<0.32.0; python_version >= '3.12'",
+    # The demo serves docs/ as its pages: django-mvp-sphinx serves the build, and Sphinx with
+    # MyST builds it from the Markdown (`manage.py build_docs`).
+    "django-mvp-sphinx>=0.4.0,<0.5; python_version >= '3.12'",
+    "sphinx>=8.1; python_version >= '3.12'",
+    "myst-parser>=4; python_version >= '3.12'",
 ]
 
 [tool.uv.sources]
@@ -157,9 +162,11 @@ branch = "true"
 source = ["controlled_vocabularies"]
 
 [tool.deptry]
+# The demo, like the tests and the docs, runs on the dev group and never ships with the package.
 extend_exclude = [
     "tests/",
     "docs/",
+    "demo/",
 ]
 
 [tool.deptry.per_rule_ignores]
@@ -190,6 +197,7 @@ non-mirror-paths = [
     "tests/test_ui/test_templates.py",
     "tests/test_demo/test_admin.py",
     "tests/test_demo/test_demo.py",
+    "tests/test_demo/test_docs.py",
     "tests/test_demo/test_documented_commands.py",
     "tests/test_demo/test_seed.py",
     "tests/test_demo/test_smoke.py",

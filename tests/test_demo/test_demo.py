@@ -26,20 +26,19 @@ assert settings.DEBUG is True, "the demo must be recognisable as a demo, not a d
 assert settings.DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3"
 assert settings.DATABASES["default"]["NAME"] != ":memory:", "the demo's database must be a local file"
 
-list_url_name = "controlled_vocabularies_ui:vocabulary-list"
-reverse(list_url_name)
+reverse("controlled_vocabularies_ui:vocabulary-list")
 
 root_match = resolve("/")
 assert root_match.url_name == "home", root_match.url_name
 assert root_match.func.view_class.__name__ == "RedirectView", root_match.func.view_class
-assert root_match.func.view_initkwargs["pattern_name"] == list_url_name, root_match.func.view_initkwargs
+assert root_match.func.view_initkwargs["pattern_name"] == "docs:front_page", root_match.func.view_initkwargs
 
 print("DEMO_BOOT_OK")
 """
 
 
 class TestDemoProject:
-    def test_demo_boots_checks_clean_and_the_root_redirects_to_the_list(self):
+    def test_demo_boots_checks_clean_and_the_root_redirects_to_the_docs(self):
         result = subprocess.run(  # noqa: S603 — fixed interpreter, literal script, no user input
             [sys.executable, "-c", BOOT_SCRIPT],
             capture_output=True,
