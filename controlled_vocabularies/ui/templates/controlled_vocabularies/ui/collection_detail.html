@@ -1,5 +1,6 @@
 {% extends "detail_view.html" %}
 {% load i18n %}
+{% block head %}{{ block.super }}<c-controlled-vocabularies.rdf-alternates :alternates="rdf_alternates" />{% endblock %}
 {% block page.content %}
   {% comment %}
     Leads the page, as in concept_detail.html.

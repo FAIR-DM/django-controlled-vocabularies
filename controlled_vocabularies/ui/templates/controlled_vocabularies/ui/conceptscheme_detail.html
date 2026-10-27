@@ -1,5 +1,6 @@
 {% extends "list_view.html" %}
 {% load i18n %}
+{% block head %}{{ block.super }}<c-controlled-vocabularies.rdf-alternates :alternates="rdf_alternates" />{% endblock %}
 {% comment %}
   The title and lead text are the vocabulary's own (the view's page title and subtitle). Everything
   else the page says about the vocabulary sits in the side panel, so the content column is the

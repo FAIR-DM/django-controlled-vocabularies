@@ -381,6 +381,28 @@ class TestAccessControl:
         assert browser.url == turtle.url
 
 
+@pytest.mark.django_db
+class TestAlternateLinks:
+    def test_the_head_names_the_four_alternatives_in_order(self, client, subject):
+        soup = BeautifulSoup(ask(client, subject, BROWSER).content, "html.parser")
+
+        links = soup.head.find_all("link", rel="alternate")
+
+        assert [link["type"] for link in links] == [
+            Serialization.named(name).media_type
+            for name in ("ttl", "xml", "json-ld", "nt")
+        ]
+
+    def test_each_link_returns_the_media_type_it_names(self, client, subject):
+        soup = BeautifulSoup(ask(client, subject, BROWSER).content, "html.parser")
+
+        for link in soup.head.find_all("link", rel="alternate"):
+            response = client.get(address(subject) + link["href"])
+
+            assert response.status_code == 200
+            assert response["Content-Type"].split(";")[0] == link["type"]
+
+
 @pytest.fixture
 def demo(db):
     """Seed the demo's two vocabularies."""

@@ -334,3 +334,35 @@ class TestNoTemplateNamesACottonComponentWithAnUnderscore:
         assert offenders == [], (
             f"{path.relative_to(TEMPLATES_ROOT)} names a cotton tag with an underscore: {offenders}"
         )
+
+
+@pytest.mark.django_db
+class TestRdfAlternatesComponent:
+    def test_it_renders_one_alternate_link_per_representation(self):
+        html = render_to_string(
+            "cotton/controlled_vocabularies/rdf_alternates.html",
+            {
+                "alternates": [
+                    {"media_type": "text/turtle", "href": "?format=ttl"},
+                    {"media_type": "application/rdf+xml", "href": "?format=xml"},
+                ]
+            },
+        )
+
+        links = BeautifulSoup(html, "html.parser").find_all("link", rel="alternate")
+
+        assert [(link["type"], link["href"]) for link in links] == [
+            ("text/turtle", "?format=ttl"),
+            ("application/rdf+xml", "?format=xml"),
+        ]
+
+    @pytest.mark.parametrize("kind", ["vocabulary", "concept", "collection"])
+    def test_the_pages_head_keeps_what_the_base_template_puts_there(self, client, kind):
+        from tests.test_ui.test_representations import address, subjects_for
+
+        subject = subjects_for()[kind]
+
+        head = BeautifulSoup(client.get(address(subject)).content, "html.parser").head
+
+        assert head.find("title") is not None
+        assert len(head.find_all("link", rel="alternate")) == 4
