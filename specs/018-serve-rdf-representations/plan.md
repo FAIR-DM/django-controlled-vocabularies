@@ -135,9 +135,9 @@ The template gets `rdf_alternates`: a context list of the four (`ttl`, `xml`, `j
 
 ### 5. Documentation
 
-- `docs/browsing.md` gains a section on the RDF a page returns: the two ways to ask, the formats,
+- `docs/how-to/ask-a-page-for-rdf.md` gains a section on the RDF a page returns: the two ways to ask, the formats,
   the precedence, the refusals, the alternates.
-- `to_graph()` is documented in `docs/importing.md`, beside the import it mirrors.
+- `to_graph()` is documented in `docs/how-to/read-a-row-back-as-rdf.md`, beside the import it mirrors.
 - `CONTEXT.md` gains **Representation**.
 - `docs/ROADMAP.md`, R4: the content-negotiation deliverable is recorded as delivered for a row's
   own statements, with the whole-vocabulary export and publication still to come.
@@ -159,5 +159,5 @@ tests/
   test_models.py                          to_graph()
   test_ui/test_representations.py         new
   test_ui/test_templates.py               alternates
-docs/browsing.md, docs/importing.md, CONTEXT.md, docs/ROADMAP.md
+docs/how-to/ask-a-page-for-rdf.md, docs/how-to/read-a-row-back-as-rdf.md, CONTEXT.md, docs/ROADMAP.md
 ```

@@ -1,27 +1,4 @@
-# Configuration
-
-## The vocabularies your site uses
-
-`python manage.py sync_vocabularies` loads every vocabulary your models' concept fields name, with
-no setting at all. Declare a vocabulary in your Django settings when no field names it, or when
-you want it read from somewhere other than the source a field gives. Each is keyed by the slug the
-vocabulary is given on this site:
-
-```python
-CONTROLLED_VOCABULARIES = {
-    "rock-type": {"source": BASE_DIR / "vocabularies" / "rock-type.ttl"},
-    "sample-status": {"source": "https://vocab.example.org/sample-status.ttl"},
-}
-```
-
-Each `source` is a local path or an `http://`/`https://` address, with an optional `format` for a
-source whose name does not carry its serialization. Prefer a file shipped with the project: a
-deploy then never depends on a remote server being up. The setting is optional. Code of your own reads the
-declarations with `controlled_vocabularies.conf.get_declared_vocabularies()`, which returns the
-setting, or an empty dict when it is not set.
-[Importing a published vocabulary](importing.md) covers the command and what each run does.
-
-## Identifiers
+# Identifiers
 
 Every vocabulary, concept and collection has a URI, which is its identity. A vocabulary imported
 from a publisher keeps the URI its publisher gave it, held exactly as given and never rewritten. A
@@ -55,28 +32,9 @@ keeping it still is a matter of not editing it, rather than of the model refusin
 path. Treat a value that differs between two imports of the same vocabulary as a problem with the
 source file.
 
-### Where the base address matters
+## Where the base address matters
 
 The base address only decides the URI of a row created without one. An imported row keeps its
 publisher's URI whatever this setting says. The address a row is viewed at on your own site comes
 from where you mount the browsing pages, and a system check warns when that disagrees with the
-path of this setting (see [browsing vocabularies](browsing.md#a-vocabularys-own-page)).
-
-## Database
-
-The package runs on any database Django supports. On PostgreSQL, its migrations also enable the
-`pg_trgm` extension and add the two trigram indexes concept search uses (see
-[searching a large vocabulary](how-to/choosing-a-concept.md#searching-a-large-vocabulary)). There is
-nothing to configure, and `django.contrib.postgres` does not need to be in `INSTALLED_APPS`.
-
-Enabling the extension needs a database user allowed to create one. `pg_trgm` is a trusted
-extension, so any user with the `CREATE` privilege on the database can. Where the user that runs
-your migrations cannot, have an administrator run `CREATE EXTENSION pg_trgm;` in the database
-once, before migrating. Reversing the migration drops the two indexes and leaves the extension in
-place, since another application may use it.
-
-On any other database the migration adds neither, and search works without them.
-
----
-
-Next: [attaching concepts to your models](fields.md).
+path of this setting (see [browsing vocabularies](../reference/a-vocabularys-own-page.md)).

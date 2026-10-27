@@ -184,18 +184,17 @@ specimen.get_rock_type_uri()  # its URI
 
 The full manual lives in
 [`docs/`](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/index.md):
-[configuration](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/configuration.md),
-[attaching concepts to your models](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/fields.md),
-[choosing a concept](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/how-to/choosing-a-concept.md),
-[browsing vocabularies](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/browsing.md),
-and [importing a published vocabulary](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/importing.md).
+a [tutorial](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/tutorial.md),
+[how-to guides](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/how-to/index.md),
+a [reference](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/reference/index.md) and
+[explanations](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/explanation/index.md).
 
 ## Contributing
 
 Bug reports and feature requests are welcome on the
 [issue tracker](https://github.com/FAIR-DM/django-controlled-vocabularies/issues). The repository
 carries a runnable demo project, and
-[getting it running](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/browsing.md#try-it-the-demo-project)
+[getting it running](https://github.com/FAIR-DM/django-controlled-vocabularies/blob/main/docs/tutorial.md)
 is the shortest route to a working development checkout.
 
 ## Changelog
