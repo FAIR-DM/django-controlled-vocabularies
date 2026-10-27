@@ -49,6 +49,10 @@ Ambiguities the intake decisions left open, resolved while drafting against the 
 
 - **Q: rdflib's `pretty-xml` writer adds statements to a graph holding an RDF list, in some processes and not others. Is it offered?** → A: No. An ordered collection's member list is an RDF list, so it would serve statements the record does not hold, against FR-003 and FR-012. The plain RDF/XML writer produces the same syntax faithfully and stays offered. Integrated into FR-002.
 
+### Session 2026-10-27 (walkthrough)
+
+- **Q: A concept's page shows the vocabulary that holds it, from the record's own link to it, even when the stored statements do not name it. Does the RDF name it too?** → A: Yes. A record whose document states no `skos:inScheme` has its own vocabulary stated, as its class is stated when the document gives none. A document that states one keeps exactly what it states. Integrated into FR-003.
+
 ### Session 2026-10-27 (coverage scan)
 
 Ambiguities surfaced by the structured coverage scan over the drafted specification. The scan found
@@ -174,7 +178,8 @@ format and confirm the refusal lists the formats that are available.
   else: every statement, in every language, with its datatype, including hidden labels, an ordered
   collection's member list in sequence, and embedded nodes as blank nodes. It MUST NOT add
   statements other records make about the subject, inverse statements, labels of records it links
-  to, or, for a vocabulary, the concepts and collections it holds.
+  to, or, for a vocabulary, the concepts and collections it holds. The row's class, and a
+  record's vocabulary, are stated from the row when its document states none.
 - **FR-004**: The RDF MUST describe its subject by the subject's own identifier, unchanged, whether
   or not that identifier is an address on this site.
 - **FR-005**: When a request carries `?format=`, the format it names MUST be returned, whatever the

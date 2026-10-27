@@ -10,7 +10,7 @@ published. Without it, an authored vocabulary's RDF would not say it is a `skos:
 the importer, which finds a vocabulary by that type, could not read it back. This is a statement
 the row records, so FR-003's "nothing else" holds.
 
-**ADR:** docs/adr/0028-a-rows-rdf-is-its-own-document-and-its-class.md
+**ADR:** docs/adr/0028-a-rows-rdf-is-its-own-document-and-what-the-row-records.md
 
 ## D2. Every format is written from a dataset's default graph
 
@@ -50,7 +50,7 @@ later export of a whole vocabulary needs both without any page. They sit in `exc
 already holds the import, and run on the core package's Python 3.11. Only choosing a response for
 a request belongs to the pages.
 
-**ADR:** docs/adr/0028-a-rows-rdf-is-its-own-document-and-its-class.md (its last paragraph).
+**ADR:** docs/adr/0028-a-rows-rdf-is-its-own-document-and-what-the-row-records.md (its last paragraph).
 
 ## D6. `pretty-xml` is not offered
 
@@ -103,3 +103,13 @@ still gives the page. An entry with `q=0` is dropped by Django before matching, 
 as a refusal of HTML. No known client sends one, and the limitation is documented.
 
 **ADR:** none — local to the negotiation in one mixin, and documented in docs/browsing.md.
+
+## D11. A record names its vocabulary when its document does not
+
+At the walkthrough, a demo concept's page showed `skos:inScheme` while its RDF did not: the page adds
+the row from the record's link to its vocabulary, and the representation served only the document.
+The maintainer chose to state it. A record whose document states no `skos:inScheme` gets one naming
+its own vocabulary, by the same rule as D1, so a client fetching one concept can follow it to its
+vocabulary and the importer can place it.
+
+**ADR:** docs/adr/0028-a-rows-rdf-is-its-own-document-and-what-the-row-records.md

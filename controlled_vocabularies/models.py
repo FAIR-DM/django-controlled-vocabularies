@@ -217,7 +217,8 @@ class Resource(models.Model):
 
         The graph holds what the row's document states about its ``uri`` and nothing
         gathered from other rows. A document that states no ``rdf:type`` gets one from
-        ``rdf_class``.
+        ``rdf_class``, and a record whose document states no ``skos:inScheme`` gets its
+        own vocabulary: both are recorded by the row itself.
 
         Returns:
             The graph, with the row's ``uri`` as its subject.
@@ -225,7 +226,16 @@ class Resource(models.Model):
         # Imported here: the exchange package imports these models.
         from controlled_vocabularies.exchange.graph import document_graph
 
-        return document_graph(self.uri, self.data, self.rdf_class)
+        return document_graph(self.uri, self.recorded_document(), self.rdf_class)
+
+    def recorded_document(self) -> dict:
+        """Return the document with what the row records outside it.
+
+        Returns:
+            The row's document, as stored.
+        """
+        document: dict = self.data
+        return document
 
     def minted_uri(self) -> str:
         """Return the URI for a row authored on this site, from its slug.
@@ -505,6 +515,18 @@ class Record(Resource):
     def rdf_class(self) -> str:  # type: ignore[override]
         """The SKOS class the record is an instance of, its ``type`` column."""
         return self.type
+
+    def recorded_document(self) -> dict:
+        """Return the document, naming the record's vocabulary when it does not.
+
+        Returns:
+            The stored document, with ``skos:inScheme`` set to the vocabulary's URI
+            when the document states none.
+        """
+        document: dict = self.data
+        if "skos:inScheme" in document:
+            return document
+        return {**document, "skos:inScheme": [{"@id": self.scheme.uri}]}
 
     @property
     def is_collection(self) -> bool:

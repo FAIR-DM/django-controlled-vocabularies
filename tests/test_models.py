@@ -821,6 +821,32 @@ class TestToGraph:
 
         assert set(graph.subjects()) == {rdflib.URIRef(child.uri)}
 
+    def test_record_without_a_stated_vocabulary_names_its_own(self):
+        concept = RecordFactory()
+
+        graph = concept.to_graph()
+
+        assert set(graph.objects(rdflib.URIRef(concept.uri), SKOS.inScheme)) == {
+            rdflib.URIRef(concept.scheme.uri)
+        }
+
+    def test_record_that_states_its_vocabulary_keeps_only_what_it_states(self):
+        elsewhere = "http://example.org/other-scheme"
+        concept = RecordFactory(
+            data=labelled("Granite", statements={"skos:inScheme": [{"@id": elsewhere}]})
+        )
+
+        graph = concept.to_graph()
+
+        assert set(graph.objects(rdflib.URIRef(concept.uri), SKOS.inScheme)) == {
+            rdflib.URIRef(elsewhere)
+        }
+
+    def test_vocabulary_gets_no_in_scheme(self):
+        scheme = ConceptSchemeFactory()
+
+        assert not set(scheme.to_graph().objects(None, SKOS.inScheme))
+
     def test_rdf_class_of_a_record_follows_its_type_column(self):
         record = RecordFactory(type=Record.Type.COLLECTION)
 

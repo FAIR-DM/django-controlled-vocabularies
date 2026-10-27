@@ -159,8 +159,9 @@ not include its concepts. The subject is the row's `uri`, unchanged.
 
 Every statement of the document is in the graph, in every language, and a `skos:memberList` is
 written as one RDF list in its stored order. A row whose document states no `rdf:type` is given
-one: `skos:ConceptScheme` for a vocabulary, and a record's `type` for a record. A document that
-states a type keeps exactly the types it states.
+one: `skos:ConceptScheme` for a vocabulary, and a record's `type` for a record. A record whose
+document states no `skos:inScheme` is given its own vocabulary. A document that states either keeps
+exactly what it states.
 
 `to_graph()` calls `document_graph()`, from `controlled_vocabularies.exchange.graph`, which does
 the same for any document in the stored shape, such as one not yet saved:
