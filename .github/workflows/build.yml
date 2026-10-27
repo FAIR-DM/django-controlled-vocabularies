@@ -1,23 +1,15 @@
 name: Build
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'controlled_vocabularies/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - '.pre-commit-config.yaml'
-      - '.github/workflows/build.yml'
   # No paths filter on pull_request: these checks are ruleset-required, and a
   # path-filtered required check never reports on out-of-scope PRs, blocking merge.
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 jobs:
   call-build:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     uses: django-mvp/shared/.github/workflows/build.yml@v0.6.0
     with:
       source-dir: controlled_vocabularies

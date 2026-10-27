@@ -39,6 +39,10 @@ updates:
       python-dependencies:
         patterns:
           - "*"
+      python-dependencies-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -56,5 +60,9 @@ updates:
       include: "scope"
     groups:
       github-actions:
+        patterns:
+          - "*"
+      github-actions-security:
+        applies-to: security-updates
         patterns:
           - "*"
