@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('controlled_vocabularies', '0003_record_links'),
+        ('controlled_vocabularies', '0001_initial'),
         ('testapp', '0002_fossil'),
     ]
 
