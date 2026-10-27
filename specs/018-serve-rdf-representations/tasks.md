@@ -36,8 +36,9 @@ compared with `rdflib.compare.isomorphic` against the graph it must give:
 - a `urn:` identifier as the subject, unchanged;
 - an empty document gives exactly the one type triple.
 
-Plus the round trip the importer guarantees: import a fixture under `tests/fixtures/skos/` with
-the existing importer, and for every row the importer stored, the graph built from its document is
+Plus the round trip the importer guarantees: import a fixture under `tests/fixtures/skos/` whose
+rows all state `rdf:type` (such as `rocks.ttl`, not a fixture relying on implied types, which
+would gain the D1 type triple by design) with the existing importer, and for every row the importer stored, the graph built from its document is
 isomorphic to the subgraph of the parsed fixture about that subject (its triples, with blank-node
 objects followed). That is FR-012 at the source.
 
@@ -61,17 +62,25 @@ and nothing gathered from other rows).
 
 As plan.md §2. Tests:
 
-- `patch` is not offered; Turtle, RDF/XML, JSON-LD and N-Triples are, by their short names and
+- `patch` and `pretty-xml` are not offered; Turtle, RDF/XML, JSON-LD and N-Triples are, by their short names and
   by their media types;
-- every offered serialization writes a two-triple graph without error, and its output parses back
-  isomorphic with rdflib's parser for the same syntax (N-Quads and TriX through a `Dataset`);
+- every offered serialization writes a graph holding a language-tagged literal, a plain literal,
+  a blank node and an RDF list, and its output reads back to the same statements. **The read-back
+  rule, one helper in `tests/conftest.py` that T006 and T008 reuse:** parse into a `Dataset` with
+  the serialization's name when rdflib registers a parser under it, otherwise with its media
+  type; take the statements of all its graphs; treat an `xsd:string` literal as the plain literal
+  on both sides; then `isomorphic`. Run it under several hash seeds
+  (`PYTHONHASHSEED` in a subprocess, or a loop over shuffled insertion orders), because a
+  serializer's output order can depend on the seed (D6);
 - `nquads` and `trix` are marked as written from a dataset, Turtle is not;
+- short names: Turtle `ttl`, RDF/XML `xml`, N-Triples `nt`, JSON-LD `json-ld`;
 - extensions: Turtle `ttl`, RDF/XML `rdf`, JSON-LD `jsonld`, N-Triples `nt`, `longturtle` `ttl`;
 - every serialization has a media type; exactly those rdflib registers a `/` name for are
   negotiable;
 - a serializer registered at test time with `rdflib.plugin.register` and removed afterwards is
   offered without any change to the module, which is what makes the list follow rdflib (FR-002).
-  Clear the table's cache before and after.
+  Clear the table's cache before and after. rdflib has no public way to unregister a plugin, so the
+  test removes it from `rdflib.plugin._plugins` in its teardown, with a comment saying so.
 
 ---
 
@@ -100,7 +109,12 @@ of the three addresses where the scenario is not specific to one:
 - a browser's header (`text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8`), no
   `Accept` header, and `*/*` each give the HTML page with status 200 (scenario 6, FR-006);
 - `Accept: text/turtle, text/html` (equal quality) gives the page; `text/html;q=0.5, text/turtle`
-  gives Turtle (edge case, FR-006);
+  gives Turtle (edge case, FR-006); `text/turtle, */*` gives the page, deliberately, because HTML is
+  accepted at the same quality (D3);
+- a concept view behind a login requirement (a test subclass with `LoginRequiredMixin` on a test
+  URL): an anonymous request with `Accept: text/turtle` gets the same redirect as one with a
+  browser's header (FR-014);
+- a browser request for a concept page runs no more queries than before the feature;
 - `Accept: application/json` alone gives 406 and the response is not HTML (scenario 7, FR-007);
 - a record of a vocabulary imported with identifiers on another site is described by that
   identifier (scenario 9, FR-004);
@@ -138,7 +152,8 @@ format. In this group, the negotiable formats only. T008 widens it to all of the
 
 `docs/browsing.md`: a section on the RDF a page returns when asked through `Accept`: which pages,
 which media types, what the RDF holds and what it leaves out, the HTML default, the 406, the
-`Vary` header, and the alternate links. A `curl -H 'Accept: text/turtle'` example against the
+`Vary` header, and the alternate links. Say that N-Triples is negotiated as
+`application/n-triples`, so a client asking for `text/plain` gets the page. A `curl -H 'Accept: text/turtle'` example against the
 demo's address. `CONTEXT.md`: the **Representation** entry, as the spec's Key Entities give it.
 
 ---

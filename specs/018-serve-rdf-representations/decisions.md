@@ -40,3 +40,24 @@ Building a graph from a row and knowing which formats exist describe the data an
 later export of a whole vocabulary needs both without any page. They sit in `exchange/`, which
 already holds the import, and run on the core package's Python 3.11. Only choosing a response for
 a request belongs to the pages.
+
+## D6. `pretty-xml` is not offered
+
+rdflib 7.6.0's `pretty-xml` writer adds statements when a graph holds an RDF list, in some
+processes and not others: the demo's research-methods file, written with it and read back, gains
+four statements under `PYTHONHASHSEED=4` and none under eleven other seeds. An ordered
+collection's member list is an RDF list, so serving it this way would break FR-003 and FR-012.
+`xml` writes the same syntax faithfully and stays offered. This narrows FR-002 and was put to the
+maintainer as a change to the specification.
+
+## D7. A format's name is the shortest one rdflib registers
+
+rdflib registers `ttl`, `turtle` and `text/turtle` for one serializer. The shortest name without a
+`/` is the one the alternate links use and the refusal lists, so a reader sees one spelling
+everywhere. Every registered name is still accepted.
+
+## D8. The page path resolves nothing extra
+
+When the outcome is the HTML page, the view renders as it did before, with no lookup of its own,
+so a browser's request costs no extra query. The subject is resolved only on the paths that answer
+with RDF or a refusal, before answering, so an address naming nothing is still a 404 there.

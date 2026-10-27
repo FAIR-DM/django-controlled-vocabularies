@@ -45,6 +45,10 @@ Ambiguities the intake decisions left open, resolved while drafting against the 
 - **Q: How does software find out that a page has RDF behind it?** → A: The page names its RDF alternatives in its document head, the conventional way for a crawler or linked-data tool to discover them. It names the four serializations the import reads (Turtle, RDF/XML, JSON-LD and N-Triples), not all of them. They are the ones a consumer is most likely to want, and the rest stay reachable by name. Integrated into FR-010.
 - **Q: A record whose document embeds a blank node, such as a structured note: what does it look like in the RDF?** → A: As a blank node carrying the same statements. The document keeps an embedded node because a blank node has no identifier that survives storage, so it comes out as a new blank node with the same content. Integrated into FR-003 and Edge Cases.
 
+### Session 2026-10-27 (design review)
+
+- **Q: rdflib's `pretty-xml` writer adds statements to a graph holding an RDF list, in some processes and not others. Is it offered?** → A: No. An ordered collection's member list is an RDF list, so it would serve statements the record does not hold, against FR-003 and FR-012. The plain RDF/XML writer produces the same syntax faithfully and stays offered. Integrated into FR-002.
+
 ### Session 2026-10-27 (coverage scan)
 
 Ambiguities surfaced by the structured coverage scan over the drafted specification. The scan found
@@ -164,8 +168,8 @@ format and confirm the refusal lists the formats that are available.
   vocabulary the site displays MUST offer it, whether it was imported or authored here.
 - **FR-002**: The serializations offered MUST be every one the installed rdflib can write a single
   graph in, reachable by rdflib's name for it through `?format=` and by its media type through
-  `Accept`. A serialization whose output describes a change between graphs rather than a graph MUST
-  NOT be offered.
+  `Accept`. A serialization whose output describes a change between graphs rather than a graph, or
+  whose output does not read back to exactly the graph's statements, MUST NOT be offered.
 - **FR-003**: The RDF MUST hold exactly the statements in the subject's stored document and nothing
   else: every statement, in every language, with its datatype, including hidden labels, an ordered
   collection's member list in sequence, and embedded nodes as blank nodes. It MUST NOT add

@@ -72,15 +72,20 @@ class Serialization:
     extension: str
     quads: bool         # written from a Dataset, not a Graph
 
-def serializations() -> list[Serialization]: ...
-def by_name(name: str) -> Serialization | None: ...
-def by_media_type(media_type: str) -> Serialization | None: ...
-def serialize(graph: rdflib.Graph, serialization: Serialization) -> bytes: ...
+    @classmethod
+    def all(cls) -> list["Serialization"]: ...          # cached
+    @classmethod
+    def named(cls, name: str) -> "Serialization | None": ...
+    @classmethod
+    def for_media_type(cls, media_type: str) -> "Serialization | None": ...
+    def serialize(self, graph: rdflib.Graph) -> bytes: ...
 ```
 
 - Built from `rdflib.plugin.plugins(kind=Serializer)`, grouped by `(module_path, class_name)`.
-  `patch` is excluded by name, with a comment saying why (research R2).
-- `name` is the first registered name with no `/`. `media_type` is the registered name with a `/`
+  `patch` is excluded by name, with a comment saying why (research R2). `pretty-xml` is excluded
+  too (D6).
+- `name` is the shortest registered name with no `/` (`ttl`, `xml`, `nt`, `json-ld`, …), the
+  spelling the alternate links and the refusal use. `media_type` is the registered name with a `/`
   if there is one, otherwise the override in `MEDIA_TYPES` (`pretty-xml`, `longturtle`, `nt11`,
   `hext`), otherwise `text/plain`.
 - `extension`: `EXTENSIONS` override first, else the first suffix in
@@ -89,7 +94,7 @@ def serialize(graph: rdflib.Graph, serialization: Serialization) -> bytes: ...
   catching its refusal, cached with the table. A hard-coded pair would miss a later context-only
   serializer, and the check runs once per process.
 - `serialize()` wraps the graph in a `Dataset`'s default graph when `quads` is set.
-- The table is computed once (`functools.cache`).
+- `all()` is computed once (`functools.cache`).
 
 ### 3. `controlled_vocabularies/ui/representations.py` (new, UI)
 
@@ -102,16 +107,19 @@ class RepresentationMixin:
 
 `get()`:
 
-1. Resolve the subject first (`get_representation_subject()`), so an address naming nothing is a
-   404 whatever is asked for (FR-011). The record views return `self.get_object()` and keep it as
-   `self.object`. The vocabulary view returns `self.vocabulary`.
-2. If `format` is in `request.GET`: `by_name()`; unknown → 400 with the translatable message
+1. Decide the outcome first: the page, an RDF serialization, a 400 or a 406. When it is the page,
+   call `super().get()` and resolve nothing here, since the page already resolves its record and
+   is a 404 for a missing one. On every other path resolve the subject
+   (`get_representation_subject()`) before answering, so an address naming nothing is a 404
+   whatever is asked for (FR-011). The record views return `self.get_object()`; the vocabulary
+   view returns `self.vocabulary`.
+2. If `format` is in `request.GET`: `Serialization.named()`; unknown → 400 with the translatable message
    naming every short name, sorted (FR-007). Known → the RDF response, as a download.
 3. Otherwise negotiate `["text/html", *negotiable media types]` with
    `request.get_preferred_type()`. `None` → 406 (FR-007). `text/html` → `super().get()`. An RDF type
    → the RDF response, inline, **unless** `request.accepted_type("text/html")` exists with a quality
    equal to the chosen type's, in which case the page (spec edge case, research R3).
-4. The RDF response: `HttpResponse(serialize(subject.to_graph(), s), content_type=s.media_type)`,
+4. The RDF response: `HttpResponse(s.serialize(subject.to_graph()), content_type=s.media_type)`,
    with `Content-Disposition` from `content_disposition_header(True, f"{slug}.{extension}")` on the
    `?format=` path only (FR-009).
 

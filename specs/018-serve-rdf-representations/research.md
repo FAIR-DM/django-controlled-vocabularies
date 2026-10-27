@@ -37,7 +37,7 @@ registered serializer, as a `Graph` and as a `Dataset` holding it in its default
 | Serializer | Names rdflib registers | Plain graph | Dataset |
 |---|---|---|---|
 | RDF/XML | `application/rdf+xml`, `xml` | yes | yes |
-| Pretty RDF/XML | `pretty-xml` | yes | yes |
+| Pretty RDF/XML | `pretty-xml` | adds statements for an RDF list under some hash seeds (D6) | same |
 | N3 | `text/n3`, `n3` | yes | yes |
 | Turtle | `text/turtle`, `turtle`, `ttl` | yes | yes |
 | Long Turtle | `longturtle` | yes | yes |
@@ -50,7 +50,7 @@ registered serializer, as a `Graph` and as a `Dataset` holding it in its default
 | HexTuples | `hext` | yes | yes |
 | Patch | `patch` | refused | yes, as a change set |
 
-- **Offered:** every serializer but `patch`. Its output is a set of additions and deletions, a
+- **Offered:** every serializer but `patch` and `pretty-xml`. Its output is a set of additions and deletions, a
   change between graphs, which FR-002 excludes. N-Quads and TriX refuse a plain graph and are
   written from a `Dataset` whose default graph holds the statements. That is the "named set of
   graphs" case the spec allows.
@@ -138,4 +138,7 @@ order).
   are CURIEs with no `@context`. Supplying a generated context and parsing as JSON-LD was
   considered and rejected: it would run the JSON-LD processor on every page view, and embedded
   nodes and `skos:memberList` would still need rewriting first.
+- **The alternate links in the page head:** new code, a Cotton component. django-mvp ships no
+  component for head links.
+- **`Resource.to_graph()` and `rdf_class`:** new code on the models, a call into `exchange/graph.py`.
 - **Proving the round trip in tests:** an installed package, `rdflib.compare.isomorphic`.
