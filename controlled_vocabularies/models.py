@@ -149,8 +149,6 @@ class Resource(models.Model):
     rdf_class: str
 
     class Meta:
-        """Leave the table to the models that inherit this one."""
-
         abstract = True
 
     def values(self, curie: str) -> list[dict]:
@@ -488,8 +486,6 @@ class Record(Resource):
     objects = RecordQuerySet.as_manager()
 
     class Meta:
-        """Keep a slug unique within its vocabulary, and order its concepts."""
-
         constraints = [
             models.UniqueConstraint(
                 fields=["scheme", "slug"], name="unique_record_slug_per_scheme"
@@ -652,8 +648,6 @@ class Link(models.Model):
     )
 
     class Meta:
-        """Index the target, so who links to a URI is a lookup."""
-
         # The source column's own index serves rebuilding a record's rows. This one
         # answers who links to a URI, alone or under given predicates (ADR 0025).
         indexes = [

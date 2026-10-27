@@ -328,7 +328,6 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
     )
 
     def __init__(self, vocabulary=None, collection=None, branch=None, **kwargs):
-        """Fix the relation to a record's URI, and derive the choices."""
         if "on_delete" in kwargs:
             raise TypeError(
                 "ConceptField() sets on_delete=PROTECT itself; a consumer may not override it."
@@ -543,7 +542,6 @@ class MultiConceptField(ConceptFieldMixin, ManyToManyField):
     )
 
     def __init__(self, vocabulary=None, collection=None, branch=None, **kwargs):
-        """Refuse a ``through`` model, and derive the choices from the arguments."""
         if "through" in kwargs:
             raise TypeError(
                 "MultiConceptField() generates its own through model with PROTECT on the "

@@ -67,7 +67,6 @@ class SkosImporter:
         scheme: ConceptScheme | None = None,
         base_uri: str | None = None,
     ) -> None:
-        """Set up one import, with an empty report."""
         self.file = file
         self.serialization = serialization
         self.target = scheme

@@ -45,7 +45,6 @@ class PropertyRows:
     }
 
     def __init__(self, record: Record, language: str) -> None:
-        """Load the records and vocabularies the rows link to."""
         self.record = record
         self.scheme = record.scheme
         self.language = language

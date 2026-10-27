@@ -26,7 +26,6 @@ class ReportRenderer:
     def __init__(
         self, report: ImportReport, *, dry_run: bool = False, verbosity: int = 1
     ) -> None:
-        """Keep what the lines are rendered from."""
         self.report = report
         self.dry_run = dry_run
         self.verbosity = verbosity

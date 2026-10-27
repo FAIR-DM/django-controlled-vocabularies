@@ -126,8 +126,6 @@ class ConceptWidget(
 
     # Initialises the control in an inline row added by "Add another", which django-tomselect misses (FS-011).
     class Media:
-        """The script that initialises the control in an inline row."""
-
         js = ["controlled_vocabularies/js/concept-inline.js"]
 
 
@@ -141,8 +139,6 @@ class MultiConceptWidget(
     """The control :class:`MultiConceptChoiceField` renders."""
 
     class Media:
-        """The script that initialises the control in an inline row."""
-
         js = ["controlled_vocabularies/js/concept-inline.js"]
 
 
@@ -185,7 +181,6 @@ class ConceptChoiceField(DeclinesAdminRelatedWrapperMixin, TomSelectModelChoiceF
     widget_class = ConceptWidget
 
     def __init__(self, *args, model_field=None, **kwargs):
-        """Give the widget the model field, and default to the configured control."""
         kwargs.setdefault("config", tomselect_config())
         super().__init__(*args, **kwargs)
         self.widget.model_field = model_field
@@ -209,7 +204,6 @@ class MultiConceptChoiceField(  # type: ignore[misc]
     widget_class = MultiConceptWidget
 
     def __init__(self, *args, model_field=None, **kwargs):
-        """Give the widget the model field, and default to the configured control."""
         kwargs.setdefault("config", tomselect_config())
         super().__init__(*args, **kwargs)
         self.widget.model_field = model_field

@@ -105,7 +105,6 @@ class SourceResolver:
     """
 
     def __init__(self, source: str, *, serialization: str | None = None) -> None:
-        """Keep the source as given, with nothing fetched yet."""
         self.source = source
         self.serialization = serialization
         self.temp_path: Path | None = None
