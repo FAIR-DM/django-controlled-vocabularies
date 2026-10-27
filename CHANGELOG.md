@@ -48,7 +48,7 @@ All notable changes to this project are documented in this file. The format foll
 ### Changed
 
 - The page on choosing a concept moved from `docs/search.md` to
-  `docs/how-to/choosing-a-concept.md`, because django-mvp-sphinx keeps the `search/` address of a
+  `docs/how-to/choose-a-concept.md`, because django-mvp-sphinx keeps the `search/` address of a
   documentation site for its own search.
 - **Breaking:** `ConceptField` and `MultiConceptField` name a vocabulary by its URI, and
   `collection` names a collection by its URI. A slug raises a `TypeError` when the field is

@@ -10,7 +10,7 @@ pip install django-controlled-vocabularies[ui]
 ## Wiring it up
 
 This section adds to the package's base configuration rather than replacing it: `django_tomselect`
-and its middleware are still required, as [choosing a concept by typing](choosing-a-concept.md#choosing-a-concept-by-typing)
+and its middleware are still required, as [choosing a concept by typing](choose-a-concept.md#choosing-a-concept-by-typing)
 describes, and `manage.py check` says so on startup if they are missing.
 
 Add the ui app and django-mvp's own stack to `INSTALLED_APPS` — quoted from this package's own

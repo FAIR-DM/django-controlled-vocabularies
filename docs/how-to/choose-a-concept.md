@@ -1,4 +1,4 @@
-# Choosing a concept
+# Choose a concept
 
 `ConceptField` and `MultiConceptField` render as a search-as-you-type control, both in your own
 forms and on Django admin pages.
