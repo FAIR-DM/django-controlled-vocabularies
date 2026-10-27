@@ -34,7 +34,7 @@ from controlled_vocabularies.checks import (
 from controlled_vocabularies.models import Record
 from tests.factories import ConceptSchemeFactory, RecordFactory, collection_with_members
 from tests.i18n_sweep import visit_fields_checks_source
-from tests.testapp.models import CORE_SAMPLES, MINERAL, ROCK_TYPE, Specimen
+from tests.testapp.models import CORE_SAMPLES, IGNEOUS, MINERAL, ROCK_TYPE, Specimen
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -325,6 +325,63 @@ class TestCheckConceptFieldRestrictionTargetsStaysQuietWhenItShould:
         ):
             call_command("check", stderr=stderr)
         assert CHECK_ID_MISSING_RESTRICTION_TARGET not in stderr.getvalue()
+
+
+@pytest.mark.django_db
+class TestCheckConceptFieldBranchRoots:
+    def branch_warnings(self):
+        return [
+            w
+            for w in check_concept_field_restriction_targets(None)
+            if w.obj.model._meta.label
+            in {"testapp.IgneousSample", "testapp.IgneousLog"}
+        ]
+
+    def test_warns_about_a_branch_root_that_is_missing(self):
+        warnings = self.branch_warnings()
+
+        by_field = {(w.obj.model._meta.label, w.obj.name): w for w in warnings}
+        assert set(by_field) == {
+            ("testapp.IgneousSample", "rock_type"),
+            ("testapp.IgneousLog", "rock_types"),
+        }
+        message = str(by_field[("testapp.IgneousSample", "rock_type")].msg)
+        assert "testapp.IgneousSample" in message
+        assert "rock_type" in message
+        assert IGNEOUS in message
+        assert ROCK_TYPE.uri in message
+
+    def test_reports_nothing_once_the_root_exists_with_nothing_below_it(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        RecordFactory(scheme=scheme, label="Igneous")
+
+        assert self.branch_warnings() == []
+
+    def test_a_collection_with_the_roots_address_does_not_satisfy_it(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        RecordFactory(scheme=scheme, uri=IGNEOUS, type=Record.Type.COLLECTION)
+
+        assert len(self.branch_warnings()) == 2
+
+    def test_a_root_held_by_another_vocabulary_does_not_satisfy_it(self):
+        ConceptSchemeFactory(name="Rock Type")
+        RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"), uri=IGNEOUS)
+
+        assert len(self.branch_warnings()) == 2
+
+    def test_reported_objects_are_warnings_under_the_restriction_target_id(self):
+        warnings = self.branch_warnings()
+
+        assert warnings
+        for warning in warnings:
+            assert isinstance(warning, django_checks.Warning)
+            assert warning.id == CHECK_ID_MISSING_RESTRICTION_TARGET
+
+    def test_costs_one_query_however_many_fields_are_declared(self):
+        with CaptureQueriesContext(connection) as ctx:
+            check_concept_field_restriction_targets(None)
+
+        assert len(ctx.captured_queries) == 1
 
 
 class TestCheckRestrictionTargetsSurvivesUnmigratedDatabase:
@@ -667,6 +724,17 @@ class TestW005MessagesAreStaticWithNamedPlaceholders:
         )
 
         messages = [literal for literal in literals if "%(target)s" in literal]
+        assert len(messages) == 1
+        assert "%(model)s" in messages[0]
+        assert "%(field)s" in messages[0]
+        assert "%(vocabulary)s" in messages[0]
+
+    def test_the_branch_message_carries_the_four_named_placeholders(self):
+        literals = translation_call_string_literals(
+            checks_module.check_concept_field_restriction_targets
+        )
+
+        messages = [literal for literal in literals if "%(root)s" in literal]
         assert len(messages) == 1
         assert "%(model)s" in messages[0]
         assert "%(field)s" in messages[0]

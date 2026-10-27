@@ -15,7 +15,7 @@ CHECK_ID_MISSING_ROUTE = "controlled_vocabularies.W002"
 CHECK_ID_MISSING_INSTALLED_APP = "controlled_vocabularies.W003"
 CHECK_ID_MISSING_MIDDLEWARE = "controlled_vocabularies.W004"
 # Its own id rather than W001: projects silence checks by id, and silencing "vocabulary not
-# loaded" says nothing about a mistyped collection URI (FS-016).
+# loaded" says nothing about a mistyped collection or branch URI (FS-016).
 CHECK_ID_MISSING_RESTRICTION_TARGET = "controlled_vocabularies.W005"
 
 #: The middleware the control's widget needs on the page (``forms.py``). Named
@@ -76,48 +76,75 @@ def check_concept_field_vocabularies(app_configs, **kwargs):
 
 
 def check_concept_field_restriction_targets(app_configs, **kwargs):
-    """Warn about every collection restriction naming a collection that is missing."""
-    targets = [
-        (field, field.vocabulary[0].uri, field.collection)
+    """Warn about every collection or branch restriction naming a target that is missing."""
+    restricted = [
+        field
         for field in concept_fields()
-        if field.collection is not None
+        if field.collection is not None or field.branch is not None
     ]
-    if not targets:
+    if not restricted:
         return []
 
-    # The pair is the key: a collection held in some other vocabulary is not this one's.
+    # The triple is the key: a target held in some other vocabulary is not this one's, and
+    # a collection is not a branch root. One query serves both restrictions.
     # Same DatabaseError guard as check_concept_field_vocabularies.
     try:
         existing = set(
             Record.objects.filter(
-                scheme__uri__in={vocabulary for _, vocabulary, _ in targets},
-                uri__in={uri for _, _, uri in targets},
-                type__in=Record.COLLECTION_TYPES,
-            ).values_list("scheme__uri", "uri")
+                scheme__uri__in={field.vocabulary[0].uri for field in restricted},
+                uri__in={field.collection or field.branch for field in restricted},
+                type__in=[*Record.COLLECTION_TYPES, Record.Type.CONCEPT],
+            ).values_list("scheme__uri", "uri", "type")
         )
     except DatabaseError:
         return []
 
-    return [
-        checks.Warning(
-            _(
-                "%(model)s.%(field)s names collection '%(target)s', which does not exist in the '%(vocabulary)s' vocabulary."
+    warnings = []
+    for field in restricted:
+        vocabulary = field.vocabulary[0].uri
+        if field.collection is not None:
+            if not any(
+                (vocabulary, field.collection, type_) in existing
+                for type_ in Record.COLLECTION_TYPES
+            ):
+                warnings.append(
+                    checks.Warning(
+                        _(
+                            "%(model)s.%(field)s names collection '%(target)s', which does not exist in the '%(vocabulary)s' vocabulary."
+                        )
+                        % {
+                            "model": field.model._meta.label,
+                            "field": field.name,
+                            "target": field.collection,
+                            "vocabulary": vocabulary,
+                        },
+                        hint=_(
+                            "Correct the URI, or load a version of the vocabulary that holds this collection."
+                        ),
+                        obj=field,
+                        id=CHECK_ID_MISSING_RESTRICTION_TARGET,
+                    )
+                )
+        elif (vocabulary, field.branch, Record.Type.CONCEPT) not in existing:
+            warnings.append(
+                checks.Warning(
+                    _(
+                        "%(model)s.%(field)s names branch root '%(root)s', which is not a concept of the '%(vocabulary)s' vocabulary."
+                    )
+                    % {
+                        "model": field.model._meta.label,
+                        "field": field.name,
+                        "root": field.branch,
+                        "vocabulary": vocabulary,
+                    },
+                    hint=_(
+                        "Correct the URI, or load a version of the vocabulary that holds this concept."
+                    ),
+                    obj=field,
+                    id=CHECK_ID_MISSING_RESTRICTION_TARGET,
+                )
             )
-            % {
-                "model": field.model._meta.label,
-                "field": field.name,
-                "target": uri,
-                "vocabulary": vocabulary,
-            },
-            hint=_(
-                "Correct the URI, or load a version of the vocabulary that holds this collection."
-            ),
-            obj=field,
-            id=CHECK_ID_MISSING_RESTRICTION_TARGET,
-        )
-        for field, vocabulary, uri in targets
-        if (vocabulary, uri) not in existing
-    ]
+    return warnings
 
 
 def check_concept_autocomplete_route_included(app_configs, **kwargs):
