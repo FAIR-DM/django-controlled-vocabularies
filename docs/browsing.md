@@ -529,6 +529,7 @@ links are drawn from.
 The mixin answers in `get()`, after the view's `dispatch()`, so an access rule such as
 `LoginRequiredMixin` applies to the RDF exactly as it does to the page.
 
+(demo-project)=
 ## Try it: the demo project
 
 The repository carries a runnable demo of the pages above, wired the same way this page
