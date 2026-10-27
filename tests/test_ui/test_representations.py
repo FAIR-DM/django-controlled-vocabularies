@@ -457,14 +457,18 @@ class TestDownloadMenu:
             f"?format={s.name}" for s in Serialization.all()
         )
 
-    def test_the_menu_sits_in_the_title_row_not_the_list_toolbar(
+    def test_the_downloads_sit_in_the_side_panel_level_with_the_title(
         self, client, subject
     ):
         soup = BeautifulSoup(ask(client, subject, BROWSER).content, "html.parser")
 
-        title = soup.body.select_one(".page-title")
+        side = soup.body.select_one(".mvp-page-side")
 
-        assert title.select("a[download][href^='?format=']")
+        assert side["data-mvp-side-align"] == "title"
+        assert len(side.select("a[download][href^='?format=']")) == len(
+            Serialization.all()
+        )
+        assert not soup.body.select_one(".page-title").select("a[download]")
 
     def test_each_download_is_an_attachment_of_its_format(self, client, subject):
         soup = BeautifulSoup(ask(client, subject, BROWSER).content, "html.parser")

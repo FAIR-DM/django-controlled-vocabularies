@@ -1,0 +1,14 @@
+{# @description A side-panel section listing a vocabulary's or record's RDF downloads, one link per format. #}
+{# @prop downloads:list | description:"The formats on offer, each a dict with a label and an href." #}
+{# @prop class:text | description:"Extra classes on the section." #}
+{% load i18n %}
+<c-vars downloads class />
+{% comment %} A heading and a list, not a term in a description list: it states nothing about the record. {% endcomment %}
+<section class="{{ class }}" aria-labelledby="rdf-representations-label">
+  <p id="rdf-representations-label" class="text-xs uppercase font-semibold text-base-content/60">{% trans "Alternate representations" %}</p>
+  <ul class="flex flex-col gap-1 mt-1">
+    {% for download in downloads %}
+      <li><c-link href="{{ download.href }}" text="{{ download.label }}" hover=True download /></li>
+    {% endfor %}
+  </ul>
+</section>

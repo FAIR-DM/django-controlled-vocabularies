@@ -8,8 +8,8 @@ from django.utils.translation import gettext_lazy as _
 
 from controlled_vocabularies.exchange.serializations import Serialization
 
-#: The serializations the page head names, in order, by short name. The download menu
-#: offers every serialization.
+#: The serializations the page head names, in order, by short name. The side panel
+#: lists every serialization.
 ALTERNATES = ("ttl", "xml", "json-ld", "nt")
 
 __all__ = ["RepresentationMixin"]
@@ -147,7 +147,7 @@ class RepresentationMixin:
         )
 
     def get_context_data(self, **kwargs):
-        """Add the representations the page head names and the download menu offers."""
+        """Add the representations the page head names and the side panel lists."""
         context = super().get_context_data(**kwargs)
         context["rdf_alternates"] = [
             {"media_type": s.media_type, "href": f"?format={s.name}"}

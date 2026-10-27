@@ -1,18 +1,6 @@
 {% extends "list_view.html" %}
 {% load i18n %}
 {% block head %}{{ block.super }}<c-controlled-vocabularies.rdf-alternates :alternates="rdf_alternates" />{% endblock %}
-{% block page.title %}
-  {# django-mvp's title row, with the download menu where a detail page puts its actions: it acts on the vocabulary, not on the list below. #}
-  <c-mvp.page.title :title="page.title"
-                    :subtitle="page.subtitle"
-                    :info="page.info"
-                    :info_actions="page.info_actions"
-                    inline_actions>
-    <c-slot name="actions">
-      <c-controlled-vocabularies.rdf-download :downloads="rdf_downloads" />
-    </c-slot>
-  </c-mvp.page.title>
-{% endblock page.title %}
 {% comment %}
   The title and lead text are the vocabulary's own (the view's page title and subtitle). Everything
   else the page says about the vocabulary sits in the side panel, so the content column is the
@@ -62,13 +50,13 @@
 {% endblock page.toolbar %}
 {% block page.side %}
   {% comment %}
-    Set exactly as django-mvp's own filter panel on a list page: at the end, level with the content,
+    Set as django-mvp's own filter panel on a list page, at the end, but level with the page title,
     a column from xl, a drawer below it, sticky. Only the label and content differ.
   {% endcomment %}
   <c-mvp.page.side id="vocabulary-about"
                    label="{% trans "About this vocabulary" %}"
                    position="end"
-                   align="content"
+                   align="title"
                    width="md">
     <div class="flex flex-col gap-4 px-3 text-sm">
       <dl class="flex flex-col gap-3">
@@ -134,6 +122,7 @@
           </dd>
         </div>
       </dl>
+      <c-controlled-vocabularies.rdf-representations :downloads="rdf_downloads" class="border-t border-base-300 pt-4" />
     </div>
   </c-mvp.page.side>
 {% endblock page.side %}

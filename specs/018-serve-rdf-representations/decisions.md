@@ -114,15 +114,17 @@ vocabulary and the importer can place it.
 
 **ADR:** docs/adr/0028-a-rows-rdf-is-its-own-document-and-what-the-row-records.md
 
-## D12. A download menu in each page's title row
+## D12. The downloads are listed in each page's side panel
 
 The original interpretation offered a visible download link and it was dropped when a vocabulary's
 representation was narrowed to its own statements. At the walkthrough the maintainer asked for it
-back. Each of the three pages has a Download menu offering every serialization the site offers,
-each under the name readers know it by (`Serialization.label`), sorted by that name. It is built
-the way django-mvp's own share menu is: `c-mvp.dropdown` with a `c-button` trigger and daisy-cotton's
-`c-menu` and `c-menu.item`. It sits in the title row on all three pages, because it acts on the
-vocabulary or record. On a vocabulary's page, whose list view puts its actions in the list toolbar,
-the title block passes the menu into the title row's actions slot.
+back, first as a menu in the title row, then, having seen both, as a list under "Alternate
+representations" in the side panel. Each of the three pages lists every serialization the site
+offers there, under the name readers know it by (`Serialization.label`), sorted by that name. A
+vocabulary's page adds it as the last section of its "About this vocabulary" panel. The concept
+and collection pages gain a panel of their own, with a button to open it below the breakpoint.
+All three panels start level with the page title. The section is a heading and a list, not a term
+in a description list, because it states nothing about the record. django-mvp's side panel always
+shows its label as a heading, and the maintainer chose to keep it.
 
-**ADR:** none — a page control, local to the three templates.
+**ADR:** none — a page layout choice, local to the three templates.
