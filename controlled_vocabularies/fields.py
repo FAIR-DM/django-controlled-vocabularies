@@ -52,14 +52,13 @@ class Vocabulary:
     ``manage.py sync_vocabularies`` loads every vocabulary a concept field names. It
     reads one from ``source`` when given, and from ``uri`` itself otherwise.
 
-    Args:
+    A ``uri`` that is not an absolute URI raises ``TypeError``.
+
+    Attributes:
         uri: The URI the vocabulary's concept scheme is published under.
         source: A local path or an http(s) address the vocabulary can be read from.
         format: The serialization ``source`` is in, when its name or the server does
             not say.
-
-    Raises:
-        TypeError: ``uri`` is not an absolute URI.
     """
 
     uri: str
@@ -67,6 +66,7 @@ class Vocabulary:
     format: str | None = None
 
     def __post_init__(self):
+        """Refuse a ``uri`` that is not an absolute URI."""
         require_uri(self.uri, type(self).__name__, "uri")
 
 
@@ -99,6 +99,8 @@ class ConceptFieldMixin:
     def normalise_vocabulary(self, vocabulary):
         """Normalise a ``vocabulary`` argument to a tuple of distinct vocabularies.
 
+        An element that is neither a :class:`Vocabulary` nor a URI raises ``TypeError``.
+
         Args:
             vocabulary: One URI or :class:`Vocabulary`, an iterable of them, or ``None``
                 for no restriction.
@@ -106,9 +108,6 @@ class ConceptFieldMixin:
         Returns:
             The vocabularies in declaration order, the first of each URI kept; empty for
             ``None``.
-
-        Raises:
-            TypeError: An element is neither a :class:`Vocabulary` nor a URI.
         """
         if vocabulary is None:
             elements = ()
@@ -314,6 +313,11 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
     Raises:
         TypeError: The consumer supplied ``on_delete``, ``to_field``,
             ``limit_choices_to`` or an invalid restriction.
+
+    Attributes:
+        default_help_text: The help text when the field is not restricted.
+        default_restricted_help_text: The help text when ``collection`` or ``branch``
+            restricts the choices.
     """
 
     default_help_text = _(
@@ -523,6 +527,11 @@ class MultiConceptField(ConceptFieldMixin, ManyToManyField):
 
     Raises:
         TypeError: The consumer supplied ``through``, ``limit_choices_to`` or an invalid restriction.
+
+    Attributes:
+        default_help_text: The help text when the field is not restricted.
+        default_restricted_help_text: The help text when ``collection`` or ``branch``
+            restricts the choices.
     """
 
     default_help_text = _(
@@ -551,6 +560,9 @@ class MultiConceptField(ConceptFieldMixin, ManyToManyField):
 
         Args:
             cls: The consuming model class to wrap.
+
+        Returns:
+            None. A class already wrapped, or inheriting a wrapper, is left as it is.
         """
         # A subclass inherits an installed wrapper; wrapping again would report twice.
         if getattr(cls.full_clean, "multi_concept_field_required_set_check", False):

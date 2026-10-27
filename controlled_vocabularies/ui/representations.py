@@ -25,8 +25,7 @@ class RepresentationMixin:
     def get_representation_subject(self):
         """Return the vocabulary or record whose statements are served.
 
-        Returns:
-            A ``ConceptScheme`` or a ``Record``.
+        A subclass returns a ``ConceptScheme`` or a ``Record``.
 
         Raises:
             NotImplementedError: When the view does not say what its subject is.

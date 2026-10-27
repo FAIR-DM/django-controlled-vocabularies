@@ -82,11 +82,11 @@ class CountedCheckboxes(forms.CheckboxSelectMultiple):
     """Checkboxes that show beside each option how many records it would match.
 
     The count is added when the option is drawn and is not part of the choice's label, so an
-    applied filter elsewhere on the page is named without it.
+    applied filter elsewhere on the page is named without it. Until counts are set, each
+    option is drawn without one.
     """
 
     def __init__(self, *args, **kwargs):
-        """Start with no counts, which draws each option without one."""
         super().__init__(*args, **kwargs)
         self.counts: dict[str, int] | None = None
 
@@ -188,6 +188,18 @@ class VocabularyFilter(django_filters.FilterSet):
     them. Each facet offers the values the site's vocabularies carry, and is left out
     when fewer than two vocabularies differ on it. The view annotates ``concept_count``
     and ``modified`` onto the queryset.
+
+    Args:
+        *args: Passed to ``FilterSet``.
+        request: The request being answered.
+        **kwargs: Passed to ``FilterSet``.
+
+    Attributes:
+        q: Searches the vocabularies' text.
+        publisher: Narrows to vocabularies from the chosen publishers.
+        license: Narrows to vocabularies under the chosen licences.
+        language: Narrows to vocabularies in the chosen languages.
+        o: Orders the list.
     """
 
     q = VocabularySearch(fields=[], max_words=MAX_SEARCH_WORDS)
@@ -224,7 +236,6 @@ class VocabularyFilter(django_filters.FilterSet):
         fields: list[str] = []
 
     def __init__(self, *args, request=None, **kwargs):
-        """Offer each facet the values vocabularies carry, and drop those that cannot narrow."""
         super().__init__(*args, request=request, **kwargs)
         self.profiles = {
             scheme.pk: Profile.of(scheme) for scheme in ConceptScheme.objects.all()

@@ -34,7 +34,7 @@ class ReportRenderer:
         """Yield the report's lines: the counts, each untouched record, then any notice.
 
         Yields:
-            One translated line at a time, and none at all at ``--verbosity 0``.
+            str: One translated line at a time, and none at all at ``--verbosity 0``.
         """
         # Django's contract for --verbosity 0 is no output. A refusal is unaffected, since
         # it is raised as a CommandError rather than rendered here.

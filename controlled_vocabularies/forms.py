@@ -173,6 +173,9 @@ class ConceptChoiceField(DeclinesAdminRelatedWrapperMixin, TomSelectModelChoiceF
         model_field: The model field this form field was built from, handed to the
             widget so it can restrict its choices.
         **kwargs: Passed to ``TomSelectModelChoiceField``.
+
+    Attributes:
+        widget_class: The widget the field renders with.
     """
 
     widget_class = ConceptWidget
@@ -193,6 +196,9 @@ class MultiConceptChoiceField(  # type: ignore[misc]
         model_field: The model field this form field was built from, handed to the
             widget so it can restrict its choices.
         **kwargs: Passed to ``TomSelectModelMultipleChoiceField``.
+
+    Attributes:
+        widget_class: The widget the field renders with.
     """
 
     widget_class = MultiConceptWidget

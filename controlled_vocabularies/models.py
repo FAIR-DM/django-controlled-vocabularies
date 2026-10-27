@@ -242,6 +242,9 @@ class Resource(models.Model):
 
         Returns:
             The URI to store when none was given.
+
+        Raises:
+            NotImplementedError: The model does not say how its URIs are minted.
         """
         raise NotImplementedError
 
@@ -414,11 +417,9 @@ class RecordQuerySet(models.QuerySet):
         link_source = column(Link, "source")
         link_predicate = column(Link, "predicate")
         link_target = column(Link, "target")
-        # Union rather than union all, so a cycle in the stored links ends the walk.
-        # PostgreSQL allows a recursive term to refer to the walk only once, so both
-        # directions are one join with an OR. Each side of it is an indexed lookup from
-        # the records found so far: an edge set built apart from the walk is read whole
-        # on every step. Every value is a parameter.
+        # Union, not union all, so a cycle in the stored links ends the walk. PostgreSQL
+        # allows one reference to the walk per recursive term, so both directions are
+        # one join with an OR, each side an indexed lookup from the records so far.
         sql = f"""
             WITH RECURSIVE vocabulary(id) AS (
                 SELECT {scheme_pk} FROM {scheme_table} WHERE {scheme_uri_column} = %s

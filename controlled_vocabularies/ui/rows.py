@@ -32,10 +32,12 @@ class PropertyRows:
     Args:
         record: The record to describe, with its vocabulary loaded.
         language: The language being read.
+
+    Attributes:
+        INVERSES: Each hierarchy and association predicate, and the predicate it reads
+            as from the other end.
     """
 
-    #: Each hierarchy and association predicate, and the predicate it reads as from the
-    #: other end.
     INVERSES: ClassVar[dict[str, str]] = {
         "skos:broader": "skos:narrower",
         "skos:narrower": "skos:broader",
@@ -250,6 +252,7 @@ class PublicationDetails:
         license: Its licence, as an address or a name.
         version: Its version.
         modified: When it last changed, formatted when it is a date.
+        CURIES: The predicate each detail is read from.
     """
 
     publisher: str
