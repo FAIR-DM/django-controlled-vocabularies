@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+## [v0.2.0] - 2026-10-27
+
 ### Added
 
 - Django 6.1 is supported, and tested on every change alongside 5.2 and 6.0.
