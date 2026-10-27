@@ -129,33 +129,42 @@ pages are an opt-in extra — both are covered in the
 
 ## Quick start
 
-Declare the vocabularies your site uses, keyed by the slug your fields name them by. A file
-shipped with the project is the most dependable source, and an http(s) address works too:
+Attach a concept to your own model. The field names its vocabulary by URI, and says where the
+vocabulary is published. A file shipped with the project is the most dependable source, and an
+http(s) address works too:
 
 ```python
-# settings.py
-CONTROLLED_VOCABULARIES = {
-    "rock-type": {"source": BASE_DIR / "vocabularies" / "rock-type.ttl"},
-}
+from pathlib import Path
+
+from django.db import models
+
+from controlled_vocabularies.fields import ConceptField, Vocabulary
+
+ROCK_TYPE = Vocabulary(
+    "https://vocab.example.org/rock-type",
+    source=Path(__file__).parent / "vocabularies" / "rock-type.ttl",
+)
+
+
+class Specimen(models.Model):
+    name = models.CharField(max_length=200)
+    rock_type = ConceptField(vocabulary=ROCK_TYPE)
 ```
 
-Load every one of them, on first install and again on every deploy:
+Load every vocabulary your models name, on first install and again on every deploy:
 
 ```bash
 python manage.py sync_vocabularies
 ```
 
-Then attach a concept to your own model:
+A vocabulary no field names, for a field open to any concept, is declared in settings and loaded
+by the same command:
 
 ```python
-from django.db import models
-
-from controlled_vocabularies.fields import ConceptField
-
-
-class Specimen(models.Model):
-    name = models.CharField(max_length=200)
-    rock_type = ConceptField(vocabulary="rock-type")
+# settings.py
+CONTROLLED_VOCABULARIES = {
+    "keywords": {"source": BASE_DIR / "vocabularies" / "keywords.ttl"},
+}
 ```
 
 The field is a `ForeignKey` to a `Record`, the model that holds each concept, restricted to the

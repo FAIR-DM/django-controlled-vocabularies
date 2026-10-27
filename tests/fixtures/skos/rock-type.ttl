@@ -1,0 +1,20 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<https://example.org/vocabularies/rock-type>
+    a skos:ConceptScheme ;
+    skos:prefLabel "Rock Type"@en .
+
+<https://example.org/vocabularies/rock-type/granite>
+    a skos:Concept ;
+    skos:inScheme <https://example.org/vocabularies/rock-type> ;
+    skos:prefLabel "Granite"@en .
+
+<https://example.org/vocabularies/rock-type/basalt>
+    a skos:Concept ;
+    skos:inScheme <https://example.org/vocabularies/rock-type> ;
+    skos:prefLabel "Basalt"@en .
+
+<https://example.org/vocabularies/rock-type/collection/core-samples>
+    a skos:Collection ;
+    skos:prefLabel "Core samples"@en ;
+    skos:member <https://example.org/vocabularies/rock-type/granite> .

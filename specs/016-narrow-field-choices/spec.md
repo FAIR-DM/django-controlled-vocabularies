@@ -18,14 +18,14 @@
 
 Decisions taken with the maintainer at intake that decide behaviour a consumer would otherwise discover by guessing.
 
-- **Q: What does a consumer write to name a collection?** → A: Its slug, the way a vocabulary is already named. The alternatives considered were the collection's URI and its notation. Both were rejected: the slug is what the existing vocabulary restriction already uses, so one rule covers every argument. A slug is fixed when a collection is first saved and does not move when it is renamed, and a declaration naming a slug that no collection holds is reported by the system check in User Story 3. Integrated into FR-001 and Edge Cases.
+- **Q: What does a consumer write to name a collection?** → A: Its URI, the way a vocabulary is named (#233, ADR 0026), so one rule covers every argument. A URI does not move when a collection is renamed, and a declaration naming a URI that no collection holds is reported by the system check in User Story 3. Integrated into FR-001 and Edge Cases.
 - **Q: A collection can be ordered, which states a deliberate sequence. Does that sequence reach a field restricted to it?** → A: Yes, where a person looks at the choices. A collection small enough to restrict a field to is exactly the case where the sequence is visible to whoever picks a value, and if it does not reach here it reaches nowhere a consumer ever looks. The concept search offers an ordered collection's members in its sequence while the search box is empty. It is specified as its own P2 story rather than folded into User Story 1, so it can be dropped without the restriction losing its meaning. Integrated into FR-008 and User Story 4.
 
 ### Session 2026-08-25 (coverage scan)
 
 Ambiguities surfaced by the structured coverage scan over the drafted spec, resolved against the intake decisions, FS-009's precedents, and the constitution.
 
-- **Q: What happens when a declaration combines the restriction with several vocabularies, or with none?** → A: It is refused when the declaration is read, the way the existing fields already refuse `on_delete`, `through` and `limit_choices_to`. A collection's slug is unique only within its vocabulary, so with several vocabularies named there is no way to say which collection is meant. Refusing at declaration time rather than at validation time means the failure lands on the developer who wrote it, in the process that imports the model, rather than on whoever first submits a form. Integrated into FR-003 and User Story 2.
+- **Q: What happens when a declaration combines the restriction with several vocabularies, or with none?** → A: It is refused when the declaration is read, the way the existing fields already refuse `on_delete`, `through` and `limit_choices_to`. A collection belongs to one vocabulary, so with several vocabularies named the restriction would narrow some of them and not others. Refusing at declaration time rather than at validation time means the failure lands on the developer who wrote it, in the process that imports the model, rather than on whoever first submits a form. Integrated into FR-003 and User Story 2.
 - **Q: Does a restriction naming a collection absent from the database stop the project?** → A: No, and for exactly the reason FS-009 recorded for a missing vocabulary: collections arrive by import, which only a running project can perform, so refusing to boot would make a fresh install unbootstrappable. The gap is reported by the same system check FS-009 established, as a warning carrying a stable identifier, silent when the database cannot be queried at all. Integrated into FR-006 and User Story 3.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -54,9 +54,9 @@ A developer whose project uses a vocabulary of several thousand concepts declare
 
 A developer writes a declaration that restricts a field to a collection while naming two vocabularies, or none. The model does not import. The message says which rule was broken, so the mistake is fixed where it was made rather than found by whoever first uses the form.
 
-**Why this priority**: The rule this story enforces is the only thing keeping the restriction unambiguous, and the failure is otherwise silent: with several vocabularies named, a collection slug can mean any of them. Silence here produces a field that looks constrained and is not, which is worse than the unrestricted field the developer started from.
+**Why this priority**: The rule this story enforces is the only thing keeping the restriction unambiguous, and the failure is otherwise silent: with several vocabularies named, a collection narrows only the one it belongs to. Silence here produces a field that looks constrained and is not, which is worse than the unrestricted field the developer started from.
 
-**Independent Test**: Attempt each invalid declaration — the restriction alongside several vocabularies, alongside no vocabulary, and with an empty slug — and confirm each is refused when the declaration is read, with a message identifying the rule.
+**Independent Test**: Attempt each invalid declaration — the restriction alongside several vocabularies, alongside no vocabulary, and with an empty value — and confirm each is refused when the declaration is read, with a message identifying the rule.
 
 **Acceptance Scenarios**:
 
@@ -64,14 +64,14 @@ A developer writes a declaration that restricts a field to a collection while na
 2. **Given** a declaration naming no vocabulary and a collection, **When** the declaration is read, **Then** it is refused for the same reason.
 3. **Given** a declaration naming one vocabulary and a collection, **When** the declaration is read, **Then** it is accepted.
 4. **Given** any declaration not using the restriction, **When** the declaration is read, **Then** it behaves exactly as it did before this feature existed.
-5. **Given** a restriction whose slug is an empty string, or is not a string, **When** the declaration is read, **Then** it is refused, on the same reasoning that already refuses an empty vocabulary slug.
+5. **Given** a restriction that is not a URI, a slug or an empty string among them, **When** the declaration is read, **Then** it is refused, on the same reasoning that already refuses a vocabulary named by anything but its URI.
 6. **Given** a declaration that also supplies `limit_choices_to`, **When** the declaration is read, **Then** it is refused, because the package derives that restriction itself.
 
 ---
 
 ### User Story 3 - A restriction naming a collection that is absent is reported, not silent (Priority: P2)
 
-A developer mistypes a collection slug, or names a collection that this project's import has not brought in yet. The project still imports its models, migrates and starts. Running `manage.py check` names the field and the collection it expects, so the gap shows up in CI and on deploy instead of as a form that mysteriously offers nothing.
+A developer mistypes a collection's URI, or names a collection that this project's import has not brought in yet. The project still imports its models, migrates and starts. Running `manage.py check` names the field and the collection it expects, so the gap shows up in CI and on deploy instead of as a form that mysteriously offers nothing.
 
 **Why this priority**: A restriction is the one kind of declaration whose failure mode is an empty field rather than an error, and an empty field looks identical whether the collection is missing, misspelt or genuinely empty. It sits below the restriction itself because a project whose collections are all present never reaches this story.
 
@@ -81,7 +81,7 @@ A developer mistypes a collection slug, or names a collection that this project'
 
 1. **Given** a field restricted to a collection absent from the named vocabulary, **When** `makemigrations` and `migrate` are run, **Then** both succeed.
 2. **Given** the same project, **When** `manage.py check` is run, **Then** it reports a warning identifying the field and the collection it names.
-3. **Given** a collection slug that another vocabulary holds but the named one does not, **When** `check` is run, **Then** it is still reported, because the pair of vocabulary and slug is what is looked up.
+3. **Given** a collection URI that another vocabulary holds but the named one does not, **When** `check` is run, **Then** it is still reported, because the pair of vocabulary and collection is what is looked up.
 4. **Given** a project that silences the check by its identifier, **When** `check` is run, **Then** it reports nothing for that field.
 5. **Given** a database whose tables do not exist yet, **When** `check` is run, **Then** it reports nothing rather than failing.
 6. **Given** a collection that exists and holds no members, **When** `check` is run, **Then** it reports nothing, because the collection is present and empty rather than missing.
@@ -125,8 +125,8 @@ Every message this restriction puts in front of a person is translatable, the RE
 
 ### Edge Cases
 
-- A collection slug is unique only within its vocabulary. The collection is therefore resolved inside the one named vocabulary, so a name belonging to some other vocabulary is simply absent here and reported as absent.
-- A collection's slug is fixed when it is first saved, so a rename does not break a declaration naming it.
+- The collection is resolved inside the one named vocabulary, so a collection belonging to some other vocabulary is simply absent here and reported as absent.
+- A collection's URI does not change when it is renamed, so a rename does not break a declaration naming it.
 - The named collection exists and holds no members. The field offers nothing and the check stays quiet, because the collection is present and empty rather than missing — the same distinction FS-009 drew for an empty vocabulary.
 - A concept is removed from the collection while a record points at it. The reference survives, and the record holds a concept outside its field's restriction until it is next validated — the same outcome FS-009 recorded for a concept moved between vocabularies.
 - A collection of either type, `skos:Collection` or `skos:OrderedCollection`, can be named. Its members are those under `skos:member` and `skos:memberList`.
@@ -138,12 +138,12 @@ Every message this restriction puts in front of a person is translatable, the RE
 
 ### Functional Requirements
 
-- **FR-001**: Both concept fields MUST accept one optional restriction that narrows choices inside the vocabulary a declaration names — a collection, naming its target by slug, resolved within that vocabulary. The slug MUST be a non-empty string.
+- **FR-001**: Both concept fields MUST accept one optional restriction that narrows choices inside the vocabulary a declaration names — a collection, naming its target by URI, resolved within that vocabulary. A value that is not a URI MUST be refused.
 - **FR-002**: The restriction MUST limit the field to that collection's members, resolved live rather than fixed when the declaration is read, so a membership change reaches the field without a code change or a restart. A collection of either type MUST be accepted as the target.
 - **FR-003**: The restriction MUST be refused when the declaration does not name exactly one vocabulary, at the point the declaration is read, with a message stating the rule.
 - **FR-004**: No database query MUST be issued while a declaration is being read, exactly as for the existing vocabulary restriction, so a project imports its models, generates migrations, migrates and starts with the named collection absent.
 - **FR-005**: The restriction MUST be enforced both in the choices a form offers and when a record is validated, for the single-value and the multi-value field alike, with a person-facing message naming the collection the field is restricted to. For the multi-value field a write containing any concept outside the restriction MUST be refused whole, leaving the record's existing set untouched.
-- **FR-006**: The package's existing system check MUST additionally report, as a warning with a stable identifier, every declared field whose named collection is absent from the named vocabulary, identifying the specific absent collection by vocabulary and slug. It MUST report nothing when the database cannot be queried, and nothing for a collection that exists and is empty.
+- **FR-006**: The package's existing system check MUST additionally report, as a warning with a stable identifier, every declared field whose named collection is absent from the named vocabulary, identifying the specific absent collection by vocabulary and URI. It MUST report nothing when the database cannot be queried, and nothing for a collection that exists and is empty.
 - **FR-007**: A restriction MUST survive `deconstruct()` and rebuild from the emitted arguments, so migrations, `makemigrations --check` and the test-database build are unaffected, and the emitted arguments MUST record the restriction itself rather than any expression derived from it.
 - **FR-008**: Where the restriction is a collection marked ordered, the concept search MUST offer the collection's members in the sequence it lists them while the search term is empty, and MUST return to relevance order once a term is typed. No sequence is promised anywhere else.
 - **FR-009**: Every string this restriction puts in front of a person, including refusal messages and the `help_text` a restricted field falls back to, MUST be translatable per Article XII, with named placeholders so message identifiers stay static.
@@ -152,9 +152,9 @@ Every message this restriction puts in front of a person is translatable, the RE
 
 ### Key Entities *(include if feature involves data)*
 
-- **Restriction**: The second, narrower constraint a declaration may carry inside its one named vocabulary: `collection=<slug>`, or none, which is every declaration that exists without it.
+- **Restriction**: The second, narrower constraint a declaration may carry inside its one named vocabulary: `collection=<uri>`, or none, which is every declaration that exists without it.
 - **Collection**: A publisher-defined grouping of concepts within one vocabulary, optionally ordered, held as a `Record` of type `skos:Collection` or `skos:OrderedCollection`. This feature reads it and never writes it.
-- **Named target**: The collection a restriction points at, identified by slug within the named vocabulary. It may be absent when the declaration is read, and it arrives by import.
+- **Named target**: The collection a restriction points at, identified by URI within the named vocabulary. It may be absent when the declaration is read, and it arrives by import.
 
 ## Success Criteria *(mandatory)*
 

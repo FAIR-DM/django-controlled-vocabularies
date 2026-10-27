@@ -1,0 +1,15 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<https://example.org/vocabularies/mineral>
+    a skos:ConceptScheme ;
+    skos:prefLabel "Mineral"@en .
+
+<https://example.org/vocabularies/mineral/quartz>
+    a skos:Concept ;
+    skos:inScheme <https://example.org/vocabularies/mineral> ;
+    skos:prefLabel "Quartz"@en .
+
+<https://example.org/vocabularies/mineral/feldspar>
+    a skos:Concept ;
+    skos:inScheme <https://example.org/vocabularies/mineral> ;
+    skos:prefLabel "Feldspar"@en .

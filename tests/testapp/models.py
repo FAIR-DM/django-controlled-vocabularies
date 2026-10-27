@@ -1,9 +1,26 @@
 """Models that carry concept fields, for the test project to consume."""
 
+from pathlib import Path
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from controlled_vocabularies.fields import ConceptField, MultiConceptField
+from controlled_vocabularies.fields import ConceptField, MultiConceptField, Vocabulary
+
+FIXTURES = Path(__file__).parent.parent / "fixtures" / "skos"
+
+# Published under the addresses the test settings compose for a vocabulary named "Rock Type"
+# or "Mineral", so a factory-built vocabulary and the shipped file are the same vocabulary.
+ROCK_TYPE = Vocabulary(
+    "https://example.org/vocabularies/rock-type", source=FIXTURES / "rock-type.ttl"
+)
+MINERAL = Vocabulary(
+    "https://example.org/vocabularies/mineral", source=FIXTURES / "mineral.ttl"
+)
+CORE_SAMPLES = "https://example.org/vocabularies/rock-type/collection/core-samples"
+# Named only by the abstract models below.
+ERA = Vocabulary("https://example.org/vocabularies/era", source=FIXTURES / "era.ttl")
+UNUSED = "https://example.org/vocabularies/unused"
 
 
 class Specimen(models.Model):
@@ -15,7 +32,7 @@ class Specimen(models.Model):
         help_text=_("The specimen's catalogue name."),
     )
     rock_type = ConceptField(
-        vocabulary="rock-type",
+        vocabulary=ROCK_TYPE,
         verbose_name=_("rock type"),
         help_text=_("The rock type this specimen is classified as."),
     )
@@ -43,7 +60,7 @@ class Sample(models.Model):
         help_text=_("The sample's catalogue name."),
     )
     mineral = ConceptField(
-        vocabulary="mineral",
+        vocabulary=MINERAL,
         null=True,
         blank=True,
         related_name="samples",
@@ -65,7 +82,7 @@ class Artifact(models.Model):
         help_text=_("The artifact's catalogue name."),
     )
     mineral = ConceptField(
-        vocabulary="mineral",
+        vocabulary=MINERAL,
         null=True,
         blank=True,
         verbose_name=_("mineral"),
@@ -91,7 +108,7 @@ class Deposit(models.Model):
         help_text=_("The deposit's catalogue name."),
     )
     rock_types = MultiConceptField(
-        vocabulary="rock-type",
+        vocabulary=ROCK_TYPE,
         verbose_name=_("rock types"),
         help_text=_("The rock types present at this deposit."),
     )
@@ -110,13 +127,13 @@ class Survey(models.Model):
         help_text=_("The survey's catalogue name."),
     )
     primary_minerals = MultiConceptField(
-        vocabulary="mineral",
+        vocabulary=MINERAL,
         related_name="+",
         verbose_name=_("primary minerals"),
         help_text=_("The minerals this survey primarily targets."),
     )
     secondary_minerals = MultiConceptField(
-        vocabulary="mineral",
+        vocabulary=MINERAL,
         related_name="+",
         verbose_name=_("secondary minerals"),
         help_text=_("The minerals this survey secondarily targets."),
@@ -136,7 +153,7 @@ class Outcrop(models.Model):
         help_text=_("The outcrop's catalogue name."),
     )
     minerals = MultiConceptField(
-        vocabulary="mineral",
+        vocabulary=MINERAL,
         blank=True,
         related_name="outcrops",
         verbose_name=_("minerals"),
@@ -157,7 +174,7 @@ class RockSample(models.Model):
         help_text=_("The rock sample's catalogue name."),
     )
     primary_mineral = ConceptField(
-        vocabulary="mineral",
+        vocabulary=MINERAL,
         null=True,
         blank=True,
         verbose_name=_("primary mineral"),
@@ -166,7 +183,7 @@ class RockSample(models.Model):
         ),
     )
     associated_minerals = MultiConceptField(
-        vocabulary="mineral",
+        vocabulary=MINERAL,
         blank=True,
         related_name="+",
         verbose_name=_("associated minerals"),
@@ -187,7 +204,7 @@ class FieldNote(models.Model):
         help_text=_("The field note's catalogue name."),
     )
     keywords = MultiConceptField(
-        vocabulary=["rock-type", "mineral"],
+        vocabulary=[ROCK_TYPE, MINERAL],
         blank=True,
         related_name="+",
         verbose_name=_("keywords"),
@@ -210,7 +227,7 @@ class Borehole(models.Model):
         help_text=_("The borehole's catalogue name."),
     )
     dominant_material = ConceptField(
-        vocabulary=["rock-type", "mineral"],
+        vocabulary=[ROCK_TYPE, MINERAL],
         null=True,
         blank=True,
         related_name="+",
@@ -279,8 +296,8 @@ class CoreSample(models.Model):
         help_text=_("The core sample's catalogue name."),
     )
     rock_type = ConceptField(
-        vocabulary="rock-type",
-        collection="core-samples",
+        vocabulary=ROCK_TYPE,
+        collection=CORE_SAMPLES,
         null=True,
         blank=True,
         related_name="+",
@@ -304,8 +321,8 @@ class DrillCore(models.Model):
         help_text=_("The drill core's catalogue name."),
     )
     rock_types = MultiConceptField(
-        vocabulary="rock-type",
-        collection="core-samples",
+        vocabulary=ROCK_TYPE,
+        collection=CORE_SAMPLES,
         blank=True,
         related_name="drill_cores",
         verbose_name=_("rock types"),
@@ -328,7 +345,7 @@ class Locality(models.Model):
         help_text=_("The locality's catalogue name."),
     )
     primary_mineral = ConceptField(
-        vocabulary="mineral",
+        vocabulary=MINERAL,
         null=True,
         blank=True,
         related_name="+",
@@ -341,3 +358,49 @@ class Locality(models.Model):
     def __str__(self) -> str:
         """Return the name."""
         return self.name
+
+
+class Dated(models.Model):
+    """An abstract model of the kind a reusable app ships, naming a vocabulary with its source."""
+
+    era = ConceptField(
+        vocabulary=ERA,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("era"),
+        help_text=_("The era this record dates from, if known."),
+    )
+
+    class Meta:
+        abstract = True
+
+
+class Fossil(Dated):
+    """Inherit the ``era`` field from :class:`Dated`."""
+
+    name = models.CharField(
+        max_length=255,
+        verbose_name=_("name"),
+        help_text=_("The fossil's catalogue name."),
+    )
+
+    def __str__(self) -> str:
+        """Return the name."""
+        return self.name
+
+
+class Undated(models.Model):
+    """An abstract model nothing inherits, naming a vocabulary no concrete model names."""
+
+    era = ConceptField(
+        vocabulary=UNUSED,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("era"),
+        help_text=_("The era this record dates from, if known."),
+    )
+
+    class Meta:
+        abstract = True

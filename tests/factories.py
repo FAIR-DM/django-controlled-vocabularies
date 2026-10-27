@@ -10,6 +10,7 @@ from tests.testapp.models import (
     Deposit,
     DrillCore,
     FieldNote,
+    Fossil,
     Locality,
     Outcrop,
     Photograph,
@@ -259,6 +260,15 @@ class SketchFactory(factory.django.DjangoModelFactory):
         model = Sketch
 
     name = factory.Sequence(lambda n: f"Sketch {n}")
+
+
+class FossilFactory(factory.django.DjangoModelFactory):
+    """Build a saved :class:`~tests.testapp.models.Fossil` with no concept attached."""
+
+    class Meta:
+        model = Fossil
+
+    name = factory.Sequence(lambda n: f"Fossil {n}")
 
 
 class CoreSampleFactory(factory.django.DjangoModelFactory):

@@ -77,7 +77,8 @@ class StubRequestHandler(http.server.BaseHTTPRequestHandler):
     """Answer GET requests from the responses configured on the server."""
 
     def do_GET(self) -> None:
-        """Send the response configured for the path, or 404."""
+        """Record the request's headers, then send the response configured for the path, or 404."""
+        self.server.request_headers.append(dict(self.headers))  # type: ignore[attr-defined]
         response = self.server.responses.get(self.path)  # type: ignore[attr-defined]
         if response is None:
             self.send_response(404)
@@ -113,6 +114,11 @@ class HTTPStub:
         """The base URL the server listens on."""
         return f"http://127.0.0.1:{self._server.server_port}"
 
+    @property
+    def request_headers(self) -> list[dict[str, str]]:
+        """The headers of every request the server has answered, in order."""
+        return self._server.request_headers  # type: ignore[attr-defined]
+
     def set_response(
         self,
         path: str,
@@ -140,6 +146,7 @@ class HTTPStub:
 def http_stub():
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), StubRequestHandler)
     server.responses = {}  # type: ignore[attr-defined]
+    server.request_headers = []  # type: ignore[attr-defined]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

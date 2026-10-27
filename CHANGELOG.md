@@ -6,6 +6,34 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+### Added
+
+- A concept field can say where its vocabulary is published:
+  `ConceptField(vocabulary=Vocabulary(uri, source=..., format=...))`. `manage.py
+  sync_vocabularies` loads every vocabulary a field on an installed model names, including a field
+  inherited from an abstract model, with nothing declared in settings. It reads each from the
+  field's source, or from its URI when there is none, once however many fields name it. A
+  vocabulary declared in `CONTROLLED_VOCABULARIES` is loaded from the declaration instead, and a
+  source publishing some other vocabulary is refused. The command also accepts a field's
+  vocabulary URI on the command line (#233). See
+  [ADR 0026](docs/adr/0026-a-field-names-its-vocabulary-by-uri-and-may-say-where-it-is-published.md).
+- A fetched source is asked for Turtle, RDF/XML or JSON-LD, so a vocabulary's own URI answers with
+  the vocabulary rather than its web page.
+
+### Changed
+
+- **Breaking:** `ConceptField` and `MultiConceptField` name a vocabulary by its URI, and
+  `collection` names a collection by its URI. A slug raises a `TypeError` when the field is
+  declared. Rewrite `vocabulary="rock-type"` as the vocabulary's URI, in your models and in every
+  migration that records the field, since loading a migration that still names a slug raises the
+  same error. A field's migration records only the URIs, so changing a `source` needs none.
+
+### Removed
+
+- `controlled_vocabularies.W006`, the warning for a vocabulary that is neither declared nor loaded.
+  A field's vocabulary can always be loaded now, so `controlled_vocabularies.W001` reports one that
+  has not been loaded yet.
+
 ## [v0.2.0] - 2026-10-27
 
 ### Added

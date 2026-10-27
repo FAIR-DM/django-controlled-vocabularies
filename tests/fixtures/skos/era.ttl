@@ -1,0 +1,10 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<https://example.org/vocabularies/era>
+    a skos:ConceptScheme ;
+    skos:prefLabel "Era"@en .
+
+<https://example.org/vocabularies/era/mesozoic>
+    a skos:Concept ;
+    skos:inScheme <https://example.org/vocabularies/era> ;
+    skos:prefLabel "Mesozoic"@en .

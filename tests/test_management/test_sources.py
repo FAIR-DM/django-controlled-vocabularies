@@ -96,6 +96,18 @@ class TestSourceResolverFetch:
         resolver.cleanup()
         assert not Path(resolved.path).exists()
 
+    def test_a_fetch_asks_for_turtle_rdf_xml_or_json_ld(self, http_stub):
+        http_stub.set_response("/vocabulary", status=200, body=b"stub body")
+        resolver = SourceResolver(http_stub.url + "/vocabulary", serialization="turtle")
+        resolver.resolve()
+        resolver.cleanup()
+
+        (headers,) = http_stub.request_headers
+        accepted = headers["Accept"]
+        assert "text/turtle" in accepted
+        assert "application/rdf+xml" in accepted
+        assert "application/ld+json" in accepted
+
     def test_a_redirect_to_another_http_url_is_followed(self, http_stub):
         http_stub.set_response(
             "/redirect.ttl",

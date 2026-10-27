@@ -88,10 +88,10 @@ class ConceptAutocompleteView(AutocompleteModelView):
         queryset = queryset.complex_filter(field.get_limit_choices_to())  # type: ignore[attr-defined]
         if not field.vocabulary:
             return queryset
-        # The restriction names vocabularies by slug, through a join. Naming them by id as
+        # The restriction names vocabularies by URI, through a join. Naming them by id as
         # well lets PostgreSQL read a page off the record index in its sort order, rather
         # than sorting every concept of the vocabulary first.
-        schemes = ConceptScheme.objects.filter(slug__in=field.vocabulary)
+        schemes = ConceptScheme.objects.filter(uri__in=field.vocabulary_uris())
         return queryset.filter(scheme__in=list(schemes.values_list("pk", flat=True)))
 
     def order_queryset(self, queryset: QuerySet) -> QuerySet:
@@ -106,8 +106,8 @@ class ConceptAutocompleteView(AutocompleteModelView):
 
         (vocabulary,) = field.vocabulary
         collection = Record.objects.filter(
-            scheme__slug=vocabulary,
-            slug=field.collection,
+            scheme__uri=vocabulary.uri,
+            uri=field.collection,
             type=Record.Type.ORDERED_COLLECTION,
         ).first()
         if collection is None:

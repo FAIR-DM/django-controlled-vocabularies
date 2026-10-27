@@ -7,7 +7,6 @@ from django.db import DatabaseError
 from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 
-from . import conf
 from .fields import ConceptField, MultiConceptField
 from .models import ConceptScheme, Record
 
@@ -16,10 +15,8 @@ CHECK_ID_MISSING_ROUTE = "controlled_vocabularies.W002"
 CHECK_ID_MISSING_INSTALLED_APP = "controlled_vocabularies.W003"
 CHECK_ID_MISSING_MIDDLEWARE = "controlled_vocabularies.W004"
 # Its own id rather than W001: projects silence checks by id, and silencing "vocabulary not
-# imported" says nothing about a mistyped collection slug (FS-016).
+# loaded" says nothing about a mistyped collection URI (FS-016).
 CHECK_ID_MISSING_RESTRICTION_TARGET = "controlled_vocabularies.W005"
-# Its own id rather than W001: "declare it" and "load it" are different fixes.
-CHECK_ID_UNDECLARED_VOCABULARY = "controlled_vocabularies.W006"
 
 #: The middleware the control's widget needs on the page (``forms.py``). Named
 #: once here for the same reason as :data:`AUTOCOMPLETE_URL_NAME`.
@@ -42,94 +39,61 @@ def concept_fields():
 
 
 def check_concept_field_vocabularies(app_configs, **kwargs):
-    """Warn about every vocabulary a concept field names that is not in the database.
-
-    One the site declares in ``CONTROLLED_VOCABULARIES`` is reported as not loaded yet, and
-    one it does not declare as undeclared, under its own id.
-    """
+    """Warn about every vocabulary a concept field names that is not in the database."""
     fields = concept_fields()
-    slugs = {slug for field in fields for slug in field.vocabulary}
-    if not slugs:
+    uris = {uri for field in fields for uri in field.vocabulary_uris()}
+    if not uris:
         return []
 
     # Checks run before migrate, and a missing table is not evidence that a vocabulary is absent.
     try:
         existing = set(
-            ConceptScheme.objects.filter(slug__in=slugs).values_list("slug", flat=True)
+            ConceptScheme.objects.filter(uri__in=uris).values_list("uri", flat=True)
         )
     except DatabaseError:
         return []
 
-    declared = conf.get_declared_vocabularies()
     return [
-        absent_vocabulary_warning(field, slug, declared=slug in declared)
-        for field in fields
-        for slug in field.vocabulary
-        if slug not in existing
-    ]
-
-
-def absent_vocabulary_warning(field, slug, *, declared):
-    """Build the warning for a field naming a vocabulary that is not in the database.
-
-    Args:
-        field: The concept field.
-        slug: The vocabulary it names.
-        declared: Whether ``CONTROLLED_VOCABULARIES`` declares it.
-
-    Returns:
-        The warning.
-    """
-    params = {
-        "model": field.model._meta.label,
-        "field": field.name,
-        "vocabulary": slug,
-    }
-    if declared:
-        return checks.Warning(
+        checks.Warning(
             _(
-                "%(model)s.%(field)s names vocabulary '%(vocabulary)s', which is declared but has no matching ConceptScheme yet."
+                "%(model)s.%(field)s names vocabulary '%(vocabulary)s', which has not been loaded yet."
             )
-            % params,
+            % {
+                "model": field.model._meta.label,
+                "field": field.name,
+                "vocabulary": uri,
+            },
             hint=_(
                 "Run manage.py sync_vocabularies, or silence this check with SILENCED_SYSTEM_CHECKS."
             ),
             obj=field,
             id=CHECK_ID,
         )
-    return checks.Warning(
-        _(
-            "%(model)s.%(field)s names vocabulary '%(vocabulary)s', which is neither declared in CONTROLLED_VOCABULARIES nor in the database."
-        )
-        % params,
-        hint=_(
-            "Declare it in CONTROLLED_VOCABULARIES and run manage.py sync_vocabularies, or silence this check with SILENCED_SYSTEM_CHECKS."
-        ),
-        obj=field,
-        id=CHECK_ID_UNDECLARED_VOCABULARY,
-    )
+        for field in fields
+        for uri in field.vocabulary_uris()
+        if uri not in existing
+    ]
 
 
 def check_concept_field_restriction_targets(app_configs, **kwargs):
     """Warn about every collection restriction naming a collection that is missing."""
     targets = [
-        (field, field.vocabulary[0], field.collection)
+        (field, field.vocabulary[0].uri, field.collection)
         for field in concept_fields()
         if field.collection is not None
     ]
     if not targets:
         return []
 
-    # A collection slug is unique only within its vocabulary, so the pair is the key: a
-    # flat set of slugs would call a mistyped slug present whenever another vocabulary
-    # uses it. Same DatabaseError guard as check_concept_field_vocabularies.
+    # The pair is the key: a collection held in some other vocabulary is not this one's.
+    # Same DatabaseError guard as check_concept_field_vocabularies.
     try:
         existing = set(
             Record.objects.filter(
-                scheme__slug__in={vocabulary for _, vocabulary, _ in targets},
-                slug__in={slug for _, _, slug in targets},
+                scheme__uri__in={vocabulary for _, vocabulary, _ in targets},
+                uri__in={uri for _, _, uri in targets},
                 type__in=Record.COLLECTION_TYPES,
-            ).values_list("scheme__slug", "slug")
+            ).values_list("scheme__uri", "uri")
         )
     except DatabaseError:
         return []
@@ -142,15 +106,17 @@ def check_concept_field_restriction_targets(app_configs, **kwargs):
             % {
                 "model": field.model._meta.label,
                 "field": field.name,
-                "target": slug,
+                "target": uri,
                 "vocabulary": vocabulary,
             },
-            hint=_("Create this collection, or correct the name."),
+            hint=_(
+                "Correct the URI, or load a version of the vocabulary that holds this collection."
+            ),
             obj=field,
             id=CHECK_ID_MISSING_RESTRICTION_TARGET,
         )
-        for field, vocabulary, slug in targets
-        if (vocabulary, slug) not in existing
+        for field, vocabulary, uri in targets
+        if (vocabulary, uri) not in existing
     ]
 
 

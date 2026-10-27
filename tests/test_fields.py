@@ -20,6 +20,7 @@ from controlled_vocabularies.fields import (
     ConceptField,
     ConceptFieldMixin,
     MultiConceptField,
+    Vocabulary,
 )
 from controlled_vocabularies.models import ConceptScheme, Record
 from tests.factories import (
@@ -41,6 +42,9 @@ from tests.factories import (
 )
 from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import (
+    CORE_SAMPLES,
+    MINERAL,
+    ROCK_TYPE,
     Artifact,
     Borehole,
     CoreSample,
@@ -54,6 +58,9 @@ from tests.testapp.models import (
     Specimen,
     Survey,
 )
+
+ALL_SAMPLES = f"{ROCK_TYPE.uri}/collection/all-samples"
+NO_SUCH_COLLECTION = f"{ROCK_TYPE.uri}/collection/no-such-collection"
 
 
 def admitted_by(field):
@@ -86,51 +93,90 @@ def bilingual(english, german):
     }
 
 
+class TestVocabulary:
+    def test_holds_its_uri_source_and_format(self):
+        vocabulary = Vocabulary(
+            ROCK_TYPE.uri, source="https://example.org/rock-type.rdf", format="xml"
+        )
+
+        assert vocabulary.uri == ROCK_TYPE.uri
+        assert vocabulary.source == "https://example.org/rock-type.rdf"
+        assert vocabulary.format == "xml"
+
+    def test_source_and_format_default_to_none(self):
+        vocabulary = Vocabulary(ROCK_TYPE.uri)
+
+        assert vocabulary.source is None
+        assert vocabulary.format is None
+
+    def test_a_slug_is_refused(self):
+        with pytest.raises(TypeError, match="Vocabulary"):
+            Vocabulary("rock-type")
+
+    def test_a_windows_path_is_not_a_uri(self):
+        with pytest.raises(TypeError, match="Vocabulary"):
+            Vocabulary("C:/vocabularies/rock-type.ttl")
+
+
 @pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestSharedVocabularyContract:
     def test_inherits_the_shared_contract(self, field_class):
         assert issubclass(field_class, ConceptFieldMixin)
 
-    def test_one_slug_normalises_to_a_one_element_tuple(self, field_class):
-        field = field_class(vocabulary="rock-type")
+    def test_one_uri_normalises_to_a_one_element_tuple(self, field_class):
+        field = field_class(vocabulary=ROCK_TYPE.uri)
 
-        assert field.vocabulary == ("rock-type",)
+        assert field.vocabulary == (Vocabulary(ROCK_TYPE.uri),)
 
-    def test_several_slugs_normalise_to_their_union_with_duplicates_collapsed(
+    def test_several_uris_normalise_to_their_union_with_duplicates_collapsed(
         self, field_class
     ):
-        field = field_class(vocabulary=["rock-type", "mineral", "rock-type"])
+        field = field_class(vocabulary=[ROCK_TYPE.uri, MINERAL.uri, ROCK_TYPE.uri])
 
-        assert field.vocabulary == ("rock-type", "mineral")
+        assert field.vocabulary_uris() == (ROCK_TYPE.uri, MINERAL.uri)
+
+    def test_a_vocabulary_is_kept_with_its_source(self, field_class):
+        field = field_class(vocabulary=[ROCK_TYPE, MINERAL.uri])
+
+        assert field.vocabulary == (ROCK_TYPE, Vocabulary(MINERAL.uri))
+
+    def test_the_first_declaration_of_a_uri_is_kept(self, field_class):
+        field = field_class(vocabulary=[ROCK_TYPE, ROCK_TYPE.uri])
+
+        assert field.vocabulary == (ROCK_TYPE,)
 
     def test_an_omitted_vocabulary_is_an_empty_tuple(self, field_class):
         assert field_class().vocabulary == ()
 
-    def test_an_empty_slug_is_refused_by_name(self, field_class):
+    def test_a_slug_is_refused_by_name(self, field_class):
+        with pytest.raises(TypeError, match=field_class.__name__):
+            field_class(vocabulary="rock-type")
+
+    def test_an_empty_uri_is_refused_by_name(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
             field_class(vocabulary="")
 
-    def test_a_non_string_slug_is_refused_by_name(self, field_class):
+    def test_a_non_string_uri_is_refused_by_name(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
-            field_class(vocabulary=["mineral", 42])
+            field_class(vocabulary=[MINERAL.uri, 42])
 
     def test_a_consumer_supplied_limit_choices_to_is_refused(self, field_class):
         with pytest.raises(TypeError, match="limit_choices_to"):
             field_class(
-                vocabulary="rock-type", limit_choices_to=Q(pref_label="Granite")
+                vocabulary=ROCK_TYPE.uri, limit_choices_to=Q(pref_label="Granite")
             )
 
     def test_help_text_defaults_to_a_translatable_string_and_stays_overridable(
         self, field_class
     ):
-        assert isinstance(field_class(vocabulary="rock-type").help_text, Promise)
+        assert isinstance(field_class(vocabulary=ROCK_TYPE.uri).help_text, Promise)
         assert (
-            field_class(vocabulary="rock-type", help_text="Pick one.").help_text
+            field_class(vocabulary=ROCK_TYPE.uri, help_text="Pick one.").help_text
             == "Pick one."
         )
 
     @pytest.mark.parametrize(
-        "vocabulary", [None, "rock-type", ["rock-type", "mineral"]]
+        "vocabulary", [None, ROCK_TYPE.uri, [ROCK_TYPE.uri, MINERAL.uri]]
     )
     def test_deconstruct_records_the_normalised_vocabulary_and_strips_the_fixed_kwargs(
         self, field_class, vocabulary
@@ -138,7 +184,7 @@ class TestSharedVocabularyContract:
         field = field_class(vocabulary=vocabulary)
         path, args, kwargs = field.deconstruct()[1:]
 
-        assert kwargs["vocabulary"] == field.vocabulary
+        assert kwargs["vocabulary"] == field.vocabulary_uris()
         assert "to" not in kwargs
         assert "limit_choices_to" not in kwargs
         assert "on_delete" not in kwargs
@@ -149,9 +195,14 @@ class TestSharedVocabularyContract:
         assert rebuilt.vocabulary == field.vocabulary
 
     def test_clone_rebuilds_an_equivalent_field(self, field_class):
-        field = field_class(vocabulary=["rock-type", "mineral"])
+        field = field_class(vocabulary=[ROCK_TYPE.uri, MINERAL.uri])
 
-        assert field.clone().vocabulary == ("rock-type", "mineral")
+        assert field.clone().vocabulary == field.vocabulary
+
+    def test_deconstruct_records_the_uri_and_not_the_source(self, field_class):
+        kwargs = field_class(vocabulary=ROCK_TYPE).deconstruct()[3]
+
+        assert kwargs["vocabulary"] == (ROCK_TYPE.uri,)
 
 
 @pytest.mark.django_db
@@ -161,7 +212,7 @@ class TestSharedVocabularyRestriction:
         rock = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
         mineral = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
 
-        admitted = admitted_by(field_class(vocabulary="rock-type"))
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri))
 
         assert admitted == {rock}
         assert mineral not in admitted
@@ -171,7 +222,7 @@ class TestSharedVocabularyRestriction:
         mineral = RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
         fossil = RecordFactory(scheme=ConceptSchemeFactory(name="Fossil"))
 
-        admitted = admitted_by(field_class(vocabulary=["rock-type", "mineral"]))
+        admitted = admitted_by(field_class(vocabulary=[ROCK_TYPE.uri, MINERAL.uri]))
 
         assert admitted == {rock, mineral}
         assert fossil not in admitted
@@ -184,7 +235,7 @@ class TestSharedVocabularyRestriction:
 
         assert admitted_by(field_class()) == {rock, mineral}
 
-    @pytest.mark.parametrize("vocabulary", [None, "rock-type"])
+    @pytest.mark.parametrize("vocabulary", [None, ROCK_TYPE.uri])
     def test_a_collection_is_never_admitted(self, field_class, vocabulary):
         scheme = ConceptSchemeFactory(name="Rock Type")
         collection, members = collection_with_members(scheme=scheme)
@@ -196,7 +247,7 @@ class TestSharedVocabularyRestriction:
 
     def test_construction_issues_no_query(self, field_class):
         with CaptureQueriesContext(connection) as ctx:
-            field_class(vocabulary="rock-type")
+            field_class(vocabulary=ROCK_TYPE.uri)
 
         assert len(ctx.captured_queries) == 0
 
@@ -205,7 +256,7 @@ class TestSharedVocabularyRestriction:
 class TestSharedLimitChoicesToCallable:
     def test_limit_choices_to_is_a_callable_resolved_on_demand(self, field_class):
         assert callable(
-            field_class(vocabulary="rock-type").remote_field.limit_choices_to
+            field_class(vocabulary=ROCK_TYPE.uri).remote_field.limit_choices_to
         )
         assert callable(field_class().remote_field.limit_choices_to)
 
@@ -213,53 +264,59 @@ class TestSharedLimitChoicesToCallable:
 @pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestSharedCollectionArgument:
     def test_collection_defaults_to_none(self, field_class):
-        assert field_class(vocabulary="rock-type").collection is None
+        assert field_class(vocabulary=ROCK_TYPE.uri).collection is None
 
     def test_collection_stores_the_slug(self, field_class):
-        field = field_class(vocabulary="rock-type", collection="core-samples")
+        field = field_class(vocabulary=ROCK_TYPE.uri, collection=CORE_SAMPLES)
 
-        assert field.collection == "core-samples"
+        assert field.collection == CORE_SAMPLES
 
     def test_collection_rejects_a_non_string(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
-            field_class(vocabulary="rock-type", collection=42)
+            field_class(vocabulary=ROCK_TYPE.uri, collection=42)
 
     def test_collection_rejects_an_empty_string(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
-            field_class(vocabulary="rock-type", collection="")
+            field_class(vocabulary=ROCK_TYPE.uri, collection="")
+
+    def test_collection_rejects_a_slug(self, field_class):
+        with pytest.raises(TypeError, match=field_class.__name__):
+            field_class(vocabulary=ROCK_TYPE.uri, collection="core-samples")
 
     def test_a_collection_naming_no_vocabulary_is_refused(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
-            field_class(collection="core-samples")
+            field_class(collection=CORE_SAMPLES)
 
     def test_a_collection_naming_several_vocabularies_is_refused(self, field_class):
         with pytest.raises(TypeError, match=field_class.__name__):
-            field_class(vocabulary=["rock-type", "mineral"], collection="core-samples")
+            field_class(
+                vocabulary=[ROCK_TYPE.uri, MINERAL.uri], collection=CORE_SAMPLES
+            )
 
     def test_several_vocabularies_without_a_collection_are_accepted(self, field_class):
-        field = field_class(vocabulary=["rock-type", "mineral"])
+        field = field_class(vocabulary=[ROCK_TYPE.uri, MINERAL.uri])
 
-        assert field.vocabulary == ("rock-type", "mineral")
+        assert field.vocabulary_uris() == (ROCK_TYPE.uri, MINERAL.uri)
 
     def test_collection_is_emitted_and_survives_the_round_trip(self, field_class):
-        field = field_class(vocabulary="rock-type", collection="core-samples")
+        field = field_class(vocabulary=ROCK_TYPE.uri, collection=CORE_SAMPLES)
         path, args, kwargs = field.deconstruct()[1:]
 
-        assert kwargs["collection"] == "core-samples"
+        assert kwargs["collection"] == CORE_SAMPLES
         assert "limit_choices_to" not in kwargs
 
         rebuilt = import_string(path)(*args, **kwargs)
-        assert rebuilt.collection == "core-samples"
+        assert rebuilt.collection == CORE_SAMPLES
 
     def test_no_collection_is_not_emitted(self, field_class):
-        kwargs = field_class(vocabulary="rock-type").deconstruct()[3]
+        kwargs = field_class(vocabulary=ROCK_TYPE.uri).deconstruct()[3]
 
         assert "collection" not in kwargs
 
     def test_clone_rebuilds_a_collection_restricted_field(self, field_class):
-        field = field_class(vocabulary="rock-type", collection="core-samples")
+        field = field_class(vocabulary=ROCK_TYPE.uri, collection=CORE_SAMPLES)
 
-        assert field.clone().collection == "core-samples"
+        assert field.clone().collection == CORE_SAMPLES
 
 
 # Both defaults stay static gettext_lazy strings: % on a lazy proxy evaluates it
@@ -267,26 +324,26 @@ class TestSharedCollectionArgument:
 @pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
 class TestSharedRestrictedHelpText:
     def test_an_unrestricted_field_keeps_the_unrestricted_default(self, field_class):
-        field = field_class(vocabulary="rock-type")
+        field = field_class(vocabulary=ROCK_TYPE.uri)
 
         assert field.help_text == field_class.default_help_text
 
     def test_a_collection_restricted_field_gets_the_restricted_default(
         self, field_class
     ):
-        field = field_class(vocabulary="rock-type", collection="core-samples")
+        field = field_class(vocabulary=ROCK_TYPE.uri, collection=CORE_SAMPLES)
 
         assert field.help_text == field_class.default_restricted_help_text
         assert field.help_text != field_class.default_help_text
 
     def test_restricted_help_text_is_a_lazy_translatable_string(self, field_class):
-        field = field_class(vocabulary="rock-type", collection="core-samples")
+        field = field_class(vocabulary=ROCK_TYPE.uri, collection=CORE_SAMPLES)
 
         assert isinstance(field.help_text, Promise)
 
     def test_help_text_does_not_vary_with_the_restrictions_target(self, field_class):
-        first = field_class(vocabulary="rock-type", collection="core-samples")
-        second = field_class(vocabulary="rock-type", collection="all-samples")
+        first = field_class(vocabulary=ROCK_TYPE.uri, collection=CORE_SAMPLES)
+        second = field_class(vocabulary=ROCK_TYPE.uri, collection=ALL_SAMPLES)
 
         assert str(first.help_text) == str(second.help_text)
 
@@ -294,8 +351,8 @@ class TestSharedRestrictedHelpText:
         self, field_class
     ):
         field = field_class(
-            vocabulary="rock-type",
-            collection="core-samples",
+            vocabulary=ROCK_TYPE.uri,
+            collection=CORE_SAMPLES,
             help_text="Pick a sample rock.",
         )
 
@@ -315,7 +372,7 @@ class TestCollectionRestrictionResolves:
         outsider = RecordFactory(scheme=scheme, label="Marble")
 
         admitted = admitted_by(
-            field_class(vocabulary="rock-type", collection=collection.slug)
+            field_class(vocabulary=ROCK_TYPE.uri, collection=collection.uri)
         )
 
         assert admitted == set(members)
@@ -328,7 +385,7 @@ class TestCollectionRestrictionResolves:
         )
 
         admitted = admitted_by(
-            field_class(vocabulary="rock-type", collection=collection.slug)
+            field_class(vocabulary=ROCK_TYPE.uri, collection=collection.uri)
         )
 
         assert admitted == set(members)
@@ -338,7 +395,7 @@ class TestCollectionRestrictionResolves:
         RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
 
         admitted = admitted_by(
-            field_class(vocabulary="rock-type", collection="no-such-collection")
+            field_class(vocabulary=ROCK_TYPE.uri, collection=NO_SUCH_COLLECTION)
         )
 
         assert admitted == set()
@@ -359,7 +416,7 @@ class TestCollectionRestrictionResolves:
         assert mineral_collection.slug == rock_collection.slug
 
         admitted = admitted_by(
-            field_class(vocabulary="rock-type", collection=rock_collection.slug)
+            field_class(vocabulary=ROCK_TYPE.uri, collection=rock_collection.uri)
         )
 
         assert admitted == set(rock_members)
@@ -378,7 +435,7 @@ class TestCollectionRestrictionResolvesLive:
         collection, members = collection_with_members(
             scheme=scheme, labels=("Granite",)
         )
-        field = field_class(vocabulary="rock-type", collection=collection.slug)
+        field = field_class(vocabulary=ROCK_TYPE.uri, collection=collection.uri)
         assert admitted_by(field) == set(members)
 
         newcomer = RecordFactory(scheme=scheme, label="Basalt")
@@ -390,37 +447,37 @@ class TestCollectionRestrictionResolvesLive:
 
 class TestConceptFieldConstruction:
     def test_fixes_to_record(self):
-        field = ConceptField(vocabulary="rock-type")
+        field = ConceptField(vocabulary=ROCK_TYPE.uri)
 
         assert field.remote_field.model == "controlled_vocabularies.Record"
 
     def test_fixes_on_delete_to_protect(self):
-        field = ConceptField(vocabulary="rock-type")
+        field = ConceptField(vocabulary=ROCK_TYPE.uri)
 
         assert field.remote_field.on_delete is PROTECT
 
     def test_rejects_consumer_supplied_on_delete(self):
         with pytest.raises(TypeError, match="on_delete"):
-            ConceptField(vocabulary="rock-type", on_delete=PROTECT)
+            ConceptField(vocabulary=ROCK_TYPE.uri, on_delete=PROTECT)
 
     def test_rejects_consumer_supplied_to_field(self):
         # A column holding anything but the URI would break the URI accessor.
         with pytest.raises(TypeError, match="to_field"):
-            ConceptField(vocabulary="rock-type", to_field="id")
+            ConceptField(vocabulary=ROCK_TYPE.uri, to_field="id")
 
     def test_help_text_has_a_translatable_default(self):
-        field = ConceptField(vocabulary="rock-type")
+        field = ConceptField(vocabulary=ROCK_TYPE.uri)
 
         assert isinstance(field.help_text, Promise)
         assert str(field.help_text)
 
     def test_help_text_default_is_overridable(self):
-        field = ConceptField(vocabulary="rock-type", help_text="Pick a rock type.")
+        field = ConceptField(vocabulary=ROCK_TYPE.uri, help_text="Pick a rock type.")
 
         assert field.help_text == "Pick a rock type."
 
     def test_error_messages_invalid_carries_named_vocabulary_placeholder(self):
-        field = ConceptField(vocabulary="rock-type")
+        field = ConceptField(vocabulary=ROCK_TYPE.uri)
 
         assert "%(vocabulary)s" in field.error_messages["invalid"]
 
@@ -434,7 +491,7 @@ class TestConceptFieldConstruction:
 # clones every field, so migrations and test-database builds fail without it.
 class TestConceptFieldDeconstruct:
     @pytest.mark.parametrize(
-        "vocabulary", [None, "rock-type", ["rock-type", "mineral"]]
+        "vocabulary", [None, ROCK_TYPE.uri, [ROCK_TYPE.uri, MINERAL.uri]]
     )
     def test_round_trip_rebuilds_an_equivalent_field(self, vocabulary):
         # A migration written before #111 records vocabulary as a bare string and has to
@@ -488,15 +545,17 @@ class TestConceptFieldStoresTheConceptsUri:
 
 class TestMultiConceptFieldConstruction:
     def test_fixes_to_record(self):
-        field = MultiConceptField(vocabulary="rock-type")
+        field = MultiConceptField(vocabulary=ROCK_TYPE.uri)
 
         assert field.remote_field.model == "controlled_vocabularies.Record"
 
     @pytest.mark.django_db
     def test_construction_issues_no_queries(self):
         with CaptureQueriesContext(connection) as ctx:
-            MultiConceptField(vocabulary="rock-type")
-            MultiConceptField(vocabulary=["gcmd", "agu-index"])
+            MultiConceptField(vocabulary=ROCK_TYPE.uri)
+            MultiConceptField(
+                vocabulary=["https://example.org/gcmd", "https://example.org/agu-index"]
+            )
             MultiConceptField()
 
         assert len(ctx.captured_queries) == 0
@@ -505,18 +564,18 @@ class TestMultiConceptFieldConstruction:
         # A consumer-supplied through model would silently drop the PROTECT guard.
         with pytest.raises(TypeError, match="through"):
             MultiConceptField(
-                vocabulary="rock-type", through="controlled_vocabularies.Record"
+                vocabulary=ROCK_TYPE.uri, through="controlled_vocabularies.Record"
             )
 
     def test_help_text_has_a_translatable_default(self):
-        field = MultiConceptField(vocabulary="rock-type")
+        field = MultiConceptField(vocabulary=ROCK_TYPE.uri)
 
         assert isinstance(field.help_text, Promise)
         assert str(field.help_text)
 
     def test_help_text_default_is_overridable(self):
         field = MultiConceptField(
-            vocabulary="rock-type", help_text="Pick some rock types."
+            vocabulary=ROCK_TYPE.uri, help_text="Pick some rock types."
         )
 
         assert field.help_text == "Pick some rock types."
@@ -594,8 +653,8 @@ class TestMultiConceptFieldMembershipModel:
             warnings.simplefilter("always")
 
             class DoubleMultiConceptField(models.Model):
-                a = MultiConceptField(vocabulary="mineral", related_name="+")
-                b = MultiConceptField(vocabulary="mineral", related_name="+")
+                a = MultiConceptField(vocabulary=MINERAL.uri, related_name="+")
+                b = MultiConceptField(vocabulary=MINERAL.uri, related_name="+")
 
                 class Meta:
                     app_label = "testapp"
@@ -782,7 +841,7 @@ class TestMultiConceptFieldWritePathVocabularyCheck:
         with pytest.raises(ValidationError) as excinfo:
             deposit.rock_types.add(other_concept)
 
-        assert any("rock-type" in message for message in excinfo.value.messages)
+        assert any(ROCK_TYPE.uri in message for message in excinfo.value.messages)
 
     def test_set_carrying_a_mix_is_refused_whole_and_the_set_is_unchanged_afterwards(
         self,
@@ -877,7 +936,7 @@ class TestMultiConceptFieldCollectionRestrictionWritePath:
         with pytest.raises(ValidationError) as excinfo:
             drill_core.rock_types.add(outsider)
 
-        assert any("core-samples" in message for message in excinfo.value.messages)
+        assert any(CORE_SAMPLES in message for message in excinfo.value.messages)
 
     def test_the_reverse_accessor_refuses_a_non_member(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
@@ -950,8 +1009,8 @@ class TestMultiConceptFieldSeveralVocabulariesWritePath:
             field_note.keywords.add(other_concept)
 
         message = " ".join(excinfo.value.messages)
-        assert "rock-type" in message
-        assert "mineral" in message
+        assert ROCK_TYPE.uri in message
+        assert MINERAL.uri in message
         assert list(field_note.keywords.all()) == []
 
 
@@ -1004,7 +1063,9 @@ class TestMultiConceptFieldFormChoices:
     def test_valid_submission_saves_and_the_memberships_appear(self):
         concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
 
-        form = DepositForm(data={"name": "Granite deposit", "rock_types": [concept.uri]})
+        form = DepositForm(
+            data={"name": "Granite deposit", "rock_types": [concept.uri]}
+        )
 
         assert form.is_valid(), form.errors
         deposit = form.save()
@@ -1305,7 +1366,9 @@ class TestMultiConceptFieldRequiredSet:
         # second around it would report every empty required field twice.
         class Parent(models.Model):
             firsts = MultiConceptField(
-                vocabulary="rock-type", verbose_name="firsts", help_text="the first set"
+                vocabulary=ROCK_TYPE.uri,
+                verbose_name="firsts",
+                help_text="the first set",
             )
 
             class Meta:
@@ -1313,7 +1376,7 @@ class TestMultiConceptFieldRequiredSet:
 
         class Child(Parent):
             seconds = MultiConceptField(
-                vocabulary="rock-type",
+                vocabulary=ROCK_TYPE.uri,
                 verbose_name="seconds",
                 help_text="the second set",
             )
@@ -1468,7 +1531,7 @@ class TestConceptFieldValidation:
 
         errors = excinfo.value.error_dict["rock_type"]
         assert [error.code for error in errors] == ["invalid"]
-        assert any("rock-type" in message for message in excinfo.value.messages)
+        assert any(ROCK_TYPE.uri in message for message in excinfo.value.messages)
 
     def test_full_clean_accepts_a_concept_from_the_correct_vocabulary(self):
         concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
@@ -1495,7 +1558,7 @@ class TestConceptFieldValidation:
             with pytest.raises(ValidationError) as excinfo:
                 specimen.full_clean()
 
-            assert any("rock-type" in message for message in excinfo.value.messages)
+            assert any(ROCK_TYPE.uri in message for message in excinfo.value.messages)
         finally:
             field.error_messages["invalid"] = original
 
@@ -1543,7 +1606,7 @@ class TestConceptFieldCollectionRestrictionValidation:
         with pytest.raises(ValidationError) as excinfo:
             core_sample.full_clean()
 
-        assert any("core-samples" in message for message in excinfo.value.messages)
+        assert any(CORE_SAMPLES in message for message in excinfo.value.messages)
 
     def test_a_consumers_own_error_messages_override_still_works(self):
         field = CoreSample._meta.get_field("rock_type")
@@ -1562,7 +1625,7 @@ class TestConceptFieldCollectionRestrictionValidation:
             with pytest.raises(ValidationError) as excinfo:
                 core_sample.full_clean()
 
-            assert any("core-samples" in message for message in excinfo.value.messages)
+            assert any(CORE_SAMPLES in message for message in excinfo.value.messages)
         finally:
             field.error_messages["invalid_restricted"] = original
 
@@ -1732,8 +1795,8 @@ class TestConceptFieldSeveralVocabularies:
             Borehole(name="Wrong vocabulary", dominant_material=outsider).full_clean()
 
         message = " ".join(excinfo.value.messages)
-        assert "rock-type" in message
-        assert "mineral" in message
+        assert ROCK_TYPE.uri in message
+        assert MINERAL.uri in message
 
     def test_form_field_offers_only_the_two_named_vocabularies_concepts(self):
         rock_concept = RecordFactory(scheme=ConceptSchemeFactory(name="Rock Type"))
@@ -1797,7 +1860,7 @@ class TestConceptFieldNoVocabulary:
 # Read off field.error_messages, where nothing has interpolated the msgid yet.
 class TestRestrictionErrorMessagesAreTranslatable:
     def test_the_message_is_a_lazy_proxy_with_a_named_restriction_placeholder(self):
-        field = ConceptField(vocabulary="rock-type")
+        field = ConceptField(vocabulary=ROCK_TYPE.uri)
         message = field.error_messages["invalid_restricted"]
 
         assert isinstance(message, Promise)
@@ -1828,7 +1891,7 @@ class TestDeclarationRuleTypeErrorsStayUntranslated:
     @pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
     def test_a_collection_naming_no_vocabulary_raises_a_plain_string(self, field_class):
         with pytest.raises(TypeError) as excinfo:
-            field_class(collection="core-samples")
+            field_class(collection=CORE_SAMPLES)
 
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str
@@ -1836,21 +1899,21 @@ class TestDeclarationRuleTypeErrorsStayUntranslated:
     @pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
     def test_a_non_string_collection_raises_a_plain_string(self, field_class):
         with pytest.raises(TypeError) as excinfo:
-            field_class(vocabulary="rock-type", collection=42)
+            field_class(vocabulary=ROCK_TYPE.uri, collection=42)
 
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str
 
     def test_concept_fields_own_delete_setting_raises_a_plain_string(self):
         with pytest.raises(TypeError) as excinfo:
-            ConceptField(vocabulary="rock-type", on_delete=PROTECT)
+            ConceptField(vocabulary=ROCK_TYPE.uri, on_delete=PROTECT)
 
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str
 
     def test_multi_concept_fields_own_through_setting_raises_a_plain_string(self):
         with pytest.raises(TypeError) as excinfo:
-            MultiConceptField(vocabulary="rock-type", through="whatever")
+            MultiConceptField(vocabulary=ROCK_TYPE.uri, through="whatever")
 
         assert not isinstance(excinfo.value.args[0], Promise)
         assert type(excinfo.value.args[0]) is str
