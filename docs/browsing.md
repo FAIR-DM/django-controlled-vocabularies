@@ -459,6 +459,33 @@ JSON-LD, N-Triples:
 
 Each `href` is relative to the page's address and returns the media type named beside it.
 
+### On a view of your own
+
+The three pages get this from `RepresentationMixin`, in `controlled_vocabularies.ui.representations`.
+A project that serves a vocabulary or record from a view of its own can put the mixin leftmost in
+the view's bases and say what the subject is:
+
+```python
+from django.views.generic import DetailView
+
+from controlled_vocabularies.models import Record
+from controlled_vocabularies.ui.representations import RepresentationMixin
+
+
+class TermView(RepresentationMixin, DetailView):
+    model = Record
+    template_name = "myproject/term.html"
+
+    def get_representation_subject(self):
+        return self.get_object()
+```
+
+The mixin also puts `rdf_alternates` in the template context, the list the page head's alternate
+links are drawn from.
+
+The mixin answers before the page is built, so the view's own access rules, such as a
+`LoginRequiredMixin` to its left, apply to the RDF exactly as they do to the page.
+
 ## Try it: the demo project
 
 The repository carries a runnable demo of the pages above, wired the same way this page
