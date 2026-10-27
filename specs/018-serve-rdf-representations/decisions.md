@@ -113,3 +113,14 @@ its own vocabulary, by the same rule as D1, so a client fetching one concept can
 vocabulary and the importer can place it.
 
 **ADR:** docs/adr/0028-a-rows-rdf-is-its-own-document-and-what-the-row-records.md
+
+## D12. A download menu on each page
+
+The original interpretation offered a visible download link and it was dropped when a vocabulary's
+representation was narrowed to its own statements. At the walkthrough the maintainer asked for it
+back. Each of the three pages has a Download menu, django-mvp's dropdown with one link per format,
+using the same four formats and `?format=` addresses as the head's alternate links, so nothing new
+is served. On the record pages it sits in the title's actions. On a vocabulary's page, whose
+template replaces the list toolbar, it sits beside the About button at the toolbar's own size.
+
+**ADR:** none — a page control, local to the three templates.

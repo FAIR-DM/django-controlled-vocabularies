@@ -45,6 +45,7 @@
     <div class="flex items-center gap-2 ms-auto">
       {% if toolbar_sort %}<c-mvp.page.list.filters.field :field="toolbar_sort" />{% endif %}
       <c-mvp.page.side.toggle for="vocabulary-about" text="{% trans "About" %}" icon="info" />
+      <c-controlled-vocabularies.rdf-download :alternates="rdf_alternates" />
     </div>
   </c-mvp.page.list.toolbar>
 {% endblock page.toolbar %}

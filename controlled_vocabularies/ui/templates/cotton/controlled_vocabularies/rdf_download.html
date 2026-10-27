@@ -1,0 +1,12 @@
+{# @description A menu on a vocabulary's or record's page that downloads it as RDF, one entry per format. #}
+{# @prop alternates:list | description:"The representations, each a dict with a media_type, an href and a label." #}
+{# @prop size:text | description:"The button's size, as django-mvp's button takes it; the toolbar's own size when omitted." #}
+{% load i18n %}
+<c-vars alternates size />
+<c-mvp.dropdown halign="end" text="{% trans 'Download' %}" icon="download" size="{{ size }}">
+  <ul class="menu">
+    {% for alternate in alternates %}
+      <li><a href="{{ alternate.href }}" type="{{ alternate.media_type }}" download>{{ alternate.label }}</a></li>
+    {% endfor %}
+  </ul>
+</c-mvp.dropdown>

@@ -11,8 +11,8 @@ All notable changes to this project are documented in this file. The format foll
 - A vocabulary's page and a concept's or collection's page answer with RDF. A client asking
   for an RDF media type in `Accept` gets the row's own statements in that serialization at the
   page's address, and `?format=` downloads them as `<slug>.<extension>` in any format the
-  installed rdflib writes faithfully. A browser still gets the page. Each page names its Turtle,
-  RDF/XML, JSON-LD and N-Triples alternatives in its `<head>` (#231). See
+  installed rdflib writes faithfully. A browser still gets the page. Each page offers Turtle,
+  RDF/XML, JSON-LD and N-Triples in a Download menu and names them in its `<head>` (#231). See
   [Asking a page for RDF](docs/browsing.md#asking-a-page-for-rdf) and
   [ADR 0028](docs/adr/0028-a-rows-rdf-is-its-own-document-and-what-the-row-records.md).
 - `to_graph()` on `ConceptScheme` and `Record` returns the row's own statements as an

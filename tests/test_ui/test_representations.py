@@ -446,6 +446,34 @@ class TestAlternateLinks:
             assert response["Content-Type"].split(";")[0] == link["type"]
 
 
+@pytest.mark.django_db
+class TestDownloadMenu:
+    def test_the_page_body_offers_the_four_formats_as_downloads(self, client, subject):
+        soup = BeautifulSoup(ask(client, subject, BROWSER).content, "html.parser")
+
+        links = soup.body.select("a[download][href^='?format=']")
+
+        assert [link["href"] for link in links] == [
+            f"?format={name}" for name in ("ttl", "xml", "json-ld", "nt")
+        ]
+
+    def test_each_download_is_an_attachment_of_its_format(self, client, subject):
+        soup = BeautifulSoup(ask(client, subject, BROWSER).content, "html.parser")
+
+        links = soup.body.select("a[download][href^='?format=']")
+
+        assert len(links) == 4
+        for link in links:
+            response = client.get(address(subject) + link["href"])
+            name = link["href"].removeprefix("?format=")
+
+            assert response.status_code == 200
+            assert response["Content-Type"].split(";")[0] == (
+                Serialization.named(name).media_type
+            )
+            assert response["Content-Disposition"].startswith("attachment")
+
+
 @pytest.fixture
 def demo(db):
     """Seed the demo's two vocabularies."""
