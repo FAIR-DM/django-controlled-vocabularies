@@ -213,7 +213,6 @@ format and confirm the refusal lists the formats that are available.
   endpoint MUST behave as they do today for every request that does not ask for RDF.
 - **FR-014**: The RDF responses MUST be subject to exactly the access the HTML page is subject to,
   with no access rule of the package's own.
-
 - **FR-015**: Each vocabulary page and record page MUST offer a download menu with the same four
   serializations FR-010 names, each downloading the subject as FR-009 describes.
 
