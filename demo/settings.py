@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     # "daisy_cotton" below "mvp": both ship an icon component, and the first app to declare a
     # template path wins.
     "mvp",
+    # Serves docs/ as the demo's own pages, from the build `manage.py build_docs` writes.
+    "mvp_sphinx",
     "daisy_cotton",
     "crispy_forms",
     # Ahead of django_tomselect, so mvp_forms' template for its widget is the one found.
@@ -152,6 +154,9 @@ FLEX_MENUS = {
         "dock": "mvp.renderers.MobileFooterNavRenderer",
     },
 }
+
+# The package's name beside the brand icon in the sidebar's header row.
+MVP_CONFIG = {"layout": {"sidebar": {"title": "django-controlled-vocabularies"}}}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

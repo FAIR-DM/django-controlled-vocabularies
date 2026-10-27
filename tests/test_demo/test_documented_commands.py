@@ -42,11 +42,12 @@ def documented_commands():
 
 
 class TestDocumentedCommands:
-    def test_the_documentation_gives_the_three_commands_the_demo_needs(self):
+    def test_the_documentation_gives_the_four_commands_the_demo_needs(self):
         subcommands = [subcommand for _, subcommand in documented_commands()]
 
         assert "migrate" in subcommands, subcommands
         assert "seed_demo" in subcommands, subcommands
+        assert "build_docs" in subcommands, subcommands
         assert "runserver" in subcommands, subcommands
 
     @pytest.mark.parametrize(("prefix", "subcommand"), documented_commands())

@@ -307,4 +307,4 @@ reports a missing collection, names the model, the field, the root and the vocab
 
 ---
 
-Next: [choosing a concept](search.md).
+Next: [choosing a concept](how-to/choosing-a-concept.md).
