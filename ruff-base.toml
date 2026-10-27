@@ -81,6 +81,9 @@ select = [
     "TRY",
     # pydocstyle
     "D",
+    # Imperative summaries. The Google convention below turns this off unless it is
+    # named here.
+    "D401",
 ]
 ignore = [
     # LineTooLong
