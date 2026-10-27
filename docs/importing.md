@@ -133,6 +133,35 @@ contains, the file is authoritative: the record's statements end up matching the
 including the removal of a statement the file no longer carries. A record the file does not mention
 at all is left completely untouched and named in the report instead, never deleted.
 
+## Reading a row back as RDF
+
+`to_graph()` is the reverse of the import. A `ConceptScheme` or a `Record` returns an
+`rdflib.Graph` built from its stored document:
+
+```python
+from controlled_vocabularies.models import Record
+
+record = Record.objects.get(uri="http://example.org/rocks/granite")
+print(record.to_graph().serialize(format="turtle"))
+```
+
+```turtle
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<http://example.org/rocks/granite> a skos:Concept ;
+    skos:broader <http://example.org/rocks/igneous> ;
+    skos:prefLabel "Granite"@en .
+```
+
+The graph holds the row's own statements and nothing gathered from other rows: a concept's
+graph does not include the labels of the concept it links to, and a vocabulary's graph does
+not include its concepts. The subject is the row's `uri`, unchanged.
+
+Every statement of the document is in the graph, in every language, and a `skos:memberList` is
+written as one RDF list in its stored order. A row whose document states no `rdf:type` is given
+one: `skos:ConceptScheme` for a vocabulary, and a record's `type` for a record. A document that
+states a type keeps exactly the types it states.
+
 ## What an import keeps
 
 A vocabulary is stored as one `ConceptScheme` row, and each concept and collection in it as one
