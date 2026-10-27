@@ -24,7 +24,7 @@ call_command("build_docs", verbosity=0)
 # holds the docs page link.
 NAVS = re.compile(r"<nav\\b.*?</nav>", re.DOTALL)
 list_url = reverse("controlled_vocabularies_ui:vocabulary-list")
-docs_page_url = reverse("docs:page", kwargs={"path": "browsing/"})
+docs_page_url = reverse("docs:page", kwargs={"path": "tutorial/"})
 
 # "testserver", the test client's default host, is not one the demo allows.
 client = Client(HTTP_HOST="localhost")

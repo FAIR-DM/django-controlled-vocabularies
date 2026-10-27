@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-BROWSING_DOC = REPO_ROOT / "docs" / "browsing.md"
+TUTORIAL_DOC = REPO_ROOT / "docs" / "tutorial.md"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "demo.yml"
 
 DEMO_SECTION_LABEL = "(demo-project)="
@@ -19,12 +19,12 @@ MANAGE_COMMAND = re.compile(
 
 
 def demo_section():
-    """Return the demo section of the browsing page.
+    """Return the demo section of the tutorial page.
 
     Returns:
         The text from the demo label's heading to the next heading of the same level or higher.
     """
-    text = BROWSING_DOC.read_text(encoding="utf-8")
+    text = TUTORIAL_DOC.read_text(encoding="utf-8")
     after_label = text[text.index(DEMO_SECTION_LABEL) + len(DEMO_SECTION_LABEL) :]
     heading = re.match(r"\s*(#+) ", after_label)
     rest = after_label[heading.end() :]
@@ -56,7 +56,7 @@ class TestDocumentedCommands:
         self, prefix, subcommand
     ):
         assert prefix.strip().endswith("uv run"), (
-            f"{BROWSING_DOC.name} documents '{prefix} python manage.py {subcommand}': a bare "
+            f"{TUTORIAL_DOC.name} documents '{prefix} python manage.py {subcommand}': a bare "
             "interpreter is not the environment 'uv sync' just built, and on a "
             "machine whose path carries only 'python3' it does not exist at all"
         )
@@ -66,6 +66,6 @@ class TestDocumentedCommands:
         workflow = WORKFLOW.read_text(encoding="utf-8")
 
         assert f"manage.py {subcommand}" in workflow, (
-            f"{BROWSING_DOC.name} documents 'manage.py {subcommand}' but {WORKFLOW.name} never "
+            f"{TUTORIAL_DOC.name} documents 'manage.py {subcommand}' but {WORKFLOW.name} never "
             "runs it, so nothing checks that the documented path still works"
         )

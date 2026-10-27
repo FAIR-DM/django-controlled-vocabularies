@@ -9,28 +9,20 @@ shortest example that works. These pages are the manual.
 
 ## Using the package
 
-- **[Configuration](configuration.md)** — the vocabularies your site declares, the base address
-  identifiers are composed from, and how a row's URI and slug are made and kept.
-- **[Attaching concepts to your models](fields.md)** — `ConceptField` and `MultiConceptField`,
-  restricting either to the vocabularies you name, and narrowing further to the members of a
-  collection.
-- **[Choosing a concept](how-to/choosing-a-concept.md)** — the search-as-you-type control in your
-  own forms and on Django admin pages, and the three wiring steps it needs.
-- **[Browsing vocabularies](browsing.md)** — the opt-in `ui` extra: the list of vocabularies, a
-  page for each vocabulary, concept and collection, and the runnable demo project.
-- **[Importing a published vocabulary](importing.md)** — declaring your site's vocabularies and
-  loading them all with one command, reading SKOS from a file or a URL, what an import keeps, and
-  what the import report tells you.
+- **[Tutorial](tutorial.md)** — run the demo project and look around it.
+- **[How-to guides](how-to/index.md)** — attach concepts to your models, load vocabularies, add the
+  browsing pages.
+- **[Reference](reference/index.md)** — settings, the import report and the pages the browsing app serves.
+- **[Explanation](explanation/index.md)** — how identifiers are made, what an import keeps and why.
 
 ```{toctree}
 :caption: Using the package
 :hidden:
 
-configuration
-fields
-how-to/choosing-a-concept
-browsing
-importing
+tutorial
+how-to/index
+reference/index
+explanation/index
 ```
 
 ## Contributing

@@ -14,7 +14,7 @@ All notable changes to this project are documented in this file. The format foll
   installed rdflib writes faithfully. A browser still gets the page. Each page lists every
   format under "Alternate representations" in its side panel, and names Turtle, RDF/XML, JSON-LD
   and N-Triples in its `<head>` (#231). See
-  [Asking a page for RDF](docs/browsing.md#asking-a-page-for-rdf) and
+  [Ask a page for RDF](docs/how-to/ask-a-page-for-rdf.md) and
   [ADR 0028](docs/adr/0028-a-rows-rdf-is-its-own-document-and-what-the-row-records.md).
 - `to_graph()` on `ConceptScheme` and `Record` returns the row's own statements as an
   `rdflib.Graph`, and `Serialization` lists the formats it can be written in.
@@ -116,7 +116,7 @@ All notable changes to this project are documented in this file. The format foll
   about the row as its publisher made it, in every language, and `pref_label` and `search_text` are
   copies of it kept for sorting and searching. A record is read with `values()`, `label()`,
   `display_label()`, `linked_uris()` and `first_value()`, and a collection's members with
-  `member_uris()`. See [Importing a published vocabulary](docs/importing.md) and
+  `member_uris()`. See [Reading a row](docs/reference/reading-a-row.md) and
   [ADR 0024](docs/adr/0024-a-vocabulary-is-stored-as-documents-of-its-published-statements.md).
 - **Breaking:** the migrations start again at a new `0001_initial`, and no data migration is
   provided. A site on 0.1.0 imports its vocabularies again from their published files after
@@ -174,7 +174,7 @@ All notable changes to this project are documented in this file. The format foll
   installing it changes its settings to match. In `INSTALLED_APPS`, `"crispy_tailwind"` becomes
   `"mvp_forms"`, with `"daisy_cotton"` listed below `"mvp"` and `"django_filters"` added. Both
   `CRISPY_TEMPLATE_PACK` and `CRISPY_ALLOWED_TEMPLATE_PACKS` become `"daisyui"`. See "Wiring it
-  up" in `docs/browsing.md`.
+  up" in `docs/how-to/add-the-browsing-pages-to-your-site.md`.
 - The search and sort of the list of vocabularies and of a vocabulary's page are filtersets,
   `VocabularyFilter` and `ConceptFilter` in `controlled_vocabularies.ui.filters`. The addresses
   are unchanged: `?q=` searches and `?o=` sorts, with the same option names. A sorted list keeps

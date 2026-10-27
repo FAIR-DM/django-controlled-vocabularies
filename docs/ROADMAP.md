@@ -136,7 +136,7 @@ features:
 - reading a single record
   ([#142](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/142)).
 
-[Browsing](browsing.md) covers mounting the pages.
+[Browsing](how-to/add-the-browsing-pages-to-your-site.md) covers mounting the pages.
 
 ### R7 — Scale hardening
 

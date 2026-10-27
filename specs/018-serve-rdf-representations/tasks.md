@@ -44,14 +44,14 @@ objects followed). That is FR-012 at the source.
 
 #### T002 — A row hands back its graph
 
-**Files**: `controlled_vocabularies/models.py`, `tests/test_models.py`, `docs/importing.md`
+**Files**: `controlled_vocabularies/models.py`, `tests/test_models.py`, `docs/how-to/read-a-row-back-as-rdf.md`
 
 `Resource.to_graph()`, `ConceptScheme.rdf_class = "skos:ConceptScheme"`, and `Record.rdf_class` as a
 property returning `self.type` (plan.md §1). Tests: a vocabulary authored with no `rdf:type` in its
 document gives a `skos:ConceptScheme` type triple; an ordered collection's graph carries its
 `skos:OrderedCollection` type; the graph's subject is the row's `uri`.
 
-Docs: a short section in `docs/importing.md`, after the import, showing `scheme.to_graph()` and
+Docs: a short section in `docs/how-to/read-a-row-back-as-rdf.md`, after the import, showing `scheme.to_graph()` and
 `record.to_graph()` serialized to Turtle, and saying what the graph holds (the row's own statements
 and nothing gathered from other rows).
 
@@ -148,9 +148,9 @@ format. In this group, the negotiable formats only. T008 widens it to all of the
 
 #### T007 — Documentation for `Accept`
 
-**Files**: `docs/browsing.md`, `CONTEXT.md`
+**Files**: `docs/how-to/ask-a-page-for-rdf.md`, `CONTEXT.md`
 
-`docs/browsing.md`: a section on the RDF a page returns when asked through `Accept`: which pages,
+`docs/how-to/ask-a-page-for-rdf.md`: a section on the RDF a page returns when asked through `Accept`: which pages,
 which media types, what the RDF holds and what it leaves out, the HTML default, the 406, the
 `Vary` header, and the alternate links. Say that N-Triples is negotiated as
 `application/n-triples`, so a client asking for `text/plain` gets the page. A `curl -H 'Accept: text/turtle'` example against the
@@ -182,9 +182,9 @@ The mixin's `?format=` path (plan.md §3, step 2 and the download header). Tests
 
 #### T009 — Documentation for `?format=`, and the roadmap
 
-**Files**: `docs/browsing.md`, `docs/ROADMAP.md`
+**Files**: `docs/how-to/ask-a-page-for-rdf.md`, `docs/ROADMAP.md`
 
-`docs/browsing.md`: the `?format=` parameter, the names it takes, the download name, its precedence
+`docs/how-to/ask-a-page-for-rdf.md`: the `?format=` parameter, the names it takes, the download name, its precedence
 over `Accept`, the 400. `docs/ROADMAP.md`, R4: the content-negotiation deliverable is recorded as
 delivered for a record's and a vocabulary's own statements, with the whole-vocabulary export that
 re-imports cleanly and publication still to come. Edit the item to read as current state, with no

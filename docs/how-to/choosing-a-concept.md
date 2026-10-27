@@ -75,7 +75,7 @@ database, so opening a vocabulary's page costs the same whatever its size. The c
 same for a field naming one vocabulary. A field naming several, or none, sorts the concepts it
 allows before taking the first page.
 
-What PostgreSQL needs for this is in [configuration](../configuration.md#database).
+What PostgreSQL needs for this is in [preparing PostgreSQL for concept search](prepare-postgresql-for-concept-search.md).
 
 ## Choosing a concept in the admin
 
@@ -88,7 +88,7 @@ A concept is chosen on these pages, never created or edited there. Django ordina
 add, change, delete or view link beside a related field so a person filling in a form can manage
 the related record without leaving it. None of the four appears beside a concept field, whether or
 not this package's own models are registered in the admin, and whatever permissions the signed-in
-person holds. Concepts arrive by [importing](../importing.md) a published vocabulary — a controlled
+person holds. Concepts arrive by [importing](load-the-vocabularies-your-site-uses.md) a published vocabulary — a controlled
 vocabulary stops being controlled the moment a data-entry form can invent or edit one.
 
 Where the admin presents the field read-only — listed in `readonly_fields`, or because the signed-in
@@ -116,7 +116,3 @@ One piece of text on these pages is Django's rather than this package's. Under a
 the admin adds *Hold down "Control", or "Command" on a Mac, to select more than one.* It is the
 same sentence the admin puts under any multiple-select field, and it does not describe this
 control: concepts are added by typing and picking, and removed one at a time.
-
----
-
-Next: [browsing vocabularies](../browsing.md).

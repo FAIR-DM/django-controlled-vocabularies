@@ -30,7 +30,7 @@ because its output is a change set.
 after negotiation an RDF choice is overruled when HTML is accepted at the same quality. Reading the
 quality uses `HttpRequest.accepted_type()`, so no header parsing is written here.
 
-**ADR:** none — local to the negotiation in one mixin, and documented in docs/browsing.md.
+**ADR:** none — local to the negotiation in one mixin, and documented in docs/how-to/ask-a-page-for-rdf.md.
 
 ## D4. Four serializers borrow a sibling's media type and extension
 
@@ -64,7 +64,7 @@ and a re-import ignores the fragment, but the output is not the record's stateme
 FR-003 and FR-012. `xml` writes the same syntax faithfully and stays offered. This narrows FR-002
 and was put to the maintainer as a change to the specification.
 
-**ADR:** none — a fault of one rdflib writer, recorded in docs/importing.md; revisit if rdflib fixes it.
+**ADR:** none — a fault of one rdflib writer, recorded in docs/how-to/read-a-row-back-as-rdf.md; revisit if rdflib fixes it.
 
 ## D7. A format's name is the shortest one rdflib registers
 
@@ -102,7 +102,7 @@ takes the quality of the most specific entry it matches, and the page is offered
 still gives the page. An entry with `q=0` is dropped by Django before matching, so it cannot be read
 as a refusal of HTML. No known client sends one, and the limitation is documented.
 
-**ADR:** none — local to the negotiation in one mixin, and documented in docs/browsing.md.
+**ADR:** none — local to the negotiation in one mixin, and documented in docs/how-to/ask-a-page-for-rdf.md.
 
 ## D11. A record names its vocabulary when its document does not
 
