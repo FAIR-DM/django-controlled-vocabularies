@@ -182,7 +182,7 @@ authoring returns when a project needs it.
 
 ### R4 — RDF publishing and stable URIs
 
-*Full feature · advances G3, and G4.*
+*delivered in [#231](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/231) · advances G3, and G4.*
 
 Serving a vocabulary held here as standards-compliant RDF at stable concept URIs, with content
 negotiation. A vocabulary's page and a record's page already return their own statements as RDF,

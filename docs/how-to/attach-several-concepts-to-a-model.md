@@ -22,7 +22,7 @@ class Sample(models.Model):
 The table linking a row to its concepts holds each concept's URI too, the same way.
 
 One vocabulary restricts to that vocabulary, a list restricts to the union of the named vocabularies, and
-leaving `vocabulary` out — as `keywords` does above — restricts nothing. A concept outside the
+leaving `vocabulary` out — as `keywords` does in the example — restricts nothing. A concept outside the
 named vocabularies is refused, and the refusal names every vocabulary the field accepts.
 
 Reading concepts back:
@@ -36,7 +36,7 @@ sample.get_rock_types_uris()         # a list of URIs, same order
 Both accessors return an empty list for a row holding nothing, including one that has not been
 saved yet, rather than raising.
 
-**Required and optional.** `blank=True`, as on `keywords` above, makes the field optional: a row
+**Required and optional.** `blank=True`, as on `keywords` in the example, makes the field optional: a row
 can hold zero concepts. Without it, as on `rock_types`, the field is required, and required means at
 least one concept attached. Django gives a many-to-many field no hook into ordinary field
 validation, so this is enforced when `full_clean()` runs rather than by the database. A

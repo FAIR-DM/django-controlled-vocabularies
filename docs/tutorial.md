@@ -1,8 +1,8 @@
 (demo-project)=
 # Try it: the demo project
 
-The repository carries a runnable demo of the pages above, wired the same way this page
-documents. From a fresh clone, with dependencies installed:
+The repository carries a runnable demo of the browsing pages, wired the same way
+[the guide to adding them](how-to/add-the-browsing-pages-to-your-site.md) documents. From a fresh clone, with dependencies installed:
 
 ```bash
 uv sync --extra ui
@@ -50,7 +50,7 @@ on a fresh checkout either.
 "Fieldwork" also carries a note only in German, alongside its English-only definition. Reading the
 page in German — `curl -H "Accept-Language: de" http://127.0.0.1:8000/browse/data-collection-methods/fieldwork/`,
 or a browser configured for German — shows the German note directly and falls back to the English
-definition, exactly as [a concept's own page](reference/a-concepts-own-page.md) above describes.
+definition, exactly as [a concept's own page](reference/a-concepts-own-page.md) describes.
 
 `seed_demo` is destructive and idempotent: it clears every vocabulary before loading, so running
 it again returns the demo to the same seeded state whatever was added or removed before —

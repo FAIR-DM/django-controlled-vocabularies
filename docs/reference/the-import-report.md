@@ -24,7 +24,7 @@ A run is refused for one of these reasons, each a member of `FatalReason`:
 - `VOCABULARY_AMBIGUOUS` — the file declares more than one vocabulary and none was named.
 
 Nothing else in this list refuses a run, and a file that cannot be read as SKOS at all raises
-`SkosImportError` (below). A run either succeeds in full or changes nothing: every problem in a
+`SkosImportError` (see [Untrusted input](../explanation/untrusted-input.md)). A run either succeeds in full or changes nothing: every problem in a
 file is collected before any of it is written, and a fatal one rolls the whole run back. The
 `sync_vocabularies` and `import_skos` management commands wrap this for use from a terminal.
 There is no web-facing entry point yet.

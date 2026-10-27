@@ -34,7 +34,7 @@ for, which are listed here as of this release:
 | `text/n3` | Notation3 |
 
 N-Triples is negotiated as `application/n-triples`, so a client that asks only for `text/plain`
-is not given it: it gets a 406, described below.
+is not given it: it gets a 406, described under [Which one a request gets](#which-one-a-request-gets).
 
 ## Which one a request gets
 

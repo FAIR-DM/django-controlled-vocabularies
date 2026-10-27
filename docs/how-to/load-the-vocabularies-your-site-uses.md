@@ -94,8 +94,9 @@ python manage.py sync_vocabularies --dry-run
 ```
 
 The declared vocabularies load first, then the ones fields name. Each is imported in a
-transaction of its own, through the same import the
-rest of this page describes, and gets its own report: how many records were created, updated and
+transaction of its own, through the same
+[import you can call from Python](import-a-skos-file-from-python.md), and gets its own
+report: how many records were created, updated and
 absent from the source, naming each absent one, as `import_skos` prints. A record the source no
 longer lists is reported and left alone, never deleted.
 

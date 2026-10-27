@@ -25,7 +25,7 @@ once. A concept's page finds the collections holding it with
 `linking_to(concept.uri, "skos:member", "skos:memberList")`.
 
 A document is validated by `validate_document` when a row is cleaned. It must be an object that
-maps each predicate to a list of entries, each a link or a literal as shown above.
+maps each predicate to a list of entries, each a link or a literal as shown in [What an import keeps](../explanation/what-an-import-keeps.md).
 `controlled_vocabularies.predicates` holds the six fixed prefixes as `PREFIXES`, and
 `Namespaces.compact()` and `Namespaces.expand()` turn a full URI into a CURIE and back. The order the
 pages show predicates in is `PREDICATE_ORDER`, and the predicates they show in one language are

@@ -81,7 +81,8 @@ reverse("controlled_vocabularies_ui:vocabulary-list")
 `manage.py check` reports `controlled_vocabularies.ui.E001`, naming the extra to install, if
 `django-mvp` is not importable.
 
-Each entry's name is a link to that vocabulary's own page, described below. The link is reversed
+Each entry's name is a link to that vocabulary's own page, described on
+[a vocabulary's own page](../reference/a-vocabularys-own-page.md). The link is reversed
 from the route's name rather than composed from the identifier base address, so it stays an
 in-site address whatever that setting says.
 
@@ -104,7 +105,7 @@ unnecessary, and nothing ever reports that it has
 The page is served by `VocabularyListView`, in `controlled_vocabularies.ui.views`. A project that
 wants a different presentation subclasses it and routes its own path at the same view — the
 queryset, its ordering, its counts and its facets come with the class, so an override that only changes
-`list_item_template` keeps every guarantee above:
+`list_item_template` keeps every guarantee of [the list of vocabularies](../reference/finding-a-vocabulary.md):
 
 ```python
 from controlled_vocabularies.ui.views import VocabularyListView

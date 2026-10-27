@@ -2,7 +2,7 @@
 
 Every vocabulary the site holds has its own address, `{mount}/{slug}/`, under wherever the routes
 are mounted. The page's title is the vocabulary's name, and its lead text is the vocabulary's
-description, truncated the same way and for the same reason as the list entry above. A vocabulary
+description, truncated the same way and for the same reason as [the list entry](finding-a-vocabulary.md). A vocabulary
 with no description has no lead text.
 
 The main column is every concept the vocabulary holds, and only that vocabulary's, in one flat,
@@ -51,13 +51,13 @@ A search box narrows the list of concepts by every name a term goes by: a concep
 label in any language it carries, its alternative labels, and its hidden labels — never its
 definition or any other note. A hidden label is matched and never shown: searching for one finds
 the concept it names without ever displaying the label itself, which is the whole point of
-keeping it hidden. As with the list of vocabularies above, the term travels in the page's own
+keeping it hidden. As with [the list of vocabularies](finding-a-vocabulary.md), the term travels in the page's own
 address (`?q=`), so a narrowed list can be linked to, bookmarked and returned to, and it reaches
 every concept in the vocabulary before paging divides the results — not only the page being
 viewed. A search matching nothing says so, repeats what was searched for, and offers **Clear all**
 as the way back to the whole vocabulary.
 
-Case is ignored, with the same database-dependent limit disclosed above: SQLite folds ASCII
+Case is ignored, with the same database-dependent limit disclosed on [the list of vocabularies](finding-a-vocabulary.md): SQLite folds ASCII
 letters only, so a concept labelled *Ökologie* is found by *ÖKOLOGIE* and not by *ökologie*;
 PostgreSQL folds the whole of Unicode and matches either way
 ([ADR 0014](../adr/0014-database-collation-differences-are-disclosed-not-repaired.md)).
@@ -95,5 +95,5 @@ disagree, naming the mismatched paths. It is silent once they agree, and silent 
 browsing routes are not mounted at all.
 
 The page is served by `VocabularyDetailView`, in `controlled_vocabularies.ui.views`, and is
-subclassed the same way as the list above. The publication details are read by
+subclassed the same way as [the list](finding-a-vocabulary.md). The publication details are read by
 `PublicationDetails.of(vocabulary)`, in `controlled_vocabularies.ui.rows`.

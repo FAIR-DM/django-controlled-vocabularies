@@ -71,7 +71,7 @@ reverse(
 ```
 
 The page is served by `ConceptDetailView`, in `controlled_vocabularies.ui.views`, and is subclassed
-the same way as the pages above. The rows themselves come from `PropertyRows(record, language)`,
+the same way as [a vocabulary's own page](a-vocabularys-own-page.md). The rows themselves come from `PropertyRows(record, language)`,
 in `controlled_vocabularies.ui.rows`, whose `build()` returns the ordered rows — the seam a project
 reaches for to build its own page, or its own rendering of a report, over the same rows this one
 renders. `PropertyRows.in_reading_language()` is the rule that picks which entries of a translated

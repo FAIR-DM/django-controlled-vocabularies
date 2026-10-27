@@ -27,5 +27,5 @@ reverse(
 ```
 
 The page is served by `CollectionDetailView`, in `controlled_vocabularies.ui.views`, and is
-subclassed the same way as the pages above. Its rows come from the same `PropertyRows` a concept's
+subclassed the same way as [a vocabulary's own page](a-vocabularys-own-page.md). Its rows come from the same `PropertyRows` a concept's
 page uses.
