@@ -31,9 +31,8 @@ LIST_URL = reverse("controlled_vocabularies_ui:vocabulary-list")
 
 #: The vocabulary page's side panel, and the region holding its list of concepts.
 SIDE_PANEL = "#vocabulary-about"
-#: The record rows of a list page: the list items whose content block holds a link, which
-#: leaves out the filter menu's buttons and the applied-search chip.
-CONCEPT_ROWS = "#mvp-list li:has(> div a)"
+#: The list items of a list page. A record's row is the one holding the link to its page.
+LIST_ITEMS = "#mvp-list li"
 
 serial = itertools.count()
 
@@ -371,7 +370,7 @@ class TestVocabularyListEntry:
         soup = soup_of(client.get(LIST_URL))
         return next(
             row
-            for row in soup.select(CONCEPT_ROWS)
+            for row in soup.select(LIST_ITEMS)
             if row.find("a", href=vocabulary_page(scheme))
         )
 
@@ -1147,7 +1146,7 @@ class TestVocabularyDetailConceptRow:
         soup = soup_of(client.get(vocabulary_page(concept.scheme)))
         return next(
             row
-            for row in soup.select(CONCEPT_ROWS)
+            for row in soup.select(LIST_ITEMS)
             if row.find("a", href=concept_page(concept))
         )
 
@@ -1620,15 +1619,17 @@ class TestVocabularyDetailConceptSearch:
         RecordFactory(scheme=scheme, label="Basalt")
 
         response = client.get(vocabulary_page(scheme), {"q": "granate"})
-        # Read from the result rows: the applied-search chip repeats what the reader
+        # Read from the result row: the applied-search chip repeats what the reader
         # typed, which is the term and not the concept's label.
-        rows_text = " ".join(
-            row.get_text() for row in soup_of(response).select(CONCEPT_ROWS)
-        )
+        row_text = next(
+            row
+            for row in soup_of(response).select(LIST_ITEMS)
+            if row.find("a", href=concept_page(match))
+        ).get_text()
 
         assert listed_pks(response) == [match.pk]
-        assert "Granite" in rows_text
-        assert "granate" not in rows_text
+        assert "Granite" in row_text
+        assert "granate" not in row_text
 
     def test_a_concept_matching_on_several_labels_at_once_is_listed_once(self, client):
         scheme = ConceptSchemeFactory()
