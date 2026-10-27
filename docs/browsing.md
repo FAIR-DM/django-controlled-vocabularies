@@ -391,6 +391,74 @@ The page is served by `CollectionDetailView`, in `controlled_vocabularies.ui.vie
 subclassed the same way as the pages above. Its rows come from the same `PropertyRows` a concept's
 page uses.
 
+## Asking a page for RDF
+
+A vocabulary's page, a concept's page and a collection's page can each be returned as RDF, at the
+same address, by sending an `Accept` header that names an RDF media type. Software that holds a
+record's identifier can fetch the record's statements without knowing anything else about the
+site. The vocabulary list is not affected.
+
+```bash
+curl -H 'Accept: text/turtle' http://127.0.0.1:8000/browse/data-collection-methods/fieldwork/
+```
+
+The response holds the statements the record's own document makes about itself, with the
+record's identifier as their subject: its labels in every language, its definition and notes, and
+the links it states to other concepts, collections and mappings. A vocabulary's response holds the
+vocabulary's own statements and none of its records'. A collection's members are written as they
+were stored, an ordered collection's as an RDF list in its stored order. The response leaves out
+what other records say about the subject: a concept that another concept names `skos:narrower`
+gets no `skos:broader` it did not state itself, and it carries no statement about the collections
+gathering it. A record imported from a publisher is described by the publisher's identifier, not
+by an address on this site.
+
+The media types a page answers to are the ones the installed rdflib can write and has a media type
+for, which are listed here as of this release:
+
+| Media type | Format |
+|---|---|
+| `text/turtle` | Turtle |
+| `application/rdf+xml` | RDF/XML |
+| `application/ld+json` | JSON-LD |
+| `application/n-triples` | N-Triples |
+| `application/n-quads` | N-Quads |
+| `application/trig` | TriG |
+| `application/trix` | TriX |
+| `text/n3` | Notation3 |
+
+N-Triples is negotiated as `application/n-triples`, so a client that asks only for `text/plain`
+is not given it: it gets a 406, described below.
+
+### Which one a request gets
+
+- A browser's header, a request with no `Accept` header and `*/*` all get the HTML page.
+- When the header names an RDF type and HTML at the same quality, the page is returned.
+  `Accept: text/turtle, text/html` and `Accept: text/turtle, */*` both give the page, because
+  HTML is as acceptable as Turtle. Giving HTML a lower quality, as in
+  `Accept: text/html;q=0.5, text/turtle`, gives Turtle.
+- A header that names only types the site cannot produce, such as `Accept: application/json`,
+  gets a plain-text `406 Not Acceptable` that lists the types on offer.
+- An address that names no vocabulary or record is a 404 whatever the header says.
+
+The RDF is returned inline, with no `Content-Disposition` header. Every response from these three
+pages, the HTML page included, carries `Vary: Accept`, so a cache keeps the page and each RDF
+type apart. A view that a project has put behind a login requirement answers an RDF request the
+way it answers a browser: the requirement runs first.
+
+### Finding the RDF from the page
+
+Each of the three pages names its RDF alternatives in its `<head>`, in the order Turtle, RDF/XML,
+JSON-LD, N-Triples:
+
+```html
+<link rel="alternate" type="text/turtle" href="?format=ttl">
+<link rel="alternate" type="application/rdf+xml" href="?format=xml">
+<link rel="alternate" type="application/ld+json" href="?format=json-ld">
+<link rel="alternate" type="application/n-triples" href="?format=nt">
+```
+
+Each `href` is relative to the page's address and returns the media type named beside it.
+
 ## Try it: the demo project
 
 The repository carries a runnable demo of the pages above, wired the same way this page
