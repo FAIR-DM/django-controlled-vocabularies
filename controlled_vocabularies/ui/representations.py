@@ -8,14 +8,9 @@ from django.utils.translation import gettext_lazy as _
 
 from controlled_vocabularies.exchange.serializations import Serialization
 
-#: The serializations the page head and the download menu offer, in order, by short name,
-#: each with the name a reader knows the format by.
-ALTERNATES = {
-    "ttl": "Turtle",
-    "xml": "RDF/XML",
-    "json-ld": "JSON-LD",
-    "nt": "N-Triples",
-}
+#: The serializations the page head names, in order, by short name. The download menu
+#: offers every serialization.
+ALTERNATES = ("ttl", "xml", "json-ld", "nt")
 
 __all__ = ["RepresentationMixin"]
 
@@ -152,14 +147,14 @@ class RepresentationMixin:
         )
 
     def get_context_data(self, **kwargs):
-        """Add the four representations the page head and the download menu link to."""
+        """Add the representations the page head names and the download menu offers."""
         context = super().get_context_data(**kwargs)
         context["rdf_alternates"] = [
-            {
-                "media_type": Serialization.named(name).media_type,
-                "href": f"?format={name}",
-                "label": label,
-            }
-            for name, label in ALTERNATES.items()
+            {"media_type": s.media_type, "href": f"?format={s.name}"}
+            for s in (Serialization.named(name) for name in ALTERNATES)
+        ]
+        context["rdf_downloads"] = [
+            {"label": s.label, "href": f"?format={s.name}"}
+            for s in sorted(Serialization.all(), key=lambda s: s.label.casefold())
         ]
         return context

@@ -1,6 +1,18 @@
 {% extends "list_view.html" %}
 {% load i18n %}
 {% block head %}{{ block.super }}<c-controlled-vocabularies.rdf-alternates :alternates="rdf_alternates" />{% endblock %}
+{% block page.title %}
+  {# django-mvp's title row, with the download menu where a detail page puts its actions: it acts on the vocabulary, not on the list below. #}
+  <c-mvp.page.title :title="page.title"
+                    :subtitle="page.subtitle"
+                    :info="page.info"
+                    :info_actions="page.info_actions"
+                    inline_actions>
+    <c-slot name="actions">
+      <c-controlled-vocabularies.rdf-download :downloads="rdf_downloads" />
+    </c-slot>
+  </c-mvp.page.title>
+{% endblock page.title %}
 {% comment %}
   The title and lead text are the vocabulary's own (the view's page title and subtitle). Everything
   else the page says about the vocabulary sits in the side panel, so the content column is the
@@ -45,7 +57,6 @@
     <div class="flex items-center gap-2 ms-auto">
       {% if toolbar_sort %}<c-mvp.page.list.filters.field :field="toolbar_sort" />{% endif %}
       <c-mvp.page.side.toggle for="vocabulary-about" text="{% trans "About" %}" icon="info" />
-      <c-controlled-vocabularies.rdf-download :alternates="rdf_alternates" />
     </div>
   </c-mvp.page.list.toolbar>
 {% endblock page.toolbar %}

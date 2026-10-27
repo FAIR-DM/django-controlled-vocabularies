@@ -175,7 +175,7 @@ from controlled_vocabularies.exchange.serializations import Serialization
 
 turtle = Serialization.named("ttl")  # any name rdflib registers, such as "turtle" or "text/turtle"
 data = turtle.serialize(record.to_graph())  # bytes
-turtle.media_type, turtle.extension  # ("text/turtle", "ttl")
+turtle.media_type, turtle.extension, turtle.label  # ("text/turtle", "ttl", "Turtle")
 [s.name for s in Serialization.all()]  # every format offered
 ```
 

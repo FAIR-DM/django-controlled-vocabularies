@@ -53,7 +53,7 @@ Ambiguities the intake decisions left open, resolved while drafting against the 
 
 - **Q: A concept's page shows the vocabulary that holds it, from the record's own link to it, even when the stored statements do not name it. Does the RDF name it too?** → A: Yes. A record whose document states no `skos:inScheme` has its own vocabulary stated, as its class is stated when the document gives none. A document that states one keeps exactly what it states. Integrated into FR-003.
 
-- **Q: A person can reach `?format=` only by typing it. Should the page offer the formats itself?** → A: Yes. Each vocabulary page and record page has a download menu offering Turtle, RDF/XML, JSON-LD and N-Triples, the same four its head names, each downloading the file. Integrated into User Story 2 and FR-015.
+- **Q: A person can reach `?format=` only by typing it. Should the page offer the formats itself?** → A: Yes. Each vocabulary page and record page has a download menu in its title row, offering every serialization the site offers, each downloading the file. It sits with the page's title because it acts on the vocabulary or record, never in the list toolbar, which acts on the list. Integrated into User Story 2 and FR-015.
 
 ### Session 2026-10-27 (coverage scan)
 
@@ -144,7 +144,7 @@ format and confirm the refusal lists the formats that are available.
 5. **Given** an address naming no record, **When** a user opens it with `?format=` naming Turtle,
    **Then** it is reported as not found.
 6. **Given** a vocabulary's, concept's or collection's page, **When** a user opens its download
-   menu, **Then** it offers Turtle, RDF/XML, JSON-LD and N-Triples, and choosing one downloads the
+   menu, **Then** it offers every serialization the site offers, and choosing one downloads the
    subject's statements in that format.
 
 ---
@@ -213,8 +213,9 @@ format and confirm the refusal lists the formats that are available.
   endpoint MUST behave as they do today for every request that does not ask for RDF.
 - **FR-014**: The RDF responses MUST be subject to exactly the access the HTML page is subject to,
   with no access rule of the package's own.
-- **FR-015**: Each vocabulary page and record page MUST offer a download menu with the same four
-  serializations FR-010 names, each downloading the subject as FR-009 describes.
+- **FR-015**: Each vocabulary page and record page MUST offer, in its title row, a download menu
+  with every serialization FR-002 offers, each named as readers know it and downloading the subject
+  as FR-009 describes.
 
 ### Key Entities
 

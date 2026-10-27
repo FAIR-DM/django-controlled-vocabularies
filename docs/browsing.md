@@ -484,8 +484,8 @@ that names no vocabulary or record is a 404 whatever `?format=` says.
 
 ### Finding the RDF from the page
 
-Each of the three pages has a **Download** menu beside its other controls, offering Turtle,
-RDF/XML, JSON-LD and N-Triples. Choosing one downloads the file, exactly as `?format=` does.
+Each of the three pages has a **Download** menu in its title row, listing every format the site
+offers by the name readers know it by. Choosing one downloads the file, exactly as `?format=` does.
 
 
 Each of the three pages names its RDF alternatives in its `<head>`, in the order Turtle, RDF/XML,

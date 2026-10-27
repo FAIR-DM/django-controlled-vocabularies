@@ -1,7 +1,7 @@
 {% extends "detail_view.html" %}
 {% load i18n %}
 {% block head %}{{ block.super }}<c-controlled-vocabularies.rdf-alternates :alternates="rdf_alternates" />{% endblock %}
-{% block page.actions %}{{ block.super }}<c-controlled-vocabularies.rdf-download :alternates="rdf_alternates" size="sm" />{% endblock page.actions %}
+{% block page.actions %}{{ block.super }}<c-controlled-vocabularies.rdf-download :downloads="rdf_downloads" />{% endblock page.actions %}
 {% block page.content %}
   {% comment %}
     Leads the page rather than trailing the list, so a reader citing this record need not scroll past

@@ -23,6 +23,22 @@ MEDIA_TYPES = {
     "hext": "application/x-ndjson",
 }
 
+#: The name a reader knows each format by. A format rdflib adds later is labelled by its
+#: short name until it is named here.
+LABELS = {
+    "hext": "HexTuples",
+    "json-ld": "JSON-LD",
+    "longturtle": "Turtle (long form)",
+    "n3": "Notation3",
+    "nquads": "N-Quads",
+    "nt": "N-Triples",
+    "nt11": "N-Triples 1.1",
+    "trig": "TriG",
+    "trix": "TriX",
+    "ttl": "Turtle",
+    "xml": "RDF/XML",
+}
+
 #: The file extension where the first one rdflib maps to the format is not the usual.
 EXTENSIONS = {
     "xml": "rdf",
@@ -44,6 +60,7 @@ class Serialization:
         negotiable: Whether rdflib registers a media type for it, so ``Accept`` can pick
             it.
         extension: The file extension, without the dot.
+        label: The name a reader knows the format by, such as ``Turtle``.
     """
 
     name: str
@@ -51,6 +68,7 @@ class Serialization:
     media_type: str
     negotiable: bool
     extension: str
+    label: str
 
     @classmethod
     @functools.cache
@@ -89,6 +107,7 @@ class Serialization:
             media_type=(slashed or [MEDIA_TYPES.get(name, "text/plain")])[0],
             negotiable=bool(slashed),
             extension=EXTENSIONS.get(name) or next(suffixes, name),
+            label=LABELS.get(name, name),
         )
 
     @classmethod

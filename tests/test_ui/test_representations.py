@@ -448,21 +448,30 @@ class TestAlternateLinks:
 
 @pytest.mark.django_db
 class TestDownloadMenu:
-    def test_the_page_body_offers_the_four_formats_as_downloads(self, client, subject):
+    def test_the_page_body_offers_every_format_as_a_download(self, client, subject):
         soup = BeautifulSoup(ask(client, subject, BROWSER).content, "html.parser")
 
         links = soup.body.select("a[download][href^='?format=']")
 
-        assert [link["href"] for link in links] == [
-            f"?format={name}" for name in ("ttl", "xml", "json-ld", "nt")
-        ]
+        assert sorted(link["href"] for link in links) == sorted(
+            f"?format={s.name}" for s in Serialization.all()
+        )
+
+    def test_the_menu_sits_in_the_title_row_not_the_list_toolbar(
+        self, client, subject
+    ):
+        soup = BeautifulSoup(ask(client, subject, BROWSER).content, "html.parser")
+
+        title = soup.body.select_one(".page-title")
+
+        assert title.select("a[download][href^='?format=']")
 
     def test_each_download_is_an_attachment_of_its_format(self, client, subject):
         soup = BeautifulSoup(ask(client, subject, BROWSER).content, "html.parser")
 
         links = soup.body.select("a[download][href^='?format=']")
 
-        assert len(links) == 4
+        assert len(links) == len(Serialization.all())
         for link in links:
             response = client.get(address(subject) + link["href"])
             name = link["href"].removeprefix("?format=")
