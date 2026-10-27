@@ -162,6 +162,25 @@ written as one RDF list in its stored order. A row whose document states no `rdf
 one: `skos:ConceptScheme` for a vocabulary, and a record's `type` for a record. A document that
 states a type keeps exactly the types it states.
 
+`to_graph()` calls `controlled_vocabularies.exchange.graph.document_graph(uri, document,
+rdf_class)`, which does the same for any document in the stored shape, such as one not yet saved.
+
+`controlled_vocabularies.exchange.serializations.Serialization` lists the formats the installed
+rdflib can write a graph in faithfully, and writes a graph in one of them:
+
+```python
+from controlled_vocabularies.exchange.serializations import Serialization
+
+turtle = Serialization.named("ttl")  # any name rdflib registers, such as "turtle" or "text/turtle"
+data = turtle.serialize(record.to_graph())  # bytes
+turtle.media_type, turtle.extension  # ("text/turtle", "ttl")
+[s.name for s in Serialization.all()]  # every format offered
+```
+
+The list follows the installed rdflib. Two of its writers are left out: `patch`, whose output is a
+change between graphs, and `pretty-xml`, which can repeat part of an RDF list (`xml` writes the
+same syntax). N-Quads and TriX are written as a dataset whose default graph holds the statements.
+
 ## What an import keeps
 
 A vocabulary is stored as one `ConceptScheme` row, and each concept and collection in it as one
