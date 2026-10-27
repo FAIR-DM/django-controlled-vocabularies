@@ -49,52 +49,62 @@ class RepresentationMixin:
             The page, the subject as RDF (a download when ``?format=`` asked for it), a
             400 naming the formats the site offers, or a 406 naming the types it offers.
         """
-        serialization = self.requested_serialization(request)
-        if serialization is None:
-            return super().get(request, *args, **kwargs)
-        # Resolved before any refusal, so an address naming nothing is a 404 whatever is asked.
-        subject = self.get_representation_subject()
-        if serialization is False:
-            return self.refusal()
-        if serialization == "unknown":
-            return self.unknown_format()
-        response = HttpResponse(
-            serialization.serialize(subject.to_graph()),
-            content_type=serialization.media_type,
-        )
         if "format" in request.GET:
+            serialization = Serialization.named(request.GET["format"])
+            # Resolved before any refusal, so an address naming nothing is a 404 whatever
+            # is asked for.
+            subject = self.get_representation_subject()
+            if serialization is None:
+                return self.unknown_format()
+            response = self.representation(subject, serialization)
             response["Content-Disposition"] = content_disposition_header(
                 as_attachment=True, filename=f"{subject.slug}.{serialization.extension}"
             )
-        return response
+            return response
+        media_type = self.negotiated_media_type(request)
+        if media_type == "text/html":
+            return super().get(request, *args, **kwargs)
+        subject = self.get_representation_subject()
+        if media_type is None:
+            return self.refusal()
+        return self.representation(subject, Serialization.for_media_type(media_type))
 
-    def requested_serialization(self, request):
-        """Decide which serialization the request asks for, if any.
-
-        ``?format=`` decides alone: ``Accept`` is not consulted when it is present.
+    def negotiated_media_type(self, request):
+        """Choose between the page and the RDF media types from ``Accept``.
 
         Args:
             request: The request.
 
         Returns:
-            A ``Serialization``, None when the page is wanted, False when the request
-            accepts nothing the site can produce, or ``"unknown"`` when ``?format=``
-            names nothing the site offers.
+            ``"text/html"`` for the page, an RDF media type, or None when the request
+            accepts nothing the site can produce.
         """
-        if "format" in request.GET:
-            return Serialization.named(request.GET["format"]) or "unknown"
-        negotiable = {s.media_type: s for s in Serialization.all() if s.negotiable}
+        negotiable = [s.media_type for s in Serialization.all() if s.negotiable]
         chosen = request.get_preferred_type(["text/html", *negotiable])
-        if chosen is None:
-            return False
-        if chosen == "text/html":
-            return None
+        if chosen in (None, "text/html"):
+            return chosen
         # A tie between HTML and RDF goes to the page, so a client that accepts anything
         # and names Turtle first still gets what a browser would.
         html = request.accepted_type("text/html")
         if html is not None and html.quality == request.accepted_type(chosen).quality:
-            return None
-        return negotiable[chosen]
+            return "text/html"
+        return chosen
+
+    @staticmethod
+    def representation(subject, serialization):
+        """Write the subject's own statements in one serialization.
+
+        Args:
+            subject: A ``ConceptScheme`` or a ``Record``.
+            serialization: The ``Serialization`` to write.
+
+        Returns:
+            The response, carrying the serialization's media type.
+        """
+        return HttpResponse(
+            serialization.serialize(subject.to_graph()),
+            content_type=serialization.media_type,
+        )
 
     def refusal(self):
         """Build the 406 response for a request that accepts nothing on offer.
