@@ -26,6 +26,7 @@ class ReportRenderer:
     def __init__(
         self, report: ImportReport, *, dry_run: bool = False, verbosity: int = 1
     ) -> None:
+        """Keep what the lines are rendered from."""
         self.report = report
         self.dry_run = dry_run
         self.verbosity = verbosity
@@ -34,7 +35,7 @@ class ReportRenderer:
         """Yield the report's lines: the counts, each untouched record, then any notice.
 
         Yields:
-            One translated line at a time, and none at all at ``--verbosity 0``.
+            str: One translated line at a time, and none at all at ``--verbosity 0``.
         """
         # Django's contract for --verbosity 0 is no output. A refusal is unaffected, since
         # it is raised as a CommandError rather than rendered here.

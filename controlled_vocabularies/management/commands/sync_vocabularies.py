@@ -253,6 +253,7 @@ class Command(BaseCommand):
 
         Raises:
             CommandError: The vocabulary could not be loaded; nothing of it was kept.
+            DryRun: Raised inside the transaction to roll it back, and caught here.
         """
         try:
             with transaction.atomic():

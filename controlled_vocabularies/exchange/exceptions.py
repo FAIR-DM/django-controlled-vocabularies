@@ -50,6 +50,7 @@ class SkosImportFailed(ValidationError):
     """
 
     def __init__(self, report: ImportReport) -> None:
+        """Keep the report and build the message from its fatal count."""
         self.report = report
         super().__init__(
             _(

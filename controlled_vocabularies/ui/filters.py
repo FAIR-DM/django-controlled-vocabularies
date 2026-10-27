@@ -82,7 +82,8 @@ class CountedCheckboxes(forms.CheckboxSelectMultiple):
     """Checkboxes that show beside each option how many records it would match.
 
     The count is added when the option is drawn and is not part of the choice's label, so an
-    applied filter elsewhere on the page is named without it.
+    applied filter elsewhere on the page is named without it. Until counts are set, each
+    option is drawn without one.
     """
 
     def __init__(self, *args, **kwargs):
@@ -188,6 +189,11 @@ class VocabularyFilter(django_filters.FilterSet):
     them. Each facet offers the values the site's vocabularies carry, and is left out
     when fewer than two vocabularies differ on it. The view annotates ``concept_count``
     and ``modified`` onto the queryset.
+
+    Args:
+        *args: Passed to ``FilterSet``.
+        request: The request being answered.
+        **kwargs: Passed to ``FilterSet``.
     """
 
     q = VocabularySearch(fields=[], max_words=MAX_SEARCH_WORDS)
@@ -220,6 +226,8 @@ class VocabularyFilter(django_filters.FilterSet):
     )
 
     class Meta:
+        """Filter vocabularies, through the facets declared on the filter set."""
+
         model = ConceptScheme
         fields: list[str] = []
 
@@ -313,5 +321,7 @@ class ConceptFilter(django_filters.FilterSet):
     )
 
     class Meta:
+        """Filter records, through the filters declared on the filter set."""
+
         model = Record
         fields: list[str] = []

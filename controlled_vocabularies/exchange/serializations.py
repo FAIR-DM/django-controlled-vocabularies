@@ -53,7 +53,7 @@ EXTENSIONS = {
 class Serialization:
     """One way to write a graph, as rdflib registers it.
 
-    Args:
+    Attributes:
         name: The shortest registered name without a ``/``, such as ``ttl``.
         names: Every name rdflib registers for the serializer, short and media type.
         media_type: What a response's ``Content-Type`` carries.
@@ -142,16 +142,14 @@ class Serialization:
         The statements are written from the default graph of a ``Dataset``, which every
         serializer accepts. A format that names graphs, such as TriG or N-Quads, then
         holds them in its default graph, where a reader expecting one graph finds them.
+        A term the format cannot express, as RDF/XML cannot a predicate ending in ``/``,
+        raises ``ValueError``.
 
         Args:
             graph: The statements to write.
 
         Returns:
             The encoded document.
-
-        Raises:
-            ValueError: The format cannot express one of the graph's terms, as RDF/XML
-                cannot a predicate ending in ``/``.
         """
         dataset = rdflib.Dataset()
         for prefix, namespace in graph.namespaces():

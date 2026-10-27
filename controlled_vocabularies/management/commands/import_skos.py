@@ -28,6 +28,7 @@ class DryRun(Exception):
     """
 
     def __init__(self, report: ImportReport) -> None:
+        """Carry the report out of the transaction being unwound."""
         self.report = report
 
 
