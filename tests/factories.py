@@ -11,6 +11,7 @@ from tests.testapp.models import (
     DrillCore,
     FieldNote,
     Fossil,
+    IgneousLog,
     Locality,
     Outcrop,
     Photograph,
@@ -313,3 +314,12 @@ class DrillCoreFactory(factory.django.DjangoModelFactory):
         model = DrillCore
 
     name = factory.Sequence(lambda n: f"Drill core {n}")
+
+
+class IgneousLogFactory(factory.django.DjangoModelFactory):
+    """Build a saved :class:`~tests.testapp.models.IgneousLog` with no concepts attached."""
+
+    class Meta:
+        model = IgneousLog
+
+    name = factory.Sequence(lambda n: f"Igneous log {n}")

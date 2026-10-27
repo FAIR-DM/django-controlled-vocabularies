@@ -91,6 +91,9 @@ class ConceptFieldMixin:
         "invalid_restricted": _(
             "%(value)s is not a valid concept in the '%(restriction)s' collection."
         ),
+        "invalid_branch": _(
+            "%(value)s is not a valid concept in the branch under '%(restriction)s'."
+        ),
     }
 
     def normalise_vocabulary(self, vocabulary):
@@ -205,6 +208,8 @@ class ConceptFieldMixin:
                 "value": value,
                 "restriction": self.collection,
             }
+        if self.branch is not None:
+            return "invalid_branch", {"value": value, "restriction": self.branch}
         if self.vocabulary:
             return "invalid", {
                 "value": value,
