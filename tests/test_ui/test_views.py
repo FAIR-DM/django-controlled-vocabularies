@@ -31,7 +31,9 @@ LIST_URL = reverse("controlled_vocabularies_ui:vocabulary-list")
 
 #: The vocabulary page's side panel, and the region holding its list of concepts.
 SIDE_PANEL = "#vocabulary-about"
-CONCEPT_ROWS = "#mvp-list li.list-row"
+#: The record rows of a list page: the list items whose content block holds a link, which
+#: leaves out the filter menu's buttons and the applied-search chip.
+CONCEPT_ROWS = "#mvp-list li:has(> div a)"
 
 serial = itertools.count()
 
@@ -369,7 +371,7 @@ class TestVocabularyListEntry:
         soup = soup_of(client.get(LIST_URL))
         return next(
             row
-            for row in soup.select("li.list-row")
+            for row in soup.select(CONCEPT_ROWS)
             if row.find("a", href=vocabulary_page(scheme))
         )
 
@@ -871,16 +873,15 @@ class TestVocabularySearchEmptyState:
         assert LIST_URL not in hrefs(client.get(LIST_URL))
 
     def test_a_term_containing_markup_is_escaped_in_the_response(self, client):
-        # Scoped to the applied-search chip, where the term is repeated, because the page's own
-        # theme-toggle script is a <script>. An unescaped term parses as a real <script> inside
-        # the chip.
+        # The page carries its own scripts, so look for one holding the term: an unescaped
+        # term parses as a real <script> element containing it.
         ConceptSchemeFactory(name="Soil Classification")
 
         response = client.get(LIST_URL, {"q": "<script>alert(1)</script>"})
-        refinements = soup_of(response).find(class_="mvp-list-refinements")
+        soup = soup_of(response)
 
-        assert refinements.find("script") is None
-        assert "<script>alert(1)</script>" in refinements.get_text()
+        assert not [s for s in soup.find_all("script") if "alert(1)" in s.get_text()]
+        assert "<script>alert(1)</script>" in soup.body.get_text()
 
 
 @pytest.mark.django_db
@@ -2194,9 +2195,7 @@ class TestConceptDetailCollectionMembership:
         soup = soup_of(client.get(concept_page(concept)))
 
         for collection in (igneous, hardness):
-            anchor = soup.find("div", class_="concept-collections").find(
-                "a", href=collection_page(collection)
-            )
+            anchor = soup.find("a", href=collection_page(collection))
             assert anchor.get_text(strip=True) == collection.pref_label
             follow = client.get(anchor["href"])
             assert follow.status_code == 200
