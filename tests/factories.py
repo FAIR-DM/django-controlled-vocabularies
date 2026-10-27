@@ -11,6 +11,7 @@ from tests.testapp.models import (
     DrillCore,
     FieldNote,
     Fossil,
+    IgneousLog,
     Locality,
     Outcrop,
     Photograph,
@@ -153,6 +154,32 @@ def collection_with_members(
     return collection, members
 
 
+def concept_below(parent, label, stated_by="child", **kwargs):
+    """Build a concept one level below ``parent``, stating the link in either direction.
+
+    Args:
+        parent: The concept it sits under, in the same vocabulary unless ``scheme`` is passed.
+        label: The new concept's label.
+        stated_by: ``"child"`` to give the new concept ``skos:broader`` the parent,
+            ``"parent"`` to add ``skos:narrower`` the new concept to the parent's document.
+        **kwargs: Passed to :class:`RecordFactory`, for example ``scheme``.
+
+    Returns:
+        The new concept.
+    """
+    scheme = kwargs.pop("scheme", parent.scheme)
+    if stated_by == "child":
+        return RecordFactory(
+            scheme=scheme,
+            data=labelled(label, statements={"skos:broader": [{"@id": parent.uri}]}),
+            **kwargs,
+        )
+    child = RecordFactory(scheme=scheme, label=label, **kwargs)
+    parent.data.setdefault("skos:narrower", []).append({"@id": child.uri})
+    parent.save()
+    return child
+
+
 class SpecimenFactory(factory.django.DjangoModelFactory):
     """Build a saved :class:`~tests.testapp.models.Specimen` with a required concept."""
 
@@ -287,3 +314,12 @@ class DrillCoreFactory(factory.django.DjangoModelFactory):
         model = DrillCore
 
     name = factory.Sequence(lambda n: f"Drill core {n}")
+
+
+class IgneousLogFactory(factory.django.DjangoModelFactory):
+    """Build a saved :class:`~tests.testapp.models.IgneousLog` with no concepts attached."""
+
+    class Meta:
+        model = IgneousLog
+
+    name = factory.Sequence(lambda n: f"Igneous log {n}")

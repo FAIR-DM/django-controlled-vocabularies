@@ -20,6 +20,7 @@ from tests.factories import (
     RecordFactory,
     SpecimenFactory,
     collection_with_members,
+    concept_below,
     labelled,
 )
 
@@ -583,6 +584,85 @@ class TestRecordQuerySet:
         )
 
         assert list(Record.objects.linking_to(target.uri)) == [linking]
+
+
+class TestRecordQuerySetInBranch:
+    def test_in_branch_returns_the_root_and_every_concept_below_it_at_any_depth(self):
+        scheme = ConceptSchemeFactory()
+        top = RecordFactory(scheme=scheme)
+        root = concept_below(top, "Igneous")
+        child = concept_below(root, "Volcanic")
+        grandchild = concept_below(child, "Basalt")
+
+        found = Record.objects.in_branch(scheme.uri, root.uri)
+
+        assert set(found) == {root, child, grandchild}
+
+    def test_in_branch_follows_a_link_stated_from_either_side_at_every_step(self):
+        scheme = ConceptSchemeFactory()
+        root = RecordFactory(scheme=scheme)
+        child = concept_below(root, "Volcanic", stated_by="parent")
+        grandchild = concept_below(child, "Basalt")
+        great_grandchild = concept_below(grandchild, "Scoria", stated_by="parent")
+
+        found = Record.objects.in_branch(scheme.uri, root.uri)
+
+        assert set(found) == {root, child, grandchild, great_grandchild}
+
+    def test_in_branch_leaves_out_the_roots_broader_concept_and_its_siblings(self):
+        scheme = ConceptSchemeFactory()
+        top = RecordFactory(scheme=scheme)
+        root = concept_below(top, "Igneous")
+        concept_below(top, "Sedimentary")
+
+        found = Record.objects.in_branch(scheme.uri, root.uri)
+
+        assert set(found) == {root}
+
+    def test_in_branch_ends_on_a_cycle_and_returns_each_record_once(self):
+        scheme = ConceptSchemeFactory()
+        root = RecordFactory(scheme=scheme)
+        child = concept_below(root, "Volcanic")
+        root.data["skos:broader"] = [{"@id": child.uri}]
+        root.save()
+
+        found = list(Record.objects.in_branch(scheme.uri, root.uri))
+
+        assert sorted(record.pk for record in found) == sorted([root.pk, child.pk])
+
+    def test_in_branch_does_not_cross_into_another_vocabulary(self):
+        scheme = ConceptSchemeFactory()
+        root = RecordFactory(scheme=scheme)
+        foreign = concept_below(root, "Quartz", scheme=ConceptSchemeFactory())
+        below_foreign = concept_below(foreign, "Alpha quartz")
+        local = concept_below(root, "Basalt")
+
+        found = Record.objects.in_branch(scheme.uri, root.uri)
+
+        assert set(found) == {root, local}
+        assert not {foreign, below_foreign} & set(found)
+
+    def test_in_branch_is_empty_when_the_root_is_in_another_vocabulary(self):
+        scheme = ConceptSchemeFactory()
+        foreign = RecordFactory(scheme=ConceptSchemeFactory())
+
+        assert not Record.objects.in_branch(scheme.uri, foreign.uri).exists()
+
+    def test_in_branch_is_empty_when_no_record_has_the_root_uri(self):
+        scheme = ConceptSchemeFactory()
+
+        assert not Record.objects.in_branch(
+            scheme.uri, "https://example.org/x"
+        ).exists()
+
+    def test_in_branch_chains_with_other_filters(self):
+        scheme = ConceptSchemeFactory()
+        root = RecordFactory(scheme=scheme)
+        child = concept_below(root, "Volcanic")
+
+        found = Record.objects.filter(pk=child.pk).in_branch(scheme.uri, root.uri)
+
+        assert list(found) == [child]
 
 
 class TestRecord:

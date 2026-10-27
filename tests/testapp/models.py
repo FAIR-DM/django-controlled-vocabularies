@@ -18,6 +18,7 @@ MINERAL = Vocabulary(
     "https://example.org/vocabularies/mineral", source=FIXTURES / "mineral.ttl"
 )
 CORE_SAMPLES = "https://example.org/vocabularies/rock-type/collection/core-samples"
+IGNEOUS = "https://example.org/vocabularies/rock-type/igneous"
 # Named only by the abstract models below.
 ERA = Vocabulary("https://example.org/vocabularies/era", source=FIXTURES / "era.ttl")
 UNUSED = "https://example.org/vocabularies/unused"
@@ -329,6 +330,53 @@ class DrillCore(models.Model):
         help_text=_(
             "The rock types logged for this drill core, drawn from the core-samples collection."
         ),
+    )
+
+    def __str__(self) -> str:
+        """Return the name."""
+        return self.name
+
+
+class IgneousSample(models.Model):
+    """Carry an optional ``ConceptField`` restricted to the igneous branch of the "rock-type" vocabulary."""
+
+    name = models.CharField(
+        max_length=255,
+        verbose_name=_("name"),
+        help_text=_("The igneous sample's catalogue name."),
+    )
+    rock_type = ConceptField(
+        vocabulary=ROCK_TYPE,
+        branch=IGNEOUS,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("rock type"),
+        help_text=_(
+            "The igneous rock this sample is classified as, drawn from the igneous branch."
+        ),
+    )
+
+    def __str__(self) -> str:
+        """Return the name."""
+        return self.name
+
+
+class IgneousLog(models.Model):
+    """Carry an optional ``MultiConceptField`` restricted to a branch, with a reverse accessor."""
+
+    name = models.CharField(
+        max_length=255,
+        verbose_name=_("name"),
+        help_text=_("The igneous log's catalogue name."),
+    )
+    rock_types = MultiConceptField(
+        vocabulary=ROCK_TYPE,
+        branch=IGNEOUS,
+        blank=True,
+        related_name="igneous_logs",
+        verbose_name=_("rock types"),
+        help_text=_("The igneous rocks logged, drawn from the igneous branch."),
     )
 
     def __str__(self) -> str:

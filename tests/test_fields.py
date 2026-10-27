@@ -30,6 +30,7 @@ from tests.factories import (
     DepositFactory,
     DrillCoreFactory,
     FieldNoteFactory,
+    IgneousLogFactory,
     OutcropFactory,
     PhotographFactory,
     RecordFactory,
@@ -39,10 +40,12 @@ from tests.factories import (
     SpecimenFactory,
     SurveyFactory,
     collection_with_members,
+    concept_below,
 )
 from tests.i18n_sweep import visit_fields_checks_source
 from tests.testapp.models import (
     CORE_SAMPLES,
+    IGNEOUS,
     MINERAL,
     ROCK_TYPE,
     Artifact,
@@ -50,6 +53,7 @@ from tests.testapp.models import (
     CoreSample,
     Deposit,
     FieldNote,
+    IgneousSample,
     Outcrop,
     Photograph,
     RockSample,
@@ -61,6 +65,7 @@ from tests.testapp.models import (
 
 ALL_SAMPLES = f"{ROCK_TYPE.uri}/collection/all-samples"
 NO_SUCH_COLLECTION = f"{ROCK_TYPE.uri}/collection/no-such-collection"
+NO_SUCH_CONCEPT = f"{ROCK_TYPE.uri}/no-such-concept"
 
 
 def admitted_by(field):
@@ -359,6 +364,70 @@ class TestSharedRestrictedHelpText:
         assert field.help_text == "Pick a sample rock."
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
+class TestSharedBranchArgument:
+    def test_branch_defaults_to_none(self, field_class):
+        assert field_class(vocabulary=ROCK_TYPE.uri).branch is None
+
+    def test_branch_stores_the_uri(self, field_class):
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+
+        assert field.branch == NO_SUCH_CONCEPT
+
+    @pytest.mark.parametrize("branch", [42, "", "igneous"])
+    def test_a_branch_that_is_not_a_uri_is_refused(self, field_class, branch):
+        with pytest.raises(TypeError):
+            field_class(vocabulary=ROCK_TYPE.uri, branch=branch)
+
+    def test_a_branch_naming_no_vocabulary_is_refused(self, field_class):
+        with pytest.raises(TypeError):
+            field_class(branch=NO_SUCH_CONCEPT)
+
+    def test_a_branch_naming_several_vocabularies_is_refused(self, field_class):
+        with pytest.raises(TypeError):
+            field_class(vocabulary=[ROCK_TYPE.uri, MINERAL.uri], branch=NO_SUCH_CONCEPT)
+
+    def test_a_branch_with_a_collection_is_refused(self, field_class):
+        with pytest.raises(TypeError, match="one restriction"):
+            field_class(
+                vocabulary=ROCK_TYPE.uri,
+                collection=CORE_SAMPLES,
+                branch=NO_SUCH_CONCEPT,
+            )
+
+    def test_branch_is_emitted_and_survives_the_round_trip(self, field_class):
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+
+        _, _, _, kwargs = field.deconstruct()
+        rebuilt = field_class(**kwargs)
+
+        assert kwargs["branch"] == NO_SUCH_CONCEPT
+        assert "collection" not in kwargs
+        assert rebuilt.branch == NO_SUCH_CONCEPT
+
+    def test_no_branch_is_not_emitted(self, field_class):
+        _, _, _, kwargs = field_class(vocabulary=ROCK_TYPE.uri).deconstruct()
+
+        assert "branch" not in kwargs
+
+    def test_clone_rebuilds_a_branch_restricted_field(self, field_class):
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+
+        assert field.clone().branch == NO_SUCH_CONCEPT
+
+    def test_a_branch_restricted_field_gets_the_restricted_default(self, field_class):
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+
+        assert field.help_text == field_class.default_restricted_help_text
+
+    def test_construction_issues_no_query(self, field_class):
+        with CaptureQueriesContext(connection) as ctx:
+            field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT).deconstruct()
+
+        assert len(ctx.captured_queries) == 0
+
+
 # Q objects wrapping a subquery compare by identity, so every test evaluates the
 # resolved Q against real rows instead of comparing Qs.
 @pytest.mark.django_db
@@ -421,6 +490,109 @@ class TestCollectionRestrictionResolves:
 
         assert admitted == set(rock_members)
         assert not set(mineral_members) & admitted
+
+
+# The traversal itself is tested on RecordQuerySet.in_branch; these tests check what
+# the field admits when it is put on top.
+@pytest.mark.django_db
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
+class TestBranchRestrictionResolves:
+    def test_the_root_and_a_concept_two_levels_below_it_are_admitted(self, field_class):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        child = concept_below(root, "Volcanic")
+        grandchild = concept_below(child, "Basalt")
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root, child, grandchild}
+
+    def test_a_concept_the_parent_states_as_narrower_is_admitted(self, field_class):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        child = concept_below(root, "Volcanic", stated_by="parent")
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root, child}
+
+    def test_a_sibling_branch_and_the_roots_broader_concept_are_not_admitted(
+        self, field_class
+    ):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        top = RecordFactory(scheme=scheme, label="Rock")
+        root = concept_below(top, "Igneous")
+        below = concept_below(root, "Basalt")
+        sibling = concept_below(top, "Sedimentary")
+        cousin = concept_below(sibling, "Limestone")
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root, below}
+        assert not {top, sibling, cousin} & admitted
+
+    def test_a_root_with_nothing_below_admits_exactly_the_root(self, field_class):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        top = RecordFactory(scheme=scheme, label="Rock")
+        root = concept_below(top, "Igneous")
+        concept_below(top, "Sedimentary")
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root}
+
+    def test_a_branch_that_does_not_exist_admits_nothing(self, field_class):
+        ConceptSchemeFactory(name="Rock Type")
+        RecordFactory(scheme=ConceptSchemeFactory(name="Mineral"))
+
+        admitted = admitted_by(
+            field_class(vocabulary=ROCK_TYPE.uri, branch=NO_SUCH_CONCEPT)
+        )
+
+        assert admitted == set()
+
+    def test_a_collection_below_the_root_is_never_admitted(self, field_class):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        collection, members = collection_with_members(scheme=scheme)
+        root.data["skos:narrower"] = [{"@id": collection.uri}]
+        root.save()
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert collection not in admitted
+
+    def test_a_same_named_concept_in_another_vocabulary_does_not_widen_the_field(
+        self, field_class
+    ):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        foreign = concept_below(
+            root, "Quartz", scheme=ConceptSchemeFactory(name="Mineral")
+        )
+
+        admitted = admitted_by(field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri))
+
+        assert admitted == {root}
+        assert foreign not in admitted
+
+
+# limit_choices_to is re-resolved on every read, so a restriction cached at
+# construction fails here.
+@pytest.mark.django_db
+@pytest.mark.parametrize("field_class", [ConceptField, MultiConceptField])
+class TestBranchRestrictionResolvesLive:
+    def test_a_concept_added_below_the_root_after_construction_appears_on_the_next_read(
+        self, field_class
+    ):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        field = field_class(vocabulary=ROCK_TYPE.uri, branch=root.uri)
+        assert admitted_by(field) == {root}
+
+        newcomer = concept_below(root, "Basalt")
+
+        assert admitted_by(field) == {root, newcomer}
 
 
 # limit_choices_to is re-resolved on every read, so a restriction cached at
@@ -986,6 +1158,73 @@ class TestMultiConceptFieldCollectionRestrictionWritePath:
         drill_core.rock_types.add(*members)
 
         assert set(drill_core.rock_types.all()) == set(members)
+
+
+@pytest.mark.django_db
+class TestMultiConceptFieldBranchWritePath:
+    def igneous_tree(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        top = RecordFactory(scheme=scheme, label="Rock")
+        root = concept_below(top, "Igneous")
+        assert root.uri == IGNEOUS
+        return top, root, concept_below(root, "Basalt")
+
+    def test_a_concept_below_the_root_attaches(self):
+        top, root, below = self.igneous_tree()
+        log = IgneousLogFactory()
+
+        log.rock_types.add(root, below)
+
+        assert set(log.rock_types.all()) == {root, below}
+
+    def test_forward_add_of_a_concept_outside_the_branch_is_refused_and_the_set_is_unchanged(
+        self,
+    ):
+        top, root, below = self.igneous_tree()
+        log = IgneousLogFactory()
+        log.rock_types.add(below)
+
+        with pytest.raises(ValidationError) as excinfo, transaction.atomic():
+            log.rock_types.add(top)
+
+        assert excinfo.value.code == "invalid"
+        assert list(log.rock_types.all()) == [below]
+
+    def test_the_refusal_names_the_branch(self):
+        top, root, below = self.igneous_tree()
+        log = IgneousLogFactory()
+
+        with pytest.raises(ValidationError) as excinfo:
+            log.rock_types.add(top)
+
+        assert any(IGNEOUS in message for message in excinfo.value.messages)
+
+    def test_a_set_carrying_a_mix_is_refused_whole(self):
+        top, root, below = self.igneous_tree()
+        log = IgneousLogFactory()
+        log.rock_types.add(root)
+
+        with pytest.raises(ValidationError), transaction.atomic():
+            log.rock_types.set([below, top])
+
+        assert set(log.rock_types.all()) == {root}
+
+    def test_the_reverse_accessor_refuses_a_concept_outside_the_branch(self):
+        top, root, below = self.igneous_tree()
+        log = IgneousLogFactory()
+
+        with pytest.raises(ValidationError), transaction.atomic():
+            top.igneous_logs.add(log)
+
+        assert list(log.rock_types.all()) == []
+
+    def test_the_reverse_accessor_attaches_a_concept_below_the_root(self):
+        top, root, below = self.igneous_tree()
+        log = IgneousLogFactory()
+
+        below.igneous_logs.add(log)
+
+        assert list(log.rock_types.all()) == [below]
 
 
 @pytest.mark.django_db
@@ -1630,6 +1869,72 @@ class TestConceptFieldCollectionRestrictionValidation:
             field.error_messages["invalid_restricted"] = original
 
 
+@pytest.mark.django_db
+class TestConceptFieldBranchRestrictionValidation:
+    def test_a_concept_below_the_root_validates(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        root = RecordFactory(scheme=scheme, label="Igneous")
+        below = concept_below(root, "Basalt")
+
+        IgneousSample(name="Sample A", rock_type=below).full_clean()
+
+    def test_a_concept_outside_the_branch_is_refused(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        top = RecordFactory(scheme=scheme, label="Rock")
+        concept_below(top, "Igneous")
+        sample = IgneousSample(name="Sample B", rock_type=top)
+
+        with pytest.raises(ValidationError) as excinfo:
+            sample.full_clean()
+
+        assert [error.code for error in excinfo.value.error_dict["rock_type"]] == [
+            "invalid"
+        ]
+
+    def test_the_refusal_names_the_branch(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        top = RecordFactory(scheme=scheme, label="Rock")
+        concept_below(top, "Igneous")
+        sample = IgneousSample(name="Sample B", rock_type=top)
+
+        with pytest.raises(ValidationError) as excinfo:
+            sample.full_clean()
+
+        assert any(IGNEOUS in message for message in excinfo.value.messages)
+
+
+class IgneousSampleForm(forms.ModelForm):
+    """Plain ``ModelForm`` over ``IgneousSample``."""
+
+    class Meta:
+        model = IgneousSample
+        fields = ["name", "rock_type"]
+
+
+@pytest.mark.django_db
+class TestConceptFieldBranchFormChoices:
+    def test_form_field_offers_exactly_the_branch(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        top = RecordFactory(scheme=scheme, label="Rock")
+        root = concept_below(top, "Igneous")
+        below = concept_below(root, "Basalt")
+        concept_below(top, "Sedimentary")
+
+        choices = set(IgneousSampleForm().fields["rock_type"].queryset)
+
+        assert choices == {root, below}
+
+    def test_form_submission_outside_the_branch_is_rejected(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        top = RecordFactory(scheme=scheme, label="Rock")
+        concept_below(top, "Igneous")
+
+        form = IgneousSampleForm(data={"name": "Wrong branch", "rock_type": top.uri})
+
+        assert not form.is_valid()
+        assert form.has_error("rock_type")
+
+
 class SpecimenForm(forms.ModelForm):
     """Plain ``ModelForm`` over ``Specimen``."""
 
@@ -1867,9 +2172,32 @@ class TestRestrictionErrorMessagesAreTranslatable:
         assert "%(restriction)s" in str(message)
         assert "%(value)s" in str(message)
 
+    def test_the_branch_message_is_a_lazy_proxy_with_a_named_restriction_placeholder(
+        self,
+    ):
+        field = ConceptField(vocabulary=ROCK_TYPE.uri)
+        message = field.error_messages["invalid_branch"]
+
+        assert isinstance(message, Promise)
+        assert "%(restriction)s" in str(message)
+        assert "%(value)s" in str(message)
+
 
 @pytest.mark.django_db
 class TestWriteGuardRefusalsAreTranslatable:
+    def test_the_branch_axis_refusal_is_a_lazy_proxy_with_named_placeholders(self):
+        scheme = ConceptSchemeFactory(name="Rock Type")
+        RecordFactory(scheme=scheme, label="Igneous")
+        outsider = RecordFactory(scheme=scheme, label="Marble")
+        log = IgneousLogFactory()
+
+        with pytest.raises(ValidationError) as excinfo:
+            log.rock_types.add(outsider)
+
+        assert isinstance(excinfo.value.message, Promise)
+        assert "%(restriction)s" in str(excinfo.value.message)
+        assert "%(value)s" in str(excinfo.value.message)
+
     def test_the_collection_axis_refusal_is_a_lazy_proxy_with_named_placeholders(self):
         scheme = ConceptSchemeFactory(name="Rock Type")
         collection_with_members(scheme=scheme, name="Core Samples", labels=("Granite",))

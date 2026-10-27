@@ -40,8 +40,8 @@ def require_uri(value, owner, argument):
     """
     if not isinstance(value, str) or len(urlsplit(value).scheme) <= 1:
         raise TypeError(
-            f"{owner}() {argument} must be a URI; got {value!r}. Name a vocabulary or "
-            "collection by its URI, not by its slug."
+            f"{owner}() {argument} must be a URI; got {value!r}. Name a vocabulary, "
+            "collection or branch by its URI, not by its slug."
         )
 
 
@@ -71,7 +71,7 @@ class Vocabulary:
 
 
 class ConceptFieldMixin:
-    """The ``vocabulary`` and ``collection`` contract shared by both concept fields.
+    """The ``vocabulary``, ``collection`` and ``branch`` contract shared by both concept fields.
 
     Holds what the two arguments accept, the ``limit_choices_to`` derived from them and
     how they survive :meth:`deconstruct`. Declare it before the Django field in the
@@ -90,6 +90,9 @@ class ConceptFieldMixin:
         "invalid_unrestricted": _("%(value)s is not a valid concept."),
         "invalid_restricted": _(
             "%(value)s is not a valid concept in the '%(restriction)s' collection."
+        ),
+        "invalid_branch": _(
+            "%(value)s is not a valid concept in the branch under '%(restriction)s'."
         ),
     }
 
@@ -121,27 +124,38 @@ class ConceptFieldMixin:
             vocabularies.setdefault(element.uri, element)
         return tuple(vocabularies.values())
 
-    def apply_collection(self, collection):
-        """Validate the ``collection`` restriction and store it as ``self.collection``.
+    def apply_restriction(self, collection, branch):
+        """Validate the ``collection`` and ``branch`` restrictions and store them.
 
-        Must run after ``self.vocabulary`` is set.
+        Must run after ``self.vocabulary`` is set. Stores ``self.collection`` and
+        ``self.branch``.
 
         Args:
             collection: URI of a collection the choices are limited to, or ``None``.
+            branch: URI of the concept whose branch the choices are limited to, or
+                ``None``.
 
         Raises:
-            TypeError: ``collection`` is not a URI, or the declaration does not name
-                exactly one vocabulary.
+            TypeError: A restriction is not a URI, both are given, or the declaration
+                does not name exactly one vocabulary.
         """
-        if collection is not None:
-            require_uri(collection, type(self).__name__, "collection")
+        if collection is not None and branch is not None:
+            raise TypeError(
+                f"{type(self).__name__}() a field carries at most one restriction; got "
+                "both collection and branch."
+            )
+        for argument, value in (("collection", collection), ("branch", branch)):
+            if value is None:
+                continue
+            require_uri(value, type(self).__name__, argument)
             if len(self.vocabulary) != 1:
                 raise TypeError(
-                    f"{type(self).__name__}() a collection restriction requires the "
+                    f"{type(self).__name__}() a {argument} restriction requires the "
                     "declaration to name exactly one vocabulary; got "
                     f"{len(self.vocabulary)}."
                 )
         self.collection = collection
+        self.branch = branch
 
     def resolve_restriction(self):
         """Return the ``Q`` that limits the field's choices, resolved at call time.
@@ -167,6 +181,13 @@ class ConceptFieldMixin:
                 type__in=Record.COLLECTION_TYPES,
             ).first()
             restriction &= Q(uri__in=collection.member_uris() if collection else [])
+        if self.branch is not None:
+            (vocabulary,) = self.vocabulary
+            restriction &= Q(
+                uri__in=Record.objects.in_branch(vocabulary.uri, self.branch).values(
+                    "uri"
+                )
+            )
         return restriction
 
     def vocabulary_uris(self):
@@ -187,6 +208,8 @@ class ConceptFieldMixin:
                 "value": value,
                 "restriction": self.collection,
             }
+        if self.branch is not None:
+            return "invalid_branch", {"value": value, "restriction": self.branch}
         if self.vocabulary:
             return "invalid", {
                 "value": value,
@@ -194,12 +217,13 @@ class ConceptFieldMixin:
             }
         return "invalid_unrestricted", {"value": value}
 
-    def apply_vocabulary(self, vocabulary, collection, kwargs):
+    def apply_vocabulary(self, vocabulary, collection, branch, kwargs):
         """Store the normalised ``vocabulary`` and restriction, and fill in the kwargs they decide.
 
         Args:
             vocabulary: One URI or :class:`Vocabulary`, an iterable of them, or ``None``.
             collection: URI of the collection restriction, or ``None``.
+            branch: URI of the branch restriction, or ``None``.
             kwargs: The field's remaining keyword arguments, updated in place.
 
         Returns:
@@ -215,14 +239,14 @@ class ConceptFieldMixin:
                 "to 'vocabulary'; a consumer may not override it."
             )
         self.vocabulary = self.normalise_vocabulary(vocabulary)
-        self.apply_collection(collection)
+        self.apply_restriction(collection, branch)
         kwargs["to"] = "controlled_vocabularies.Record"
         kwargs["limit_choices_to"] = self.resolve_restriction
         kwargs.setdefault(
             "help_text",
-            self.default_help_text
-            if self.collection is None
-            else self.default_restricted_help_text,
+            self.default_restricted_help_text
+            if self.collection is not None or self.branch is not None
+            else self.default_help_text,
         )
         return kwargs
 
@@ -252,7 +276,7 @@ class ConceptFieldMixin:
         return super().formfield(**kwargs)
 
     def deconstruct(self):
-        """Record ``vocabulary`` and ``collection`` rather than the kwargs it fixes."""
+        """Record ``vocabulary``, ``collection`` and ``branch`` rather than the kwargs it fixes."""
         # Field.clone() rebuilds from these kwargs, so they must be ones __init__ accepts.
         # Only the URIs are recorded: a source says where a vocabulary is published and
         # changes nothing in the schema, so moving one must not need a migration.
@@ -264,6 +288,8 @@ class ConceptFieldMixin:
         kwargs["vocabulary"] = self.vocabulary_uris()
         if self.collection is not None:
             kwargs["collection"] = self.collection
+        if self.branch is not None:
+            kwargs["branch"] = self.branch
         return name, path, args, kwargs
 
 
@@ -281,6 +307,8 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
             no restriction.
         collection: Limit choices to the members of the collection with this URI. Needs
             exactly one vocabulary.
+        branch: Limit choices to the concept with this URI and every concept below it. Needs
+            exactly one vocabulary, and cannot be combined with ``collection``.
         **kwargs: Passed to ``ForeignKey``.
 
     Raises:
@@ -295,7 +323,7 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
         "A concept from a restricted part of this field's configured vocabulary."
     )
 
-    def __init__(self, vocabulary=None, collection=None, **kwargs):
+    def __init__(self, vocabulary=None, collection=None, branch=None, **kwargs):
         if "on_delete" in kwargs:
             raise TypeError(
                 "ConceptField() sets on_delete=PROTECT itself; a consumer may not override it."
@@ -306,7 +334,9 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
             )
         kwargs["on_delete"] = PROTECT
         kwargs["to_field"] = "uri"
-        super().__init__(**self.apply_vocabulary(vocabulary, collection, kwargs))
+        super().__init__(
+            **self.apply_vocabulary(vocabulary, collection, branch, kwargs)
+        )
 
     def validate(self, value, model_instance):
         """Refuse a concept outside the restriction, naming what decided the refusal."""
@@ -487,6 +517,8 @@ class MultiConceptField(ConceptFieldMixin, ManyToManyField):
             no restriction.
         collection: Limit choices to the members of the collection with this URI. Needs
             exactly one vocabulary.
+        branch: Limit choices to the concept with this URI and every concept below it. Needs
+            exactly one vocabulary, and cannot be combined with ``collection``.
         **kwargs: Passed to ``ManyToManyField``.
 
     Raises:
@@ -500,13 +532,15 @@ class MultiConceptField(ConceptFieldMixin, ManyToManyField):
         "Concepts from a restricted part of this field's configured vocabulary."
     )
 
-    def __init__(self, vocabulary=None, collection=None, **kwargs):
+    def __init__(self, vocabulary=None, collection=None, branch=None, **kwargs):
         if "through" in kwargs:
             raise TypeError(
                 "MultiConceptField() generates its own through model with PROTECT on the "
                 "foreign key to the concept; a consumer may not override it."
             )
-        super().__init__(**self.apply_vocabulary(vocabulary, collection, kwargs))
+        super().__init__(
+            **self.apply_vocabulary(vocabulary, collection, branch, kwargs)
+        )
 
     @staticmethod
     def install_required_set_check(cls):
