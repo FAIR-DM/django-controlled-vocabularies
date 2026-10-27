@@ -427,3 +427,143 @@ class TestDemoRoundTrip:
             assert rdf_read_back.same_statements(
                 read(response, serialization), row.to_graph()
             ), row
+
+    @pytest.mark.parametrize("serialization", Serialization.all(), ids=lambda s: s.name)
+    def test_every_row_reads_back_through_format(
+        self, client, demo, serialization, rdf_read_back
+    ):
+        rows = [*ConceptScheme.objects.all(), *Record.objects.select_related("scheme")]
+
+        assert rows
+        for row in rows:
+            response = client.get(address(row), {"format": serialization.name})
+
+            assert response.status_code == 200, row
+            assert response["Content-Type"].split(";")[0] == serialization.media_type, (
+                row
+            )
+            assert rdf_read_back.same_statements(
+                read(response, serialization), row.to_graph()
+            ), row
+
+
+@pytest.mark.django_db
+class TestFormatDownload:
+    def test_a_concept_is_a_turtle_attachment_named_by_its_slug(self, client, subjects):
+        concept = subjects["concept"]
+
+        response = client.get(address(concept), {"format": "ttl"})
+
+        assert response.status_code == 200
+        assert response["Content-Type"].split(";")[0] == "text/turtle"
+        disposition = response["Content-Disposition"]
+        assert disposition.startswith("attachment")
+        assert f"{concept.slug}.ttl" in disposition
+
+    def test_a_vocabulary_is_named_by_its_slug_and_the_serializations_extension(
+        self, client, subjects
+    ):
+        vocabulary = subjects["vocabulary"]
+
+        response = client.get(address(vocabulary), {"format": "xml"})
+
+        assert f"{vocabulary.slug}.rdf" in response["Content-Disposition"]
+
+    @pytest.mark.parametrize("serialization", Serialization.all(), ids=lambda s: s.name)
+    def test_every_short_name_gives_that_serializations_content_type(
+        self, client, subjects, serialization
+    ):
+        response = client.get(
+            address(subjects["vocabulary"]), {"format": serialization.name}
+        )
+
+        assert response.status_code == 200
+        assert response["Content-Type"].split(";")[0] == serialization.media_type
+
+    def test_format_wins_over_accept(self, client, subject, rdf_read_back):
+        xml = Serialization.named("xml")
+
+        response = client.get(
+            address(subject), {"format": "xml"}, headers={"Accept": "text/turtle"}
+        )
+
+        assert response["Content-Type"].split(";")[0] == xml.media_type
+        assert rdf_read_back.same_statements(read(response, xml), subject.to_graph())
+
+    def test_format_wins_over_a_browsers_accept(self, client, subject):
+        response = client.get(
+            address(subject), {"format": "ttl"}, headers={"Accept": BROWSER}
+        )
+
+        assert response["Content-Type"].split(";")[0] == "text/turtle"
+
+    def test_a_media_type_is_accepted_as_a_name(self, client, subject):
+        response = client.get(address(subject), {"format": "text/turtle"})
+
+        assert response.status_code == 200
+        assert response["Content-Type"].split(";")[0] == "text/turtle"
+
+    def test_an_empty_format_is_an_unknown_name(self, client, subject):
+        assert client.get(address(subject), {"format": ""}).status_code == 400
+
+    def test_the_vocabulary_download_ignores_a_search(
+        self, client, subjects, rdf_read_back
+    ):
+        vocabulary = subjects["vocabulary"]
+
+        response = client.get(address(vocabulary), {"format": "ttl", "q": "zzzz"})
+
+        assert rdf_read_back.same_statements(read(response), vocabulary.to_graph())
+
+    def test_head_gives_the_download_headers_with_an_empty_body(self, client, subject):
+        response = client.head(address(subject), {"format": "ttl"})
+
+        assert response.status_code == 200
+        assert "attachment" in response["Content-Disposition"]
+        assert response.content == b""
+
+
+@pytest.mark.django_db
+class TestFormatRefusal:
+    def test_an_unknown_name_is_400_not_html_and_names_the_choices(
+        self, client, subject
+    ):
+        response = client.get(address(subject), {"format": "nonsense"})
+
+        assert response.status_code == 400
+        assert not response["Content-Type"].startswith("text/html")
+        body = response.content.decode()
+        for name in ("ttl", "xml", "json-ld", "nt"):
+            assert name in body
+
+    def test_an_unknown_name_is_not_settled_by_accept(self, client, subject):
+        response = client.get(
+            address(subject), {"format": "nonsense"}, headers={"Accept": "text/turtle"}
+        )
+
+        assert response.status_code == 400
+
+    @pytest.mark.parametrize("name", ["ttl", "nonsense"])
+    def test_an_address_naming_no_record_is_404_before_anything_else(
+        self, client, subjects, name
+    ):
+        missing = reverse(
+            "controlled_vocabularies_ui:concept-detail",
+            kwargs={"slug": subjects["vocabulary"].slug, "concept_slug": "nope"},
+        )
+        no_vocabulary = reverse(
+            "controlled_vocabularies_ui:vocabulary-detail", args=["nope"]
+        )
+
+        for url in (missing, no_vocabulary):
+            assert client.get(url, {"format": name}).status_code == 404
+
+    def test_an_unacceptable_type_at_a_missing_address_is_404(self, client, subjects):
+        missing = reverse(
+            "controlled_vocabularies_ui:concept-detail",
+            kwargs={"slug": subjects["vocabulary"].slug, "concept_slug": "nope"},
+        )
+
+        response = client.get(missing, headers={"Accept": "application/json"})
+
+        assert response.status_code == 404

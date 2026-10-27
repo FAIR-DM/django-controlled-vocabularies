@@ -2,6 +2,7 @@
 
 from django.http import HttpResponse
 from django.utils.cache import patch_vary_headers
+from django.utils.http import content_disposition_header
 from django.utils.translation import gettext_lazy as _
 
 from controlled_vocabularies.exchange.serializations import Serialization
@@ -45,32 +46,43 @@ class RepresentationMixin:
             **kwargs: Passed to the page.
 
         Returns:
-            The page, the subject as RDF, or a 406 naming the types the site offers.
+            The page, the subject as RDF (a download when ``?format=`` asked for it), a
+            400 naming the formats the site offers, or a 406 naming the types it offers.
         """
         serialization = self.requested_serialization(request)
         if serialization is None:
             return super().get(request, *args, **kwargs)
+        # Resolved before any refusal, so an address naming nothing is a 404 whatever is asked.
+        subject = self.get_representation_subject()
         if serialization is False:
             return self.refusal()
-        subject = self.get_representation_subject()
-        return HttpResponse(
+        if serialization == "unknown":
+            return self.unknown_format()
+        response = HttpResponse(
             serialization.serialize(subject.to_graph()),
             content_type=serialization.media_type,
         )
+        if "format" in request.GET:
+            response["Content-Disposition"] = content_disposition_header(
+                as_attachment=True, filename=f"{subject.slug}.{serialization.extension}"
+            )
+        return response
 
     def requested_serialization(self, request):
         """Decide which serialization the request asks for, if any.
+
+        ``?format=`` decides alone: ``Accept`` is not consulted when it is present.
 
         Args:
             request: The request.
 
         Returns:
-            A ``Serialization``, None when the page is wanted, or False when the request
-            accepts nothing the site can produce.
+            A ``Serialization``, None when the page is wanted, False when the request
+            accepts nothing the site can produce, or ``"unknown"`` when ``?format=``
+            names nothing the site offers.
         """
-        named = Serialization.named(request.GET.get("format", ""))
-        if named is not None:
-            return named
+        if "format" in request.GET:
+            return Serialization.named(request.GET["format"]) or "unknown"
         negotiable = {s.media_type: s for s in Serialization.all() if s.negotiable}
         chosen = request.get_preferred_type(["text/html", *negotiable])
         if chosen is None:
@@ -96,6 +108,20 @@ class RepresentationMixin:
         return HttpResponse(
             _("This address can be served as: %(offered)s.") % {"offered": offered},
             status=406,
+            content_type="text/plain; charset=utf-8",
+        )
+
+    def unknown_format(self):
+        """Build the 400 response for a ``?format=`` the site does not offer.
+
+        Returns:
+            A plain-text response naming every short name on offer.
+        """
+        offered = ", ".join(sorted(s.name for s in Serialization.all()))
+        return HttpResponse(
+            _("This address can be downloaded with ?format= set to: %(offered)s.")
+            % {"offered": offered},
+            status=400,
             content_type="text/plain; charset=utf-8",
         )
 
