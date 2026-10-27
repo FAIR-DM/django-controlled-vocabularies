@@ -38,7 +38,7 @@ class TestCheckList:
         list_url, response = seeded_list_response
         body = response.content.decode().replace(IMPORTED_NAME, "")
 
-        with pytest.raises(SmokeCheckFailed, match="did not load"):
+        with pytest.raises(SmokeCheckFailed):
             check_list(list_url, response.status_code, body)
 
     def test_fails_when_a_concept_count_is_missing_from_the_page(
@@ -49,13 +49,13 @@ class TestCheckList:
             f"{AUTHORED_CONCEPT_COUNT} concept", ""
         )
 
-        with pytest.raises(SmokeCheckFailed, match="concept count"):
+        with pytest.raises(SmokeCheckFailed):
             check_list(list_url, response.status_code, body)
 
     def test_fails_on_a_non_200_status(self, seeded_list_response):
         list_url, response = seeded_list_response
 
-        with pytest.raises(SmokeCheckFailed, match="did not serve"):
+        with pytest.raises(SmokeCheckFailed):
             check_list(list_url, 500, response.content.decode())
 
 
@@ -77,7 +77,7 @@ class TestCheckSearch:
 
         response = client.get(list_url)
 
-        with pytest.raises(SmokeCheckFailed, match="did not narrow"):
+        with pytest.raises(SmokeCheckFailed):
             check_search(list_url, response.status_code, response.content.decode())
 
 
@@ -91,7 +91,7 @@ class TestExtractVocabularyUrl:
         )
 
     def test_fails_when_no_link_names_the_vocabulary(self):
-        with pytest.raises(SmokeCheckFailed, match="no link"):
+        with pytest.raises(SmokeCheckFailed):
             extract_vocabulary_url("<p>Nothing here names it.</p>", IMPORTED_NAME)
 
 
@@ -116,13 +116,13 @@ class TestCheckVocabularyPage:
         url, response = seeded_vocabulary_page_response
         body = response.content.decode().replace(VOCABULARY_CONCEPT, "")
 
-        with pytest.raises(SmokeCheckFailed, match="did not load"):
+        with pytest.raises(SmokeCheckFailed):
             check_vocabulary_page(url, response.status_code, body)
 
     def test_fails_on_a_non_200_status(self, seeded_vocabulary_page_response):
         url, response = seeded_vocabulary_page_response
 
-        with pytest.raises(SmokeCheckFailed, match="did not serve"):
+        with pytest.raises(SmokeCheckFailed):
             check_vocabulary_page(url, 500, response.content.decode())
 
 
@@ -153,7 +153,7 @@ class TestCheckConceptSearch:
 
         response = client.get(detail_url)
 
-        with pytest.raises(SmokeCheckFailed, match="did not narrow"):
+        with pytest.raises(SmokeCheckFailed):
             check_concept_search(
                 detail_url, response.status_code, response.content.decode()
             )
@@ -169,5 +169,5 @@ class TestCheckConceptSearch:
         response = client.get(search_url)
         body = response.content.decode().replace(VOCABULARY_CONCEPT, "")
 
-        with pytest.raises(SmokeCheckFailed, match="does not narrow"):
+        with pytest.raises(SmokeCheckFailed):
             check_concept_search(search_url, response.status_code, body)

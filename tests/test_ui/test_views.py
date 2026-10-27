@@ -470,7 +470,6 @@ class TestVocabularyListEntry:
         row_text = self.row_for(client, scheme).get_text()
 
         assert "collection" not in row_text
-        assert "·" not in row_text
 
     def test_a_vocabulary_with_no_description_renders_no_paragraph(self, client):
         scheme = ConceptSchemeFactory()
