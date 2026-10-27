@@ -3,6 +3,7 @@
 import importlib
 import inspect
 import os
+import re
 import socket
 import tempfile
 from io import StringIO
@@ -39,6 +40,15 @@ class TestManagementPackageSkeleton:
         assert module.__file__ is not None
 
 
+def count_lines(output: str) -> list[int]:
+    """Read the leading integer of every count line: created first, updated second."""
+    return [
+        int(match.group().strip())
+        for line in output.splitlines()
+        if (match := re.match(r"\s*\d+", line))
+    ]
+
+
 class TestImportSkosCommandCreatesAndUpdates:
     def test_importing_into_an_empty_database_creates_the_vocabulary_and_names_the_count(
         self, db
@@ -50,8 +60,7 @@ class TestImportSkosCommandCreatesAndUpdates:
         assert Record.objects.filter(type=Record.Type.CONCEPT).count() == 5
         assert Record.objects.filter(type__in=Record.COLLECTION_TYPES).count() == 2
         output = out.getvalue()
-        assert "8 records created." in output
-        assert "0 records updated." in output
+        assert count_lines(output)[:2] == [8, 0]
 
     def test_reimporting_the_same_file_updates_the_rows_in_place_and_reports_updates(
         self, db
@@ -65,8 +74,7 @@ class TestImportSkosCommandCreatesAndUpdates:
         assert dict(Record.objects.values_list("uri", "pk")) == keys_before
         assert ConceptScheme.objects.get(uri=ROCKS_URI).pk == scheme_pk
         output = out.getvalue()
-        assert "8 records updated." in output
-        assert "0 records created." in output
+        assert count_lines(output)[:2] == [0, 8]
 
 
 class TestImportSkosCommandHelpIsTranslatable:

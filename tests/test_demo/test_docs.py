@@ -20,7 +20,9 @@ from django.urls import reverse
 call_command("migrate", run_syncdb=True, verbosity=0)
 call_command("build_docs", verbosity=0)
 
-SIDEBAR = re.compile(r'<nav aria-label="Documentation".*?</nav>', re.DOTALL)
+# The sidebar's <nav> comes from the installed shell and carries no id, so it is the <nav> that
+# holds the docs page link.
+NAVS = re.compile(r"<nav\\b.*?</nav>", re.DOTALL)
 list_url = reverse("controlled_vocabularies_ui:vocabulary-list")
 docs_page_url = reverse("docs:page", kwargs={"path": "browsing/"})
 
@@ -32,9 +34,10 @@ assert front.redirect_chain[-1][0] == reverse("docs:front_page"), front.redirect
 
 for response in (front, client.get(docs_page_url), client.get(list_url)):
     assert response.status_code == 200, response.status_code
-    sidebar = SIDEBAR.search(response.content.decode()).group()
+    navs = NAVS.findall(response.content.decode())
+    sidebar = next((n for n in navs if f'href="{docs_page_url}"' in n), None)
+    assert sidebar is not None, navs
     assert f'href="{list_url}"' in sidebar, sidebar
-    assert f'href="{docs_page_url}"' in sidebar, sidebar
 
 print("DEMO_DOCS_OK")
 """

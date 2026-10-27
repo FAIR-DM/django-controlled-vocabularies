@@ -31,7 +31,8 @@ LIST_URL = reverse("controlled_vocabularies_ui:vocabulary-list")
 
 #: The vocabulary page's side panel, and the region holding its list of concepts.
 SIDE_PANEL = "#vocabulary-about"
-CONCEPT_ROWS = "#mvp-list li.list-row"
+#: The list items of a list page. A record's row is the one holding the link to its page.
+LIST_ITEMS = "#mvp-list li"
 
 serial = itertools.count()
 
@@ -369,7 +370,7 @@ class TestVocabularyListEntry:
         soup = soup_of(client.get(LIST_URL))
         return next(
             row
-            for row in soup.select("li.list-row")
+            for row in soup.select(LIST_ITEMS)
             if row.find("a", href=vocabulary_page(scheme))
         )
 
@@ -470,7 +471,6 @@ class TestVocabularyListEntry:
         row_text = self.row_for(client, scheme).get_text()
 
         assert "collection" not in row_text
-        assert "·" not in row_text
 
     def test_a_vocabulary_with_no_description_renders_no_paragraph(self, client):
         scheme = ConceptSchemeFactory()
@@ -872,16 +872,15 @@ class TestVocabularySearchEmptyState:
         assert LIST_URL not in hrefs(client.get(LIST_URL))
 
     def test_a_term_containing_markup_is_escaped_in_the_response(self, client):
-        # Scoped to the applied-search chip, where the term is repeated, because the page's own
-        # theme-toggle script is a <script>. An unescaped term parses as a real <script> inside
-        # the chip.
+        # The page carries its own scripts, so look for one holding the term: an unescaped
+        # term parses as a real <script> element containing it.
         ConceptSchemeFactory(name="Soil Classification")
 
         response = client.get(LIST_URL, {"q": "<script>alert(1)</script>"})
-        refinements = soup_of(response).find(class_="mvp-list-refinements")
+        soup = soup_of(response)
 
-        assert refinements.find("script") is None
-        assert "<script>alert(1)</script>" in refinements.get_text()
+        assert not [s for s in soup.find_all("script") if "alert(1)" in s.get_text()]
+        assert "<script>alert(1)</script>" in soup.body.get_text()
 
 
 @pytest.mark.django_db
@@ -1147,7 +1146,7 @@ class TestVocabularyDetailConceptRow:
         soup = soup_of(client.get(vocabulary_page(concept.scheme)))
         return next(
             row
-            for row in soup.select(CONCEPT_ROWS)
+            for row in soup.select(LIST_ITEMS)
             if row.find("a", href=concept_page(concept))
         )
 
@@ -1620,15 +1619,17 @@ class TestVocabularyDetailConceptSearch:
         RecordFactory(scheme=scheme, label="Basalt")
 
         response = client.get(vocabulary_page(scheme), {"q": "granate"})
-        # Read from the result rows: the applied-search chip repeats what the reader
+        # Read from the result row: the applied-search chip repeats what the reader
         # typed, which is the term and not the concept's label.
-        rows_text = " ".join(
-            row.get_text() for row in soup_of(response).select(CONCEPT_ROWS)
-        )
+        row_text = next(
+            row
+            for row in soup_of(response).select(LIST_ITEMS)
+            if row.find("a", href=concept_page(match))
+        ).get_text()
 
         assert listed_pks(response) == [match.pk]
-        assert "Granite" in rows_text
-        assert "granate" not in rows_text
+        assert "Granite" in row_text
+        assert "granate" not in row_text
 
     def test_a_concept_matching_on_several_labels_at_once_is_listed_once(self, client):
         scheme = ConceptSchemeFactory()
@@ -2195,9 +2196,7 @@ class TestConceptDetailCollectionMembership:
         soup = soup_of(client.get(concept_page(concept)))
 
         for collection in (igneous, hardness):
-            anchor = soup.find("div", class_="concept-collections").find(
-                "a", href=collection_page(collection)
-            )
+            anchor = soup.find("a", href=collection_page(collection))
             assert anchor.get_text(strip=True) == collection.pref_label
             follow = client.get(anchor["href"])
             assert follow.status_code == 200

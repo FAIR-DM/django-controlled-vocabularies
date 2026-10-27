@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 BROWSING_DOC = REPO_ROOT / "docs" / "browsing.md"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "demo.yml"
 
-DEMO_SECTION_HEADING = "## Try it: the demo project"
+DEMO_SECTION_LABEL = "(demo-project)="
 
 # Line-scoped on purpose: a pattern free to cross newlines swallows the surrounding
 # prose into the prefix and reports the failure against that.
@@ -22,12 +22,13 @@ def demo_section():
     """Return the demo section of the browsing page.
 
     Returns:
-        The text from the demo heading to the next heading of the same level or higher.
+        The text from the demo label's heading to the next heading of the same level or higher.
     """
     text = BROWSING_DOC.read_text(encoding="utf-8")
-    start = text.index(DEMO_SECTION_HEADING)
-    rest = text[start + len(DEMO_SECTION_HEADING) :]
-    end = re.search(r"^#{1,2} ", rest, flags=re.MULTILINE)
+    after_label = text[text.index(DEMO_SECTION_LABEL) + len(DEMO_SECTION_LABEL) :]
+    heading = re.match(r"\s*(#+) ", after_label)
+    rest = after_label[heading.end() :]
+    end = re.search(rf"^#{{1,{len(heading.group(1))}}} ", rest, flags=re.MULTILINE)
     return rest[: end.start()] if end else rest
 
 

@@ -1,6 +1,7 @@
 """Tests for controlled_vocabularies.management.rendering."""
 
 import inspect
+import re
 from pathlib import Path
 
 from controlled_vocabularies.exchange.report import ImportReport
@@ -10,6 +11,11 @@ from controlled_vocabularies.management.rendering import ReportRenderer
 from tests.i18n_sweep import visit_management_source
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "skos"
+
+
+def leading_counts(lines):
+    """Return the leading integer of each line: created, updated, absent, in order."""
+    return [int(re.match(r"\d+", line).group()) for line in lines]
 
 
 class TestReportRendererBucketCounts:
@@ -24,9 +30,7 @@ class TestReportRendererBucketCounts:
             ],
         )
         lines = [str(line) for line in ReportRenderer(report).render()]
-        assert any("2" in line and "created" in line for line in lines)
-        assert any("1" in line and "updated" in line for line in lines)
-        assert any("3" in line and "absent from the source" in line for line in lines)
+        assert leading_counts(lines[:3]) == [2, 1, 3]
 
     def test_an_empty_report_still_prints_every_count_reading_zero(self):
         lines = [str(line) for line in ReportRenderer(ImportReport()).render()]
@@ -52,7 +56,7 @@ class TestReportRendererAbsentFromSource:
 
         lines = [str(line) for line in ReportRenderer(report).render()]
         assert any("http://example.org/rocks/quartz" in line for line in lines)
-        assert any("1" in line and "absent from the source" in line for line in lines)
+        assert leading_counts(lines[:3])[2] == 1
 
 
 class TestReportRendererVerbosity:

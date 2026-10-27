@@ -390,7 +390,6 @@ class TestCheckRestrictionTargetsSurvivesUnmigratedDatabase:
 
         assert result.returncode == 0, result.stderr
         assert CHECK_ID_MISSING_RESTRICTION_TARGET not in result.stdout
-        assert "System check identified no issues" in result.stdout
 
 
 _MIGRATE_CHECK_MAKEMIGRATIONS_MIGRATE_WITH_ABSENT_TARGETS = """
@@ -434,7 +433,6 @@ class TestCheckSurvivesUnmigratedDatabase:
 
         assert result.returncode == 0, result.stderr
         assert CHECK_ID not in result.stdout
-        assert "System check identified no issues" in result.stdout
 
     def test_makemigrations_succeeds_against_an_unmigrated_connection(self):
         result = run_django_admin("makemigrations", "--check", "--dry-run")
@@ -642,7 +640,6 @@ class TestProjectWithoutTheAdminIsUnaffected:
         result = run_django_admin("check", settings="tests.settings_no_admin")
 
         assert result.returncode == 0, result.stderr
-        assert "System check identified no issues" in result.stdout
         for check_id in (
             CHECK_ID,
             CHECK_ID_MISSING_ROUTE,

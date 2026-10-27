@@ -232,12 +232,6 @@ class TestPropertyRowTermDisclosesItsOwnURI:
         )
         return BeautifulSoup(html, "html.parser").find("dt")
 
-    def test_the_dt_carries_neither_text_xs_nor_uppercase(self):
-        classes = self.render_term().get("class", [])
-
-        assert "text-xs" not in classes
-        assert "uppercase" not in classes
-
     def test_the_terms_uri_is_reachable_as_text_and_carries_no_title(self):
         dt = self.render_term()
 

@@ -1,6 +1,7 @@
 """Tests for controlled_vocabularies.management.commands.sync_vocabularies."""
 
 import inspect
+import re
 from io import StringIO
 from pathlib import Path
 
@@ -284,7 +285,8 @@ class TestSyncVocabulariesDryRun:
         with declared(rock_type=FIXTURES / "rocks.ttl"):
             out, _ = sync(dry_run=True)
 
-        assert "8 records created." in out
+        counts = [int(n) for n in re.findall(r"^\s*(\d+) ", out, re.MULTILINE)]
+        assert counts[0] == 8
         assert not ConceptScheme.objects.exists()
         assert not Record.objects.exists()
 
