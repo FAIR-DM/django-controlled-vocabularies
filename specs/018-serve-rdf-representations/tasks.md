@@ -69,9 +69,9 @@ As plan.md §2. Tests:
   rule, one helper in `tests/conftest.py` that T006 and T008 reuse:** parse into a `Dataset` with
   the serialization's name when rdflib registers a parser under it, otherwise with its media
   type; take the statements of all its graphs; treat an `xsd:string` literal as the plain literal
-  on both sides; then `isomorphic`. Run it under several hash seeds
-  (`PYTHONHASHSEED` in a subprocess, or a loop over shuffled insertion orders), because a
-  serializer's output order can depend on the seed (D6);
+  on both sides; then `isomorphic`. Write and read back each graph several times with fresh blank
+  nodes, because a serializer's output can depend on the order it visits blank nodes, which
+  changes from run to run (D6);
 - `nquads` and `trix` are marked as written from a dataset, Turtle is not;
 - short names: Turtle `ttl`, RDF/XML `xml`, N-Triples `nt`, JSON-LD `json-ld`;
 - extensions: Turtle `ttl`, RDF/XML `rdf`, JSON-LD `jsonld`, N-Triples `nt`, `longturtle` `ttl`;

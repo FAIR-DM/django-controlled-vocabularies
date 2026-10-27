@@ -43,12 +43,15 @@ a request belongs to the pages.
 
 ## D6. `pretty-xml` is not offered
 
-rdflib 7.6.0's `pretty-xml` writer adds statements when a graph holds an RDF list, in some
-processes and not others: the demo's research-methods file, written with it and read back, gains
-four statements under `PYTHONHASHSEED=4` and none under eleven other seeds. An ordered
-collection's member list is an RDF list, so serving it this way would break FR-003 and FR-012.
-`xml` writes the same syntax faithfully and stays offered. This narrows FR-002 and was put to the
-maintainer as a change to the specification.
+rdflib 7.6.0's `pretty-xml` writer writes an ordered collection's member list correctly, as an
+`rdf:parseType="Collection"` under `skos:memberList`, and in some runs also writes the list's
+tail a second time as a free-standing blank node. Which runs depends on the order rdflib visits
+blank nodes, which changes with every process. Read back, the second copy is two or three extra
+list cells (`rdf:first`/`rdf:rest` statements on blank nodes nothing points at): four or six
+statements the record does not hold. The collection, its members and their order are unchanged,
+and a re-import ignores the fragment, but the output is not the record's statements and fails
+FR-003 and FR-012. `xml` writes the same syntax faithfully and stays offered. This narrows FR-002
+and was put to the maintainer as a change to the specification.
 
 ## D7. A format's name is the shortest one rdflib registers
 
