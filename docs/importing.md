@@ -162,8 +162,9 @@ written as one RDF list in its stored order. A row whose document states no `rdf
 one: `skos:ConceptScheme` for a vocabulary, and a record's `type` for a record. A document that
 states a type keeps exactly the types it states.
 
-`to_graph()` calls `controlled_vocabularies.exchange.graph.document_graph(uri, document,
-rdf_class)`, which does the same for any document in the stored shape, such as one not yet saved.
+`to_graph()` calls `document_graph()`, from `controlled_vocabularies.exchange.graph`, which does
+the same for any document in the stored shape, such as one not yet saved:
+`document_graph(uri, document, rdf_class)`.
 
 `controlled_vocabularies.exchange.serializations.Serialization` lists the formats the installed
 rdflib can write a graph in faithfully, and writes a graph in one of them:
