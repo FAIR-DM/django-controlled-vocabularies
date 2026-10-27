@@ -155,6 +155,9 @@ FLEX_MENUS = {
     },
 }
 
+# The package's name beside the brand icon in the sidebar's header row.
+MVP_CONFIG = {"layout": {"sidebar": {"title": "django-controlled-vocabularies"}}}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 USE_TZ = True

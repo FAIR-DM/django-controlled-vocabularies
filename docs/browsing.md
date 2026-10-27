@@ -416,9 +416,9 @@ site at `http://127.0.0.1:8000/`.
 The demo's pages are this documentation: the root address opens its front page at
 `http://127.0.0.1:8000/docs/`, served inside the application shell by
 [django-mvp-sphinx](https://github.com/django-mvp/django-mvp-sphinx), a development dependency.
-The sidebar on every page, the documentation's and the browsing pages', starts with a Vocabularies
-entry that leads to the populated, searchable vocabulary list at `http://127.0.0.1:8000/browse/`,
-followed by the documentation's contents. Edit a page under `docs/` and run `build_docs` again to
+The sidebar on every page, the documentation's and the browsing pages', holds the documentation's
+contents, then a Demo group whose Vocabularies entry leads to the populated, searchable vocabulary
+list at `http://127.0.0.1:8000/browse/`. Edit a page under `docs/` and run `build_docs` again to
 see the change on the next request. An open page reloads itself when a template, static file or
 Python module changes, through `django-browser-reload` and `django-watchfiles` from the
 development dependencies. The seeded

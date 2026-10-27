@@ -1,4 +1,4 @@
-# django-controlled-vocabularies
+# Introduction
 
 Import published SKOS controlled vocabularies into Django, and reference their concepts from your
 own models.

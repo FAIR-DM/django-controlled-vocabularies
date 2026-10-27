@@ -11,8 +11,8 @@ All notable changes to this project are documented in this file. The format foll
 - The demo project serves the package's documentation as its pages. `docs/` is built with Sphinx
   and MyST by `manage.py build_docs` and served inside the application shell by django-mvp-sphinx,
   a development dependency. The root address opens the documentation's front page, and the sidebar
-  on every page, documentation and browsing alike, starts with a Vocabularies entry leading to the
-  vocabulary list, followed by the documentation's contents. Running the demo is now four
+  on every page, documentation and browsing alike, holds the documentation's contents, then a Demo
+  group whose Vocabularies entry leads to the vocabulary list. Running the demo is now four
   commands: `migrate`, `seed_demo`, `build_docs` and `runserver`.
 - A concept field can be restricted to a branch of its vocabulary's hierarchy:
   `ConceptField(vocabulary=ROCK_TYPE, branch="https://vocab.example.org/rock-type/igneous")`, and
