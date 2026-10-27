@@ -8,7 +8,7 @@
 
 **Input**: Issue [#52](https://github.com/FAIR-DM/django-controlled-vocabularies/issues/52) — "Importing a vocabulary is usually an operational task, part of setting up a deployment or refreshing from an upstream publisher, and the people doing it work from a terminal or a deployment script rather than a Python shell. They want a command that takes a file, reports what it did, and can be run first in a rehearsal mode that shows the outcome without writing anything."
 
-**Serves**: G8 (external vocabularies as read-only references — a vocabulary nobody can get into a deployment is one nobody can reference) · G4 (faithful round-trip — the import half of it, reached without a Python shell) · **Roadmap**: R2 · **Issue**: #52
+**Serves**: G8 (external vocabularies as read-only references — a vocabulary nobody can get into a deployment is one nobody can reference) · G4 (faithful round-trip — the import half of it, reached without a Python shell) · **Roadmap**: R2 · **Issue**: #52, #233 (US-8)
 
 > Scope note: this is the fourth and last slice of roadmap item R2, and the one that closes its "both a management command and a programmatic entry point" deliverable. FS-006 built the import and its structured report, and FS-007 fixed that it keeps every statement in every language. This feature owns **where an operator stands when they run one and what they read afterwards**: a management command, a source that may be a local file or a URL, a rendering of the existing report at a terminal, and a dry run that reports the same outcome and keeps none of it. It adds no new import behaviour — every decision about what a file means was made upstream of it. The command takes no target vocabulary: the source declares which vocabulary it is, and a source that declares none is refused. A site may also declare the vocabularies it uses in its settings, keyed by the slug its fields name them by, and load every one of them with a second command (US-7, from issue #221). The programmatic entry point accepts a target for a source that declares none, and pointing a deployment script at the wrong address is the operator's mistake to make and not this package's to prevent. **Out of scope:** any change to what the import stores, exporting or serving RDF (R4), the consumption field (R3), the editing interface and any web-facing entry point, browsing (R6), scheduling repeat runs, storing where a vocabulary was fetched from in the database, deleting anything a source no longer lists, and importing anything the source does not itself declare as a SKOS concept scheme.
 
@@ -118,7 +118,7 @@ Everything the command prints is translatable, the README tells an operator the 
 
 ### User Story 7 - A site's vocabularies are declared once and loaded with one command (Priority: P2)
 
-A developer whose site relies on several vocabularies lists them in the project's settings, each under the slug the site's fields name it by, with the file shipped beside the code or the address it is published at. On every deploy they run one command, and every declared vocabulary is loaded or refreshed. A vocabulary that fails is reported and the others still load, and the deploy script stops on the exit status.
+A developer whose site relies on several vocabularies lists them in the project's settings, each under the slug the site gives it, with the file shipped beside the code or the address it is published at. On every deploy they run one command, and every declared vocabulary is loaded or refreshed. A vocabulary that fails is reported and the others still load, and the deploy script stops on the exit status.
 
 **Why this priority**: Without it a site using five vocabularies has five commands to remember on every deploy, and the slug a field names depends on how each publisher shaped its URI. It is P2 because US-1 and US-2 already load any one vocabulary.
 
@@ -134,7 +134,26 @@ A developer whose site relies on several vocabularies lists them in the project'
 6. **Given** a vocabulary already loaded under a different slug, **When** it is declared and the command is run, **Then** it is reported naming the slug it holds, and it is not renamed.
 7. **Given** a dry run, **When** the command finishes, **Then** every report printed and nothing was kept.
 8. **Given** one or more slugs named on the command line, **When** the command is run, **Then** only those vocabularies are loaded, and a slug that is not declared is refused before anything loads.
-9. **Given** a field naming a vocabulary that is neither declared nor loaded, **When** `manage.py check` runs, **Then** it warns under an id of its own, distinct from the warning for a vocabulary that is declared but not loaded yet.
+9. **Given** a field naming a vocabulary that is not loaded, **When** `manage.py check` runs, **Then** it warns, naming the field and the vocabulary's URI.
+
+### User Story 8 - A model shipped in a reusable app brings its vocabularies with it (Priority: P2)
+
+A developer publishing a reusable app ships an abstract model whose concept fields name each vocabulary by its URI and say where it is published. A developer installing that app subclasses the model, runs the same one command on deploy, and every vocabulary the model needs is loaded, with nothing added to the project's settings. A developer who wants a vocabulary read from a copy of their own declares it in settings, and the app's source is never read.
+
+**Why this priority**: Without it every project inheriting the model gets a field with no choices until it finds out which vocabulary each field meant, and where it is published, and declares it. A slug cannot fix that, because a slug is a name one site gives a vocabulary and an app cannot know it. It is P2 because US-7 already loads any vocabulary a project declares.
+
+**Independent Test**: Install a concrete model inheriting a concept field from an abstract one, declare nothing, run the command, and confirm the field's vocabulary was loaded under its URI from the source the field gives.
+
+**Acceptance Scenarios**:
+
+1. **Given** an installed model whose concept field, declared on itself or inherited from an abstract model, names a vocabulary with a source, **When** the command is run with nothing declared, **Then** the vocabulary is loaded from that source.
+2. **Given** an abstract model that no installed model inherits, **When** the command is run, **Then** nothing it names is loaded.
+3. **Given** a field naming a vocabulary by URI with no source, **When** the command is run, **Then** the vocabulary is read from its URI, asking for Turtle, RDF/XML or JSON-LD.
+4. **Given** a vocabulary that is also declared in settings, **When** the command is run, **Then** it is loaded from the declaration and no field's source is read for it.
+5. **Given** several fields naming one vocabulary with different sources, **When** the command is run, **Then** it is loaded once, from the first field giving a source, and the other sources are named as not read.
+6. **Given** a field whose source publishes a different vocabulary from the URI it names, **When** the command is run, **Then** that source is refused and nothing of it kept, the others still load, and the exit status is non-zero.
+7. **Given** a vocabulary's URI named on the command line, **When** the command is run, **Then** only that vocabulary is loaded.
+8. **Given** a field naming a vocabulary or collection by slug, **When** the module declaring it is imported, **Then** it is refused, saying to name it by URI.
 
 ### Edge Cases
 
@@ -170,15 +189,21 @@ A developer whose site relies on several vocabularies lists them in the project'
 - **FR-016**: `CONTEXT.md` MUST define **dry run**, which this feature puts in front of an operator. The documentation MUST describe the command, both source forms, and the dry run flag.
 
 - **FR-017**: The package MUST read a `CONTROLLED_VOCABULARIES` setting: a mapping from a vocabulary's slug to its `source`, a path or an `http`/`https` URL, and an optional `format`.
-- **FR-018**: The package MUST ship a second management command that loads every declared vocabulary, or only those named, each through the same path `import_skos` takes, in a transaction of its own, printing each one's report.
+- **FR-018**: The package MUST ship a second management command that loads every declared vocabulary and every vocabulary a field names, or only those named on the command line, each through the same path `import_skos` takes, in a transaction of its own, printing each one's report.
 - **FR-019**: A vocabulary the command creates MUST take its declared slug, and every later run MUST find it by that slug rather than by a slug derived from its URI. A vocabulary already held under another slug MUST be reported and not renamed.
 - **FR-020**: A vocabulary that fails MUST be reported with its reason and leave nothing behind, MUST NOT stop the others, and MUST make the command exit non-zero. The command MUST offer the same dry run as `import_skos`.
-- **FR-021**: `manage.py check` MUST warn about a field naming a vocabulary that is neither declared nor loaded, under an id distinct from the warning for a declared vocabulary that is not loaded yet.
+- **FR-021**: `manage.py check` MUST warn about a field naming a vocabulary that is not loaded.
+- **FR-022**: A concept field MUST name each vocabulary by its URI, optionally with the `source` it is published at and that source's `format`, and MUST name a collection restriction by the collection's URI. A slug MUST be refused when the field is declared.
+- **FR-023**: The command MUST load every vocabulary a concept field on an installed, concrete model names, including a field inherited from an abstract model, after the declared vocabularies. A vocabulary the declarations loaded MUST NOT be read again from a field. One that several fields name MUST be loaded once, from the first field giving a source, and from its URI when none does.
+- **FR-024**: A field's source that publishes a vocabulary other than the one the field names MUST be refused and leave nothing behind.
+- **FR-025**: Every fetch MUST ask for Turtle, RDF/XML or JSON-LD, so an address serving several representations answers with one the importer reads.
+- **FR-026**: A field's migration MUST record each vocabulary's URI and never its source, so changing a source needs no migration.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Source**: What the operator points the command at — a filesystem path or an `http`/`https` URL. It resolves to bytes and nothing about it is stored in the database.
-- **Declared vocabulary**: An entry in `CONTROLLED_VOCABULARIES`: the slug fields name a vocabulary by, and the source it is loaded from.
+- **Declared vocabulary**: An entry in `CONTROLLED_VOCABULARIES`: the slug a site gives a vocabulary, and the source it is loaded from.
+- **Field vocabulary** (`Vocabulary`): What a concept field names: a vocabulary's URI, with optionally the source it is published at and that source's format.
 - **Dry run**: A run performed in full and then abandoned, reporting what it did without keeping any of it.
 - **Import report**: The structured outcome FS-006 defined. This feature reads it and renders it. It adds nothing to it and parses none of its rendered messages.
 

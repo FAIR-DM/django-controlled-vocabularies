@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The artifact's catalogue name.", max_length=255, verbose_name='name')),
-                ('mineral', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The mineral this artifact is classified as, if known.', null=True, verbose_name='mineral', vocabulary=('mineral',))),
+                ('mineral', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The mineral this artifact is classified as, if known.', null=True, verbose_name='mineral', vocabulary=('https://example.org/vocabularies/mineral',))),
             ],
         ),
         migrations.CreateModel(
@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The borehole's catalogue name.", max_length=255, verbose_name='name')),
-                ('dominant_material', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The material logged as dominant, from either the rock-type or the mineral vocabulary.', null=True, related_name='+', verbose_name='dominant material', vocabulary=('rock-type', 'mineral'))),
+                ('dominant_material', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The material logged as dominant, from either the rock-type or the mineral vocabulary.', null=True, related_name='+', verbose_name='dominant material', vocabulary=('https://example.org/vocabularies/rock-type', 'https://example.org/vocabularies/mineral'))),
             ],
         ),
         migrations.CreateModel(
@@ -35,7 +35,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The core sample's catalogue name.", max_length=255, verbose_name='name')),
-                ('rock_type', controlled_vocabularies.fields.ConceptField(blank=True, collection='core-samples', help_text='The rock type this core sample is classified as, drawn from the core-samples collection.', null=True, related_name='+', verbose_name='rock type', vocabulary=('rock-type',))),
+                ('rock_type', controlled_vocabularies.fields.ConceptField(blank=True, collection='https://example.org/vocabularies/rock-type/collection/core-samples', help_text='The rock type this core sample is classified as, drawn from the core-samples collection.', null=True, related_name='+', verbose_name='rock type', vocabulary=('https://example.org/vocabularies/rock-type',))),
             ],
         ),
         migrations.CreateModel(
@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The deposit's catalogue name.", max_length=255, verbose_name='name')),
-                ('rock_types', controlled_vocabularies.fields.MultiConceptField(help_text='The rock types present at this deposit.', verbose_name='rock types', vocabulary=('rock-type',))),
+                ('rock_types', controlled_vocabularies.fields.MultiConceptField(help_text='The rock types present at this deposit.', verbose_name='rock types', vocabulary=('https://example.org/vocabularies/rock-type',))),
             ],
         ),
         migrations.CreateModel(
@@ -51,7 +51,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The drill core's catalogue name.", max_length=255, verbose_name='name')),
-                ('rock_types', controlled_vocabularies.fields.MultiConceptField(blank=True, collection='core-samples', help_text='The rock types logged for this drill core, drawn from the core-samples collection.', related_name='drill_cores', verbose_name='rock types', vocabulary=('rock-type',))),
+                ('rock_types', controlled_vocabularies.fields.MultiConceptField(blank=True, collection='https://example.org/vocabularies/rock-type/collection/core-samples', help_text='The rock types logged for this drill core, drawn from the core-samples collection.', related_name='drill_cores', verbose_name='rock types', vocabulary=('https://example.org/vocabularies/rock-type',))),
             ],
         ),
         migrations.CreateModel(
@@ -59,7 +59,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The field note's catalogue name.", max_length=255, verbose_name='name')),
-                ('keywords', controlled_vocabularies.fields.MultiConceptField(blank=True, help_text='Keywords drawn from either the rock-type or the mineral vocabulary.', related_name='+', verbose_name='keywords', vocabulary=('rock-type', 'mineral'))),
+                ('keywords', controlled_vocabularies.fields.MultiConceptField(blank=True, help_text='Keywords drawn from either the rock-type or the mineral vocabulary.', related_name='+', verbose_name='keywords', vocabulary=('https://example.org/vocabularies/rock-type', 'https://example.org/vocabularies/mineral'))),
             ],
         ),
         migrations.CreateModel(
@@ -67,7 +67,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The locality's catalogue name.", max_length=255, verbose_name='name')),
-                ('primary_mineral', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The mineral this locality is primarily characterised by, if known.', null=True, related_name='+', verbose_name='primary mineral', vocabulary=('mineral',))),
+                ('primary_mineral', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The mineral this locality is primarily characterised by, if known.', null=True, related_name='+', verbose_name='primary mineral', vocabulary=('https://example.org/vocabularies/mineral',))),
             ],
         ),
         migrations.CreateModel(
@@ -75,7 +75,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The outcrop's catalogue name.", max_length=255, verbose_name='name')),
-                ('minerals', controlled_vocabularies.fields.MultiConceptField(blank=True, help_text='The minerals observed at this outcrop, if any.', related_name='outcrops', verbose_name='minerals', vocabulary=('mineral',))),
+                ('minerals', controlled_vocabularies.fields.MultiConceptField(blank=True, help_text='The minerals observed at this outcrop, if any.', related_name='outcrops', verbose_name='minerals', vocabulary=('https://example.org/vocabularies/mineral',))),
             ],
         ),
         migrations.CreateModel(
@@ -91,8 +91,8 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The rock sample's catalogue name.", max_length=255, verbose_name='name')),
-                ('associated_minerals', controlled_vocabularies.fields.MultiConceptField(blank=True, help_text='Any additional minerals observed in this sample.', related_name='+', verbose_name='associated minerals', vocabulary=('mineral',))),
-                ('primary_mineral', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The single mineral this sample is primarily classified as, if known.', null=True, verbose_name='primary mineral', vocabulary=('mineral',))),
+                ('associated_minerals', controlled_vocabularies.fields.MultiConceptField(blank=True, help_text='Any additional minerals observed in this sample.', related_name='+', verbose_name='associated minerals', vocabulary=('https://example.org/vocabularies/mineral',))),
+                ('primary_mineral', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The single mineral this sample is primarily classified as, if known.', null=True, verbose_name='primary mineral', vocabulary=('https://example.org/vocabularies/mineral',))),
             ],
         ),
         migrations.CreateModel(
@@ -100,7 +100,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The sample's catalogue name.", max_length=255, verbose_name='name')),
-                ('mineral', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The mineral this sample is classified as, if known.', null=True, related_name='samples', verbose_name='mineral', vocabulary=('mineral',))),
+                ('mineral', controlled_vocabularies.fields.ConceptField(blank=True, help_text='The mineral this sample is classified as, if known.', null=True, related_name='samples', verbose_name='mineral', vocabulary=('https://example.org/vocabularies/mineral',))),
             ],
         ),
         migrations.CreateModel(
@@ -117,7 +117,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The specimen's catalogue name.", max_length=255, verbose_name='name')),
                 ('locality', models.ForeignKey(blank=True, help_text='The locality where this specimen was collected, if recorded.', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='specimens', to='testapp.locality', verbose_name='locality')),
-                ('rock_type', controlled_vocabularies.fields.ConceptField(help_text='The rock type this specimen is classified as.', verbose_name='rock type', vocabulary=('rock-type',))),
+                ('rock_type', controlled_vocabularies.fields.ConceptField(help_text='The rock type this specimen is classified as.', verbose_name='rock type', vocabulary=('https://example.org/vocabularies/rock-type',))),
             ],
         ),
         migrations.CreateModel(
@@ -125,8 +125,8 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text="The survey's catalogue name.", max_length=255, verbose_name='name')),
-                ('primary_minerals', controlled_vocabularies.fields.MultiConceptField(help_text='The minerals this survey primarily targets.', related_name='+', verbose_name='primary minerals', vocabulary=('mineral',))),
-                ('secondary_minerals', controlled_vocabularies.fields.MultiConceptField(help_text='The minerals this survey secondarily targets.', related_name='+', verbose_name='secondary minerals', vocabulary=('mineral',))),
+                ('primary_minerals', controlled_vocabularies.fields.MultiConceptField(help_text='The minerals this survey primarily targets.', related_name='+', verbose_name='primary minerals', vocabulary=('https://example.org/vocabularies/mineral',))),
+                ('secondary_minerals', controlled_vocabularies.fields.MultiConceptField(help_text='The minerals this survey secondarily targets.', related_name='+', verbose_name='secondary minerals', vocabulary=('https://example.org/vocabularies/mineral',))),
             ],
         ),
     ]

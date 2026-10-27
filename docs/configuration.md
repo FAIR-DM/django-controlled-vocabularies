@@ -2,8 +2,10 @@
 
 ## The vocabularies your site uses
 
-Declare every vocabulary your site uses in your Django settings, keyed by the slug your fields
-name it by, and load them all with `python manage.py sync_vocabularies`:
+`python manage.py sync_vocabularies` loads every vocabulary your models' concept fields name, with
+no setting at all. Declare a vocabulary in your Django settings when no field names it, or when
+you want it read from somewhere other than the source a field gives. Each is keyed by the slug the
+vocabulary is given on this site:
 
 ```python
 CONTROLLED_VOCABULARIES = {
@@ -14,8 +16,7 @@ CONTROLLED_VOCABULARIES = {
 
 Each `source` is a local path or an `http://`/`https://` address, with an optional `format` for a
 source whose name does not carry its serialization. Prefer a file shipped with the project: a
-deploy then never depends on a remote server being up. The setting is optional, and a site that
-loads its vocabularies with `import_skos` alone can leave it out. Code of your own reads the
+deploy then never depends on a remote server being up. The setting is optional. Code of your own reads the
 declarations with `controlled_vocabularies.conf.get_declared_vocabularies()`, which returns the
 setting, or an empty dict when it is not set.
 [Importing a published vocabulary](importing.md) covers the command and what each run does.

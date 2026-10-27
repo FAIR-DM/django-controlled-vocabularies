@@ -1,6 +1,6 @@
 # ADR 0022 — A restriction names its target by slug
 
-**Status:** accepted
+**Status:** superseded by ADR 0026
 
 ## Decision
 

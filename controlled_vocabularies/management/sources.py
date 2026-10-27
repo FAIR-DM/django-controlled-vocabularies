@@ -15,6 +15,7 @@ from urllib.request import (
     HTTPRedirectHandler,
     HTTPSHandler,
     OpenerDirector,
+    Request,
     UnknownHandler,
 )
 
@@ -30,6 +31,11 @@ CONTENT_TYPE_SERIALIZATIONS = {
     "application/rdf+xml": "xml",
     "application/ld+json": "json-ld",
 }
+
+# Sent with every fetch, so an address that serves several representations, as a vocabulary's
+# own URI often does, answers with one the importer reads rather than its HTML page. The
+# trailing */* keeps a server that negotiates strictly from refusing a file it serves as text.
+ACCEPT = "text/turtle, application/rdf+xml;q=0.9, application/ld+json;q=0.8, */*;q=0.1"
 
 # Neither is configurable: they bound what the remote server chooses, sized for real
 # published vocabularies (tens of megabytes, seconds to first byte), not for test fixtures
@@ -181,7 +187,11 @@ class SourceResolver:
                 a ``CommandError`` built by :meth:`retrieval_error`.
         """
         try:
-            response = OPENER.open(self.source, timeout=TIMEOUT_SECONDS)
+            response = OPENER.open(
+                # S310: classify() admitted only http(s), and OPENER has no other handler.
+                Request(self.source, headers={"Accept": ACCEPT}),  # noqa: S310
+                timeout=TIMEOUT_SECONDS,
+            )
         except OSError as exc:
             raise self.retrieval_error(exc) from exc
         with response:

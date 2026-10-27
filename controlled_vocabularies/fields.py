@@ -1,7 +1,10 @@
 """Model fields that attach concepts to a consuming model."""
 
+import os
+from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, ClassVar
+from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
 from django.db.models import CASCADE, PROTECT, ForeignKey, ManyToManyField, Model, Q
@@ -19,7 +22,52 @@ __all__ = [
     "ConceptField",
     "ConceptFieldMixin",
     "MultiConceptField",
+    "Vocabulary",
 ]
+
+
+def require_uri(value, owner, argument):
+    """Refuse a value that is not an absolute URI.
+
+    Args:
+        value: The value to check.
+        owner: The name of the class it was passed to, for the message.
+        argument: The argument it was passed as, for the message.
+
+    Raises:
+        TypeError: ``value`` is not a string, or names no scheme. A one-character scheme
+            is a Windows drive letter, not a URI scheme.
+    """
+    if not isinstance(value, str) or len(urlsplit(value).scheme) <= 1:
+        raise TypeError(
+            f"{owner}() {argument} must be a URI; got {value!r}. Name a vocabulary or "
+            "collection by its URI, not by its slug."
+        )
+
+
+@dataclass(frozen=True)
+class Vocabulary:
+    """A vocabulary a concept field names: its URI, and where it is published.
+
+    ``manage.py sync_vocabularies`` loads every vocabulary a concept field names. It
+    reads one from ``source`` when given, and from ``uri`` itself otherwise.
+
+    Args:
+        uri: The URI the vocabulary's concept scheme is published under.
+        source: A local path or an http(s) address the vocabulary can be read from.
+        format: The serialization ``source`` is in, when its name or the server does
+            not say.
+
+    Raises:
+        TypeError: ``uri`` is not an absolute URI.
+    """
+
+    uri: str
+    source: str | os.PathLike | None = None
+    format: str | None = None
+
+    def __post_init__(self):
+        require_uri(self.uri, type(self).__name__, "uri")
 
 
 class ConceptFieldMixin:
@@ -46,29 +94,32 @@ class ConceptFieldMixin:
     }
 
     def normalise_vocabulary(self, vocabulary):
-        """Normalise a ``vocabulary`` argument to a tuple of distinct slugs.
+        """Normalise a ``vocabulary`` argument to a tuple of distinct vocabularies.
 
         Args:
-            vocabulary: One slug, an iterable of slugs, or ``None`` for no restriction.
+            vocabulary: One URI or :class:`Vocabulary`, an iterable of them, or ``None``
+                for no restriction.
 
         Returns:
-            The slugs in declaration order with duplicates removed; empty for ``None``.
+            The vocabularies in declaration order, the first of each URI kept; empty for
+            ``None``.
 
         Raises:
-            TypeError: An element is not a non-empty string.
+            TypeError: An element is neither a :class:`Vocabulary` nor a URI.
         """
         if vocabulary is None:
-            slugs = ()
-        elif isinstance(vocabulary, str):
-            slugs = (vocabulary,)
+            elements = ()
+        elif isinstance(vocabulary, (str, Vocabulary)):
+            elements = (vocabulary,)
         else:
-            slugs = tuple(vocabulary)
-        for slug in slugs:
-            if not isinstance(slug, str) or not slug:
-                raise TypeError(
-                    f"{type(self).__name__}() vocabulary elements must be non-empty strings; got {slug!r}."
-                )
-        return tuple(dict.fromkeys(slugs))
+            elements = tuple(vocabulary)
+        vocabularies = {}
+        for element in elements:
+            if not isinstance(element, Vocabulary):
+                require_uri(element, type(self).__name__, "vocabulary")
+                element = Vocabulary(element)
+            vocabularies.setdefault(element.uri, element)
+        return tuple(vocabularies.values())
 
     def apply_collection(self, collection):
         """Validate the ``collection`` restriction and store it as ``self.collection``.
@@ -76,18 +127,14 @@ class ConceptFieldMixin:
         Must run after ``self.vocabulary`` is set.
 
         Args:
-            collection: Slug of a collection the choices are limited to, or ``None``.
+            collection: URI of a collection the choices are limited to, or ``None``.
 
         Raises:
-            TypeError: ``collection`` is not a non-empty string, or the declaration does
-                not name exactly one vocabulary.
+            TypeError: ``collection`` is not a URI, or the declaration does not name
+                exactly one vocabulary.
         """
         if collection is not None:
-            if not isinstance(collection, str) or not collection:
-                raise TypeError(
-                    f"{type(self).__name__}() collection must be a non-empty "
-                    f"string; got {collection!r}."
-                )
+            require_uri(collection, type(self).__name__, "collection")
             if len(self.vocabulary) != 1:
                 raise TypeError(
                     f"{type(self).__name__}() a collection restriction requires the "
@@ -111,16 +158,20 @@ class ConceptFieldMixin:
 
         restriction = Q(type=Record.Type.CONCEPT)
         if self.vocabulary:
-            restriction &= Q(scheme__slug__in=self.vocabulary)
+            restriction &= Q(scheme__uri__in=self.vocabulary_uris())
         if self.collection is not None:
             (vocabulary,) = self.vocabulary
             collection = Record.objects.filter(
-                scheme__slug=vocabulary,
-                slug=self.collection,
+                scheme__uri=vocabulary.uri,
+                uri=self.collection,
                 type__in=Record.COLLECTION_TYPES,
             ).first()
             restriction &= Q(uri__in=collection.member_uris() if collection else [])
         return restriction
+
+    def vocabulary_uris(self):
+        """Return the URIs of the vocabularies the field names, in declaration order."""
+        return tuple(vocabulary.uri for vocabulary in self.vocabulary)
 
     def refusal(self, value):
         """Build the error for a concept the restriction does not admit.
@@ -137,15 +188,18 @@ class ConceptFieldMixin:
                 "restriction": self.collection,
             }
         if self.vocabulary:
-            return "invalid", {"value": value, "vocabulary": ", ".join(self.vocabulary)}
+            return "invalid", {
+                "value": value,
+                "vocabulary": ", ".join(self.vocabulary_uris()),
+            }
         return "invalid_unrestricted", {"value": value}
 
     def apply_vocabulary(self, vocabulary, collection, kwargs):
         """Store the normalised ``vocabulary`` and restriction, and fill in the kwargs they decide.
 
         Args:
-            vocabulary: One slug, an iterable of slugs, or ``None``.
-            collection: Collection restriction, or ``None``.
+            vocabulary: One URI or :class:`Vocabulary`, an iterable of them, or ``None``.
+            collection: URI of the collection restriction, or ``None``.
             kwargs: The field's remaining keyword arguments, updated in place.
 
         Returns:
@@ -200,12 +254,14 @@ class ConceptFieldMixin:
     def deconstruct(self):
         """Record ``vocabulary`` and ``collection`` rather than the kwargs it fixes."""
         # Field.clone() rebuilds from these kwargs, so they must be ones __init__ accepts.
+        # Only the URIs are recorded: a source says where a vocabulary is published and
+        # changes nothing in the schema, so moving one must not need a migration.
         name, path, args, kwargs = super().deconstruct()
         kwargs.pop("to", None)
         kwargs.pop("to_field", None)
         kwargs.pop("on_delete", None)
         kwargs.pop("limit_choices_to", None)
-        kwargs["vocabulary"] = self.vocabulary
+        kwargs["vocabulary"] = self.vocabulary_uris()
         if self.collection is not None:
             kwargs["collection"] = self.collection
         return name, path, args, kwargs
@@ -221,8 +277,10 @@ class ConceptField(ConceptFieldMixin, ForeignKey):
     arguments below.
 
     Args:
-        vocabulary: One vocabulary slug, several, or ``None`` for no restriction.
-        collection: Limit choices to the members of this collection. Needs exactly one vocabulary.
+        vocabulary: One vocabulary's URI or :class:`Vocabulary`, several, or ``None`` for
+            no restriction.
+        collection: Limit choices to the members of the collection with this URI. Needs
+            exactly one vocabulary.
         **kwargs: Passed to ``ForeignKey``.
 
     Raises:
@@ -425,9 +483,10 @@ class MultiConceptField(ConceptFieldMixin, ManyToManyField):
     one concept when the consuming model is cleaned.
 
     Args:
-        vocabulary: One vocabulary slug, several, or ``None`` for no restriction.
-        collection: Limit choices to the members of this collection. Needs exactly one
-            vocabulary.
+        vocabulary: One vocabulary's URI or :class:`Vocabulary`, several, or ``None`` for
+            no restriction.
+        collection: Limit choices to the members of the collection with this URI. Needs
+            exactly one vocabulary.
         **kwargs: Passed to ``ManyToManyField``.
 
     Raises:
