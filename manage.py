@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""Run Django's command-line utility for the demo project."""
 
 import os
 import sys

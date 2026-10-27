@@ -120,7 +120,7 @@ ignore_missing_model_attributes = "True"
 [tool.ruff]
 extend = "ruff-base.toml"
 
-[tool.ruff.lint.per-file-ignores]
+[tool.ruff.lint.extend-per-file-ignores]
 # S101: asserts are the point of a test. S105: settings_core.py carries a
 # placeholder test SECRET_KEY. RUF059: collection_with_members() returns a
 # tuple a handful of tests unpack for only one member.

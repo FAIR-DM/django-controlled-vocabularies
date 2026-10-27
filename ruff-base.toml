@@ -27,7 +27,7 @@
 # downstream pyproject.toml has to state itself: once extending, a package's
 # own [tool.ruff] holds only its remainder — extend-ignore for additional
 # ignored rules, extend-exclude for additional excluded paths,
-# [tool.ruff.lint.per-file-ignores] for test/example carve-outs, and any
+# [tool.ruff.lint.extend-per-file-ignores] for test/example carve-outs, and any
 # [tool.ruff.format] keys that differ from the ones set below — instead of
 # restating the whole shared rule set.
 #
@@ -79,6 +79,8 @@ select = [
     "RUF",
     # tryceratops
     "TRY",
+    # pydocstyle
+    "D",
 ]
 ignore = [
     # LineTooLong
@@ -93,7 +95,21 @@ ignore = [
     "A003",
     # Function too complex
     "C901",
+    # Constructor arguments are documented in the class docstring
+    "D107",
+    # Inner Meta classes
+    "D106",
 ]
+
+# Add a repo's own carve-outs under `extend-per-file-ignores`. A `per-file-ignores`
+# table in the extending config replaces this one instead of merging with it.
+[lint.per-file-ignores]
+"tests/**" = ["D"]
+"**/migrations/**" = ["D"]
+"**/conftest.py" = ["D"]
+
+[lint.pydocstyle]
+convention = "google"
 
 [format]
 docstring-code-format = true
