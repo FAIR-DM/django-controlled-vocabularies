@@ -116,46 +116,79 @@ class Command(BaseCommand):
         slugs = [slug for slug in declarations if not requested or slug in requested]
         uris = [uri for uri in named if not requested or uri in requested]
         dry_run = options["dry_run"]
-        loaded: set[str] = set()
-        attempted = failed = 0
-        for slug in slugs:
-            attempted += 1
-            try:
-                report, uri = self.sync(
-                    partial(self.load, slug, declarations[slug]), dry_run=dry_run
-                )
-            except CommandError as exc:
-                failed += 1
-                self.fail(slug, exc)
-                continue
-            loaded.add(uri)
-            self.render(slug, report, dry_run=dry_run, verbosity=options["verbosity"])
+        verbosity = options["verbosity"]
+        outcomes = {
+            slug: self.attempt(
+                slug,
+                partial(self.load, slug, declarations[slug]),
+                dry_run=dry_run,
+                verbosity=verbosity,
+            )
+            for slug in slugs
+        }
+        loaded = set(outcomes.values())
         for uri in uris:
             if uri in loaded:
                 continue
-            attempted += 1
-            vocabulary, *others = named[uri]
-            try:
-                report, _loaded = self.sync(
-                    partial(self.load_named, vocabulary), dry_run=dry_run
-                )
-            except CommandError as exc:
-                failed += 1
-                self.fail(uri, exc)
+            held = ConceptScheme.objects.filter(uri=uri).first()
+            if held is not None and held.slug in declarations:
+                # Declared, so never read from a field. One this run attempted has reported.
+                if held.slug not in outcomes:
+                    outcomes[held.slug] = self.attempt(
+                        held.slug,
+                        partial(self.load, held.slug, declarations[held.slug]),
+                        dry_run=dry_run,
+                        verbosity=verbosity,
+                    )
                 continue
-            self.render(uri, report, dry_run=dry_run, verbosity=options["verbosity"])
-            self.report_unused_sources(vocabulary, others, options["verbosity"])
+            vocabulary, *others = named[uri]
+            outcomes[uri] = self.attempt(
+                uri,
+                partial(self.load_named, vocabulary),
+                dry_run=dry_run,
+                verbosity=verbosity,
+            )
+            if outcomes[uri] is not None:
+                self.report_unused_sources(vocabulary, others, verbosity)
+        failed = sum(outcome is None for outcome in outcomes.values())
         if failed:
             raise CommandError(
                 str(
                     ngettext_lazy(
                         "%(failed)d of %(total)d vocabulary could not be loaded.",
                         "%(failed)d of %(total)d vocabularies could not be loaded.",
-                        attempted,
+                        len(outcomes),
                     )
                 )
-                % {"failed": failed, "total": attempted}
+                % {"failed": failed, "total": len(outcomes)}
             )
+
+    def attempt(
+        self,
+        name: str,
+        load: Callable[[], tuple[ImportReport, str]],
+        *,
+        dry_run: bool,
+        verbosity: int,
+    ) -> str | None:
+        """Load one vocabulary and print its report, or report why it could not be loaded.
+
+        Args:
+            name: The slug or URI it is named by.
+            load: Loads it, returning the import's report and the vocabulary's URI.
+            dry_run: Whether to roll the import back once it has reported.
+            verbosity: The command's verbosity.
+
+        Returns:
+            The vocabulary's URI, or ``None`` when it could not be loaded.
+        """
+        try:
+            report, uri = self.sync(load, dry_run=dry_run)
+        except CommandError as exc:
+            self.fail(name, exc)
+            return None
+        self.render(name, report, dry_run=dry_run, verbosity=verbosity)
+        return uri
 
     def fail(self, name: str, exc: CommandError) -> None:
         """Report one vocabulary that could not be loaded.

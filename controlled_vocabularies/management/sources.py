@@ -33,8 +33,9 @@ CONTENT_TYPE_SERIALIZATIONS = {
 }
 
 # Sent with every fetch, so an address that serves several representations, as a vocabulary's
-# own URI often does, answers with one the importer reads rather than its HTML page.
-ACCEPT = "text/turtle, application/rdf+xml;q=0.9, application/ld+json;q=0.8"
+# own URI often does, answers with one the importer reads rather than its HTML page. The
+# trailing */* keeps a server that negotiates strictly from refusing a file it serves as text.
+ACCEPT = "text/turtle, application/rdf+xml;q=0.9, application/ld+json;q=0.8, */*;q=0.1"
 
 # Neither is configurable: they bound what the remote server chooses, sized for real
 # published vocabularies (tens of megabytes, seconds to first byte), not for test fixtures

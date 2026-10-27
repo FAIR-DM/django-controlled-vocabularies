@@ -353,6 +353,18 @@ class TestSyncVocabulariesLoadsWhatFieldsName:
 
         assert ConceptScheme.objects.get(uri=ROCK_TYPE.uri).slug == "rock-type"
 
+    def test_a_declared_vocabulary_named_by_its_uri_is_read_from_the_declaration(
+        self, fields_naming
+    ):
+        with declared(rock_type=FIXTURES / "rock-type.ttl"):
+            sync()
+            fields_naming(
+                Vocabulary(ROCK_TYPE.uri, source=FIXTURES / "does-not-exist.ttl")
+            )
+            out, _ = sync(ROCK_TYPE.uri)
+
+        assert out.startswith("rock-type")
+
     def test_a_vocabulary_named_by_several_fields_is_read_once_from_the_first_source(
         self, fields_naming
     ):
