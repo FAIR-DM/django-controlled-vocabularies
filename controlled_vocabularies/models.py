@@ -1,10 +1,9 @@
 """Models for vocabularies and the records they hold, with SKOS statements in JSON."""
 
-import json
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models.functions import Lower
 from django.utils.text import slugify
 from django.utils.translation import get_language
@@ -327,25 +326,24 @@ class ConceptScheme(Resource):
 class RecordQuerySet(models.QuerySet):
     """Queries over records that read the JSON documents."""
 
-    def mentioning(self, uri: str) -> "RecordQuerySet":
-        """Narrow to records whose document may link to ``uri``.
+    def linking_to(self, uri: str, *curies: str) -> "RecordQuerySet":
+        """Narrow to records whose document links to ``uri``, under one of ``curies`` when given.
 
-        A cheap pre-filter on the stored text, which can match a record that holds the
-        URI as a plain literal; callers check the links in Python.
+        Reads the ``Link`` rows, so a record that holds the URI only as a literal is not
+        returned, and a record that states the link more than once is returned once.
 
         Args:
-            uri: The URI to look for.
+            uri: The URI the records link to.
+            *curies: The predicates to look under, such as ``skos:member``. Any
+                predicate when none is given.
 
         Returns:
-            The candidate records.
+            The records stating a link to ``uri``.
         """
-        # The stored text is JSON, so the quoted form is what appears in it. SQLite
-        # keeps non-ASCII characters escaped and PostgreSQL's jsonb does not, so both
-        # are tried.
-        return self.filter(
-            models.Q(data__icontains=json.dumps(uri))
-            | models.Q(data__icontains=json.dumps(uri, ensure_ascii=False))
-        )
+        links = Link.objects.filter(source=models.OuterRef("pk"), target=uri)
+        if curies:
+            links = links.filter(predicate__in=curies)
+        return self.filter(models.Exists(links))
 
 
 class Record(Resource):
@@ -454,11 +452,92 @@ class Record(Resource):
         return Record.objects.filter(scheme_id=self.scheme_id)
 
     def save(self, *args, **kwargs):
-        """Refresh the search text, then save as any resource does."""
+        """Refresh the search text, then save as any resource does and rebuild the links.
+
+        The links are rebuilt, in the same transaction as the save, unless a partial
+        save leaves ``data`` out.
+        """
         self.search_text = "\n".join(
             str(entry["@value"])
             for curie in ("skos:prefLabel", "skos:altLabel", "skos:hiddenLabel")
             for entry in self.values(curie)
             if "@value" in entry
         )
-        super().save(*args, **kwargs)
+        update_fields = kwargs.get("update_fields")
+        adding = self._state.adding
+        # No savepoint: an import saves thousands of records in one transaction, and a
+        # failure here rolls back the caller's transaction as a failed save would.
+        with transaction.atomic(savepoint=False):
+            super().save(*args, **kwargs)
+            if adding:
+                # A new record has no rows to clear.
+                Link.objects.bulk_create(self.link_rows())
+            elif update_fields is None or "data" in update_fields:
+                self.refresh_links()
+
+    def link_rows(self) -> list["Link"]:
+        """Return the unsaved ``Link`` rows this record's document states.
+
+        Returns:
+            One row for each top-level link entry, in stored order.
+        """
+        return [
+            Link(source=self, predicate=curie, target=target)
+            for curie in self.data
+            for target in self.linked_uris(curie)
+        ]
+
+    def refresh_links(self) -> None:
+        """Rebuild this record's ``Link`` rows from its document.
+
+        ``save()`` calls this. Call it after writing documents with
+        ``QuerySet.update()`` or ``bulk_create()``, which skip ``save()``, once the
+        record is loaded again.
+        """
+        with transaction.atomic(savepoint=False):
+            self.links.all().delete()
+            Link.objects.bulk_create(self.link_rows())
+
+
+class Link(models.Model):
+    """One link a record's document states, copied into a row so it can be queried.
+
+    The document stays the only source of truth. The rows are rebuilt from it each time
+    the record is saved, so a page that asks who links to a record reads an index
+    instead of every document.
+    """
+
+    source = models.ForeignKey(
+        Record,
+        on_delete=models.CASCADE,
+        related_name="links",
+        verbose_name=_("source"),
+        help_text=_("The record whose document states the link."),
+    )
+    predicate = models.CharField(
+        max_length=500,
+        verbose_name=_("predicate"),
+        help_text=_(
+            "The key the link is stored under in the document, written as a CURIE such "
+            "as skos:broader, or as a full URI."
+        ),
+    )
+    target = models.CharField(
+        max_length=500,
+        verbose_name=_("target"),
+        help_text=_(
+            "The URI the link points at, as stored. It may name a concept this site "
+            "does not hold."
+        ),
+    )
+
+    class Meta:
+        # The source column's own index serves rebuilding a record's rows. This one
+        # answers who links to a URI, alone or under given predicates (ADR 0025).
+        indexes = [
+            models.Index(fields=["target", "predicate"], name="link_target_predicate")
+        ]
+
+    def __str__(self) -> str:
+        """Return the link as ``source predicate target``."""
+        return f"{self.source.uri} {self.predicate} {self.target}"

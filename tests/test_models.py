@@ -10,11 +10,13 @@ from controlled_vocabularies import conf
 from controlled_vocabularies.models import (
     PREF_LABEL_MAX_LENGTH,
     ConceptScheme,
+    Link,
     Record,
     validate_document,
 )
 from tests.factories import (
     ConceptSchemeFactory,
+    LinkFactory,
     RecordFactory,
     SpecimenFactory,
     collection_with_members,
@@ -369,36 +371,218 @@ class TestIdentity:
         assert slugs == ["rocks", "rocks-2", "rocks-3"]
 
 
+class TestLink:
+    def test_it_names_the_source_the_predicate_and_the_target(self):
+        link = LinkFactory(predicate="skos:related", target="https://example.org/x")
+
+        text = str(link)
+
+        assert link.source.uri in text
+        assert "skos:related" in text
+        assert "https://example.org/x" in text
+
+
+class TestRecordLinks:
+    def stored(self, record):
+        return sorted(record.links.values_list("predicate", "target"))
+
+    def test_saving_gives_one_row_per_top_level_link_entry(self):
+        record = RecordFactory(
+            data=labelled(
+                "Child",
+                statements={
+                    "skos:broader": [{"@id": "https://example.org/a"}],
+                    "skos:related": [
+                        {"@id": "https://example.org/b"},
+                        {"@id": "https://example.org/c"},
+                    ],
+                },
+            )
+        )
+
+        assert self.stored(record) == [
+            ("skos:broader", "https://example.org/a"),
+            ("skos:related", "https://example.org/b"),
+            ("skos:related", "https://example.org/c"),
+        ]
+
+    def test_a_predicate_written_as_a_full_uri_is_stored_as_written(self):
+        predicate = "https://example.org/vocab#sameAs"
+        record = RecordFactory(
+            data=labelled(
+                "X", statements={predicate: [{"@id": "https://example.org/a"}]}
+            )
+        )
+
+        assert self.stored(record) == [(predicate, "https://example.org/a")]
+
+    def test_a_literal_entry_gives_no_row(self):
+        record = RecordFactory(
+            data=labelled(
+                "X", statements={"skos:note": [{"@value": "https://example.org/a"}]}
+            )
+        )
+
+        assert self.stored(record) == []
+
+    def test_a_link_inside_an_embedded_node_gives_no_row(self):
+        record = RecordFactory(
+            data=labelled(
+                "X",
+                statements={
+                    "skosxl:prefLabel": [
+                        {"skosxl:literalForm": [{"@id": "https://example.org/a"}]}
+                    ]
+                },
+            )
+        )
+
+        assert self.stored(record) == []
+
+    def test_a_link_stated_twice_gives_two_rows(self):
+        record = RecordFactory(
+            data=labelled(
+                "X",
+                statements={
+                    "skos:related": [
+                        {"@id": "https://example.org/a"},
+                        {"@id": "https://example.org/a"},
+                    ]
+                },
+            )
+        )
+
+        assert self.stored(record) == [("skos:related", "https://example.org/a")] * 2
+
+    def test_saving_a_changed_document_replaces_the_rows(self):
+        record = RecordFactory(
+            data=labelled(
+                "X", statements={"skos:broader": [{"@id": "https://example.org/old"}]}
+            )
+        )
+
+        record.data = labelled(
+            "X", statements={"skos:related": [{"@id": "https://example.org/new"}]}
+        )
+        record.save()
+
+        assert self.stored(record) == [("skos:related", "https://example.org/new")]
+
+    def test_saving_again_leaves_one_set_of_rows(self):
+        record = RecordFactory(
+            data=labelled(
+                "X", statements={"skos:broader": [{"@id": "https://example.org/a"}]}
+            )
+        )
+
+        record.save()
+
+        assert Link.objects.filter(source=record).count() == 1
+
+    def test_a_save_that_leaves_data_out_keeps_the_rows(self):
+        record = RecordFactory(
+            data=labelled(
+                "X", statements={"skos:broader": [{"@id": "https://example.org/a"}]}
+            )
+        )
+
+        record.data = labelled("X")
+        record.type = Record.Type.COLLECTION
+        record.save(update_fields=["type"])
+
+        assert self.stored(record) == [("skos:broader", "https://example.org/a")]
+
+    def test_a_save_that_includes_data_replaces_the_rows(self):
+        record = RecordFactory(
+            data=labelled(
+                "X", statements={"skos:broader": [{"@id": "https://example.org/a"}]}
+            )
+        )
+
+        record.data = labelled("X")
+        record.save(update_fields=["data"])
+
+        assert self.stored(record) == []
+
+    def test_refresh_links_brings_rows_in_line_with_a_document_written_by_update(
+        self,
+    ):
+        record = RecordFactory(
+            data=labelled(
+                "X", statements={"skos:broader": [{"@id": "https://example.org/old"}]}
+            )
+        )
+        document = labelled(
+            "X", statements={"skos:broader": [{"@id": "https://example.org/new"}]}
+        )
+        Record.objects.filter(pk=record.pk).update(data=document)
+        record.refresh_from_db()
+
+        record.refresh_links()
+
+        assert self.stored(record) == [("skos:broader", "https://example.org/new")]
+
+    def test_deleting_a_record_deletes_its_rows(self):
+        record = RecordFactory(
+            data=labelled(
+                "X", statements={"skos:broader": [{"@id": "https://example.org/a"}]}
+            )
+        )
+
+        record.delete()
+
+        assert not Link.objects.exists()
+
+
 class TestRecordQuerySet:
-    def test_mentioning_finds_a_record_linking_to_the_uri(self):
+    def test_linking_to_finds_a_record_linking_to_the_uri(self):
         target = RecordFactory()
         linking = RecordFactory(
             data=labelled("Child", statements={"skos:broader": [{"@id": target.uri}]})
         )
 
-        assert list(Record.objects.mentioning(target.uri)) == [linking]
+        assert list(Record.objects.linking_to(target.uri)) == [linking]
 
-    def test_mentioning_leaves_out_records_that_do_not_hold_the_uri(self):
+    def test_linking_to_leaves_out_records_that_do_not_link_to_the_uri(self):
         target = RecordFactory()
         RecordFactory()
 
-        assert not Record.objects.mentioning(target.uri).exists()
+        assert not Record.objects.linking_to(target.uri).exists()
 
-    def test_mentioning_matches_a_uri_that_needs_escaping_in_json(self):
-        uri = 'https://example.org/a"b\\c'
-        linking = RecordFactory(
-            data=labelled("Child", statements={"skos:broader": [{"@id": uri}]})
+    def test_linking_to_leaves_out_a_record_holding_the_uri_only_as_a_literal(self):
+        target = RecordFactory()
+        RecordFactory(
+            data=labelled("Note", statements={"skos:note": [{"@value": target.uri}]})
         )
 
-        assert list(Record.objects.mentioning(uri)) == [linking]
+        assert not Record.objects.linking_to(target.uri).exists()
 
-    def test_mentioning_matches_a_uri_with_non_ascii_characters(self):
-        uri = "https://example.org/géologie/granit"
-        linking = RecordFactory(
-            data=labelled("Child", statements={"skos:broader": [{"@id": uri}]})
+    def test_linking_to_with_predicates_leaves_out_a_link_under_another_predicate(self):
+        target = RecordFactory()
+        related = RecordFactory(
+            data=labelled("Rel", statements={"skos:related": [{"@id": target.uri}]})
+        )
+        RecordFactory(
+            data=labelled("Child", statements={"skos:broader": [{"@id": target.uri}]})
         )
 
-        assert list(Record.objects.mentioning(uri)) == [linking]
+        found = Record.objects.linking_to(target.uri, "skos:related", "skos:member")
+
+        assert list(found) == [related]
+
+    def test_linking_to_lists_a_record_once_however_often_it_links(self):
+        target = RecordFactory()
+        linking = RecordFactory(
+            data=labelled(
+                "Child",
+                statements={
+                    "skos:broader": [{"@id": target.uri}, {"@id": target.uri}],
+                    "skos:related": [{"@id": target.uri}],
+                },
+            )
+        )
+
+        assert list(Record.objects.linking_to(target.uri)) == [linking]
 
 
 class TestRecord:
@@ -496,7 +680,7 @@ class TestConsumingModelProtection:
 
 
 class TestFieldMetadata:
-    @pytest.mark.parametrize("model", [ConceptScheme, Record])
+    @pytest.mark.parametrize("model", [ConceptScheme, Record, Link])
     def test_every_field_has_a_translatable_verbose_name_and_help_text(self, model):
         fields = [
             field

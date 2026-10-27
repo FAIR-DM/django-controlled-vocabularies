@@ -1210,6 +1210,19 @@ class TestVocabularyDetailConceptRow:
 
         assert "Plutonic rock" in self.row_for(client, concept).get_text()
 
+    def test_a_stated_broader_concept_wins_over_one_that_names_the_concept_narrower(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        stated = RecordFactory(scheme=scheme, label="Plutonic rock")
+        concept = concept_with(scheme, "Granite", skos__broader=[link(stated.uri)])
+        concept_with(scheme, "Mineral", skos__narrower=[link(concept.uri)])
+
+        row_text = self.row_for(client, concept).get_text()
+
+        assert "Plutonic rock" in row_text
+        assert "Mineral" not in row_text
+
     def test_the_broader_concept_is_named_in_the_active_language(self, client):
         scheme = ConceptSchemeFactory()
         parent = RecordFactory(
@@ -1298,6 +1311,39 @@ class TestVocabularyDetailTopConcepts:
         response = client.get(vocabulary_page(scheme))
 
         assert [c.pk for c in response.context["top_concepts"]] == [rock.pk]
+
+    def test_a_concept_with_a_broader_concept_held_elsewhere_is_not_at_the_top(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        rock = RecordFactory(scheme=scheme, label="Rock")
+        concept_with(scheme, "Granite", skos__broader=[link(rock.uri)])
+        concept_with(
+            scheme, "Sandstone", skos__broader=[link("https://elsewhere.example/sed")]
+        )
+
+        response = client.get(vocabulary_page(scheme))
+
+        assert [c.pk for c in response.context["top_concepts"]] == [rock.pk]
+
+    def test_a_narrower_link_from_another_vocabularys_concept_does_not_place_a_concept(
+        self, client
+    ):
+        scheme = ConceptSchemeFactory()
+        rock = RecordFactory(scheme=scheme, label="Rock")
+        granite = concept_with(scheme, "Granite", skos__broader=[link(rock.uri)])
+        outsider = RecordFactory(scheme=scheme, label="Basalt")
+        concept_with(
+            ConceptSchemeFactory(), "Other", skos__narrower=[link(outsider.uri)]
+        )
+
+        response = client.get(vocabulary_page(scheme))
+
+        assert {c.pk for c in response.context["top_concepts"]} == {
+            rock.pk,
+            outsider.pk,
+        }
+        assert granite.pk not in {c.pk for c in response.context["top_concepts"]}
 
     def test_a_flat_vocabulary_lists_no_top_concepts(self, client):
         scheme = ConceptSchemeFactory()

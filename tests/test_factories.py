@@ -2,9 +2,10 @@
 
 import pytest
 
-from controlled_vocabularies.models import ConceptScheme, Record
+from controlled_vocabularies.models import ConceptScheme, Link, Record
 from tests.factories import (
     ConceptSchemeFactory,
+    LinkFactory,
     RecordFactory,
     collection_with_members,
     labelled,
@@ -34,6 +35,21 @@ class TestConceptSchemeFactory:
         scheme = ConceptSchemeFactory(name="Rock types")
 
         assert scheme.pref_label == "Rock types"
+
+
+@pytest.mark.django_db
+class TestLinkFactory:
+    def test_link_factory_produces_a_saved_link_with_its_own_source_record(self):
+        link = LinkFactory()
+
+        assert isinstance(link, Link)
+        assert link.pk is not None
+        assert Record.objects.filter(pk=link.source_id).exists()
+
+    def test_link_factory_targets_do_not_repeat(self):
+        first, second = LinkFactory(), LinkFactory()
+
+        assert first.target != second.target
 
 
 @pytest.mark.django_db
