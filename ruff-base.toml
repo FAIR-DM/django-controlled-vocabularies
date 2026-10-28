@@ -16,7 +16,7 @@
 # and pulls this file in explicitly.
 #
 # A copy is only worth having if something compares it. Each repo's copy is
-# checked against this file at the shared tag that repo pins, which catches the
+# checked against this file on main (ADR 0010), which catches the
 # four ways it goes wrong: missing, stale, under an old name, or present but
 # not extended from pyproject.
 #
