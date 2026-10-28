@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+### Fixed
+
+- `manage.py check` no longer fails in a project whose database is not configured yet. The
+  checks that look up loaded vocabularies and restriction targets report nothing when there is
+  no database to ask, as they already did before `migrate`.
+
 ## [v0.3.0] - 2026-10-28
 
 ### Added

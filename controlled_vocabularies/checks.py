@@ -3,6 +3,7 @@
 from django.apps import apps
 from django.conf import settings
 from django.core import checks
+from django.core.exceptions import ImproperlyConfigured
 from django.db import DatabaseError
 from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
@@ -45,12 +46,13 @@ def check_concept_field_vocabularies(app_configs, **kwargs):
     if not uris:
         return []
 
-    # Checks run before migrate, and a missing table is not evidence that a vocabulary is absent.
+    # Checks run before migrate, and before a project has configured its database at all.
+    # Neither a missing table nor a missing database is evidence that a vocabulary is absent.
     try:
         existing = set(
             ConceptScheme.objects.filter(uri__in=uris).values_list("uri", flat=True)
         )
-    except DatabaseError:
+    except (DatabaseError, ImproperlyConfigured):
         return []
 
     return [
@@ -87,7 +89,7 @@ def check_concept_field_restriction_targets(app_configs, **kwargs):
 
     # The triple is the key: a target held in some other vocabulary is not this one's, and
     # a collection is not a branch root. One query serves both restrictions.
-    # Same DatabaseError guard as check_concept_field_vocabularies.
+    # Same guard as check_concept_field_vocabularies.
     try:
         existing = set(
             Record.objects.filter(
@@ -96,7 +98,7 @@ def check_concept_field_restriction_targets(app_configs, **kwargs):
                 type__in=[*Record.COLLECTION_TYPES, Record.Type.CONCEPT],
             ).values_list("scheme__uri", "uri", "type")
         )
-    except DatabaseError:
+    except (DatabaseError, ImproperlyConfigured):
         return []
 
     warnings = []
