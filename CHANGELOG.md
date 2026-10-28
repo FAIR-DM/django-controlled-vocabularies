@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+## [v0.3.0] - 2026-10-28
+
 ### Added
 
 - A vocabulary's page and a concept's or collection's page answer with RDF. A client asking
