@@ -105,7 +105,12 @@ class TestSerializationTable:
 
     @pytest.mark.parametrize(
         ("name", "label"),
-        [("ttl", "Turtle"), ("xml", "RDF/XML"), ("json-ld", "JSON-LD"), ("nt", "N-Triples")],
+        [
+            ("ttl", "Turtle"),
+            ("xml", "RDF/XML"),
+            ("json-ld", "JSON-LD"),
+            ("nt", "N-Triples"),
+        ],
     )
     def test_a_format_carries_the_name_a_reader_knows_it_by(self, name, label):
         assert by_name(name).label == label
