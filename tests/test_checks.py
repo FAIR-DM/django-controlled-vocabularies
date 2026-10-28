@@ -427,6 +427,15 @@ class TestNothingAboutAnAbsentRestrictionTargetStopsTheProject:
         assert "ALL_SUCCEEDED" in result.stdout
 
 
+class TestChecksSurviveAnUnconfiguredDatabase:
+    def test_check_succeeds_and_reports_no_vocabulary_check(self):
+        result = run_django_admin("check", settings="tests.settings_no_database")
+
+        assert result.returncode == 0, result.stderr
+        assert CHECK_ID not in result.stdout
+        assert CHECK_ID_MISSING_RESTRICTION_TARGET not in result.stdout
+
+
 class TestCheckSurvivesUnmigratedDatabase:
     def test_check_reports_nothing_against_an_unmigrated_connection(self):
         result = run_django_admin("check")
