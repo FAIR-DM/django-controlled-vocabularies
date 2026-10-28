@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+## [v0.3.1] - 2026-10-28
+
 ### Fixed
 
 - `manage.py check` no longer fails in a project whose database is not configured yet. The
