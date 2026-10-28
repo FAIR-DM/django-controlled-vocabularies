@@ -1,6 +1,6 @@
 [project]
 name = "django-controlled-vocabularies"
-version = "0.3.0"
+version = "0.3.1"
 description = "Import published SKOS controlled vocabularies into Django and reference their concepts"
 authors = [{ name = "Sam Jennings" }]
 license = "MIT"
