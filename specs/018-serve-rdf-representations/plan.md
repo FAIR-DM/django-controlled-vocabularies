@@ -65,14 +65,16 @@ for `ConceptScheme`, `self.type` for `Record`. Declared as a class attribute on 
 ```python
 @dataclass(frozen=True)
 class Serialization:
-    name: str           # rdflib's short name, the one ?format= documents
-    names: frozenset    # every name rdflib registers for the serializer, short and media type
-    media_type: str     # what Content-Type carries
-    negotiable: bool    # whether rdflib registers a media type for it, so Accept can pick it
+    name: str  # rdflib's short name, the one ?format= documents
+    names: frozenset  # every name rdflib registers for the serializer, short and media type
+    media_type: str  # what Content-Type carries
+    negotiable: (
+        bool  # whether rdflib registers a media type for it, so Accept can pick it
+    )
     extension: str
 
     @classmethod
-    def all(cls) -> list["Serialization"]: ...          # cached
+    def all(cls) -> list["Serialization"]: ...  # cached
     @classmethod
     def named(cls, name: str) -> "Serialization | None": ...
     @classmethod
