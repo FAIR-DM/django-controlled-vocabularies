@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+## [v0.3.2] - 2026-11-02
+
 ### Fixed
 
 - **`sync_vocabularies` and `import_skos` no longer negotiate for an address that names a
