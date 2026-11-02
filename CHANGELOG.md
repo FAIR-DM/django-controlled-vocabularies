@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+### Fixed
+
+- **`sync_vocabularies` and `import_skos` no longer negotiate for an address that names a
+  file.** A fetch of an address ending in an RDF file's extension, such as `.ttl`, sends
+  `Accept: */*`. It sent the Turtle-first header it sends a vocabulary's own URI, and a redirect
+  service that negotiates on `Accept` looked for the file beneath the address and returned a 404.
+
 ## [v0.3.1] - 2026-10-28
 
 ### Fixed

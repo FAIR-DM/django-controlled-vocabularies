@@ -64,4 +64,5 @@ removed. A field's vocabulary can now always be loaded, so the one remaining war
 `controlled_vocabularies.W001`, is for a vocabulary that has not been loaded yet.
 
 A fetch of a URI sends an `Accept` header naming Turtle, RDF/XML and JSON-LD, so a publisher
-serving several representations at one address answers with one the importer reads.
+serving several representations at one address answers with one the importer reads. An address
+ending in an RDF file's extension names one representation already, so its fetch sends `*/*`.
