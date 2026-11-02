@@ -108,6 +108,17 @@ class TestSourceResolverFetch:
         assert "application/rdf+xml" in accepted
         assert "application/ld+json" in accepted
 
+    def test_a_fetch_of_a_named_file_negotiates_nothing(self, http_stub):
+        http_stub.set_response("/vocabulary.ttl", status=200, body=b"stub body")
+        resolver = SourceResolver(
+            http_stub.url + "/vocabulary.ttl", serialization="turtle"
+        )
+        resolver.resolve()
+        resolver.cleanup()
+
+        (headers,) = http_stub.request_headers
+        assert headers["Accept"] == "*/*"
+
     def test_a_redirect_to_another_http_url_is_followed(self, http_stub):
         http_stub.set_response(
             "/redirect.ttl",

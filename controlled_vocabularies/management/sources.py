@@ -32,10 +32,14 @@ CONTENT_TYPE_SERIALIZATIONS = {
     "application/ld+json": "json-ld",
 }
 
-# Sent with every fetch, so an address that serves several representations, as a vocabulary's
+# Sent with a fetch, so an address that serves several representations, as a vocabulary's
 # own URI often does, answers with one the importer reads rather than its HTML page. The
 # trailing */* keeps a server that negotiates strictly from refusing a file it serves as text.
 ACCEPT = "text/turtle, application/rdf+xml;q=0.9, application/ld+json;q=0.8, */*;q=0.1"
+
+# Sent instead for an address that names a file: it has one representation, and a server that
+# negotiates on Accept may treat the address as a resource and look for the file beneath it.
+ACCEPT_NAMED_FILE = "*/*"
 
 # Neither is configurable: they bound what the remote server chooses, sized for real
 # published vocabularies (tens of megabytes, seconds to first byte), not for test fixtures
@@ -175,6 +179,17 @@ class SourceResolver:
             % {"source": self.source, "error": exc}
         )
 
+    def accept(self) -> str:
+        """Choose the ``Accept`` header for :attr:`source`.
+
+        Returns:
+            :data:`ACCEPT_NAMED_FILE` when the address ends in an RDF file's extension,
+            otherwise :data:`ACCEPT`.
+        """
+        if rdflib.util.guess_format(urlsplit(self.source).path):
+            return ACCEPT_NAMED_FILE
+        return ACCEPT
+
     def fetch(self) -> Fetched:
         """Fetch :attr:`source` to a temporary file under a timeout and a byte ceiling.
 
@@ -189,7 +204,7 @@ class SourceResolver:
         try:
             response = OPENER.open(
                 # S310: classify() admitted only http(s), and OPENER has no other handler.
-                Request(self.source, headers={"Accept": ACCEPT}),  # noqa: S310
+                Request(self.source, headers={"Accept": self.accept()}),  # noqa: S310
                 timeout=TIMEOUT_SECONDS,
             )
         except OSError as exc:
