@@ -140,6 +140,11 @@ validation messages use named placeholders (`%(slug)s`) so the msgids stay stati
 diagnostics (`DoesNotExist`, logging) and pure acronyms are exempt. **`help_text` is mandatory on
 every model field.** A hard-coded user-visible string is a blocking review comment.
 
+This article covers the package only. The `demo/` app is never translated: its strings are plain
+text, `makemessages` runs over `controlled_vocabularies/` and never over `demo/`, and translation
+markup in `demo/` is a blocking review comment. The demo's `LocaleMiddleware` stays, so the
+package's own translations can be seen working.
+
 ### Article XIII — Data-model conventions
 Every model field is a deliberate indexing decision. Because consumers of this package cannot add
 their own indexes, any field with a plausible lookup / filter / ordering path is indexed at its
